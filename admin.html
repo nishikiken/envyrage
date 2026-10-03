@@ -660,6 +660,43 @@
         </div>
       </div>
 
+      <!-- TOOL 6: Интеграция с Базой Данных (Supabase / Databasing) -->
+      <div class="admin-card" style="grid-column: 1 / -1; border: 1px solid rgba(59, 130, 246, 0.4); background: rgba(30, 41, 59, 0.5);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div class="card-title" style="margin-bottom: 0;">⚡ Облачная База Данных (Supabase / Databasing)</div>
+          <span id="sb-status-badge" style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: rgba(34, 197, 94, 0.2); color: #22c55e; font-weight: 700; border: 1px solid rgba(34, 197, 94, 0.4);">
+            ✓ Ключи активны (Publish & Secret)
+          </span>
+        </div>
+        <div class="card-desc">
+          Двусторонняя синхронизация аккаунтов, скинов, баланса и подкрутки с облачной базой данных Supabase.
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; font-size: 12px; color: var(--gray); margin-bottom: 6px; font-weight: 600;">URL проекта Supabase (Project URL)</label>
+            <input type="text" id="sb-project-url" class="input-field" placeholder="https://xxxxxxxxxxxx.supabase.co" style="width: 100%; font-family: monospace; font-size: 13px;" />
+          </div>
+          <div>
+            <label style="display: block; font-size: 12px; color: var(--gray); margin-bottom: 6px; font-weight: 600;">Publish Key (Client API)</label>
+            <input type="text" id="sb-pub-key" class="input-field" value="sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb" readonly style="width: 100%; font-family: monospace; font-size: 12px; opacity: 0.8;" />
+          </div>
+          <div>
+            <label style="display: block; font-size: 12px; color: var(--gray); margin-bottom: 6px; font-weight: 600;">Secret Key (Admin Sync)</label>
+            <input type="password" id="sb-sec-key" class="input-field" value="sb_secret_mk9lVZUGn4BYeXYydR-zfw_bwC8tl4y" readonly style="width: 100%; font-family: monospace; font-size: 12px; opacity: 0.8;" />
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button type="button" class="btn-action btn-yellow" onclick="saveAndSyncSupabase()" style="flex: 1; min-width: 220px;">
+            🔄 Сохранить URL и синхронизировать с БД
+          </button>
+          <button type="button" class="btn-action" style="flex: 1; min-width: 200px; background: rgba(255,255,255,0.08);" onclick="copySupabaseSql()">
+            📋 Скопировать SQL код для таблиц
+          </button>
+        </div>
+      </div>
+
     </div>
 
   </main>
@@ -1576,6 +1613,101 @@
       showToast('Электронная почта успешно отвязана');
     }
 
+    function loadSupabaseSettings() {
+      const url = localStorage.getItem('upgrader_supabase_url') || '';
+      const input = document.getElementById('sb-project-url');
+      if (input && url) {
+        input.value = url;
+      }
+    }
+
+    async function saveAndSyncSupabase() {
+      const input = document.getElementById('sb-project-url');
+      const url = input ? input.value.trim().replace(/\/+$/, '') : '';
+      if (!url) {
+        showToast('Пожалуйста, введите URL вашего проекта Supabase (https://xxxx.supabase.co)', false);
+        return;
+      }
+      localStorage.setItem('upgrader_supabase_url', url);
+      showToast('Синхронизация с базой данных...');
+
+      if (window.SupabaseDB) {
+        window.SupabaseDB.setUrl(url);
+        const ok = await window.SupabaseDB.syncAllToDB();
+        if (ok) {
+          showToast('✓ Успешно синхронизировано с базой данных Supabase!');
+        } else {
+          showToast('✓ URL сохранен. Создайте таблицы в Supabase SQL Editor.');
+        }
+      } else {
+        showToast('✓ URL проекта Supabase сохранен!');
+      }
+    }
+
+    function copySupabaseSql() {
+      const sql = `-- UPGRADER DATABASE SCHEMA FOR SUPABASE
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    nickname TEXT,
+    avatar TEXT,
+    image TEXT,
+    balance NUMERIC(12, 2) DEFAULT 0.00,
+    email TEXT,
+    is_email_verified BOOLEAN DEFAULT true,
+    steam_trade_link TEXT,
+    steam_privacy TEXT DEFAULT 'public',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.inventory (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+    market_name TEXT NOT NULL,
+    price NUMERIC(12, 2) NOT NULL,
+    image TEXT,
+    status TEXT DEFAULT 'available',
+    extra JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+    key TEXT PRIMARY KEY,
+    rig_mode TEXT DEFAULT 'normal',
+    server_upgrades BIGINT DEFAULT 487677451,
+    server_online INT DEFAULT 4281,
+    config JSONB DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read users" ON public.users FOR SELECT USING (true);
+CREATE POLICY "Allow public write users" ON public.users FOR ALL USING (true);
+CREATE POLICY "Allow public read inventory" ON public.inventory FOR SELECT USING (true);
+CREATE POLICY "Allow public write inventory" ON public.inventory FOR ALL USING (true);
+CREATE POLICY "Allow public read admin_settings" ON public.admin_settings FOR SELECT USING (true);
+CREATE POLICY "Allow public write admin_settings" ON public.admin_settings FOR ALL USING (true);
+
+INSERT INTO public.users (id, username, nickname, avatar, image, balance, email, is_email_verified)
+VALUES ('10001', 'test_user', 'Test Winner', 'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg', 'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg', 50000.00, 'legendary_gamer@gmail.com', true)
+ON CONFLICT (id) DO UPDATE SET balance = EXCLUDED.balance, nickname = EXCLUDED.nickname, email = EXCLUDED.email;
+
+INSERT INTO public.admin_settings (key, rig_mode, server_upgrades, server_online)
+VALUES ('global_settings', 'normal', 487677451, 4281)
+ON CONFLICT (key) DO NOTHING;`;
+
+      navigator.clipboard.writeText(sql).then(() => {
+        showToast('✓ SQL код скопирован в буфер обмена!');
+      }).catch(() => {
+        prompt('Скопируйте SQL код для Supabase:', sql);
+      });
+    }
+
     function saveAllSettings() {
       if (!currentSelectedAcc) {
         showToast('Аккаунт не выбран', false);
@@ -1587,6 +1719,9 @@
       saveBalance();
       if (document.getElementById('email-input').value.trim()) {
         saveEmail();
+      }
+      if (window.SupabaseDB) {
+        window.SupabaseDB.syncAllToDB();
       }
       showToast('Все параметры аккаунта успешно сохранены!');
     }
@@ -1606,6 +1741,7 @@
 
       populateDropdown();
       loadActiveAccount();
+      loadSupabaseSettings();
     });
   </script>
 </body>

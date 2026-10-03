@@ -1,6 +1,14 @@
 <!doctype html><html lang="ru" class="scrollbar-thin" dir="ltr"><head>
     <meta charset="utf-8">
     <meta name="referrer" content="no-referrer">
+    <script>
+      (function() {
+        var isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+        var b = document.createElement('base');
+        b.href = isGH ? '/envyrage/' : '/';
+        document.head.appendChild(b);
+      })();
+    </script>
     <title>Апгрейдер предметов CS2 | Официальный Сайт UPGRADER</title>
     <meta name="description" content="Улучшай предметы CS2 на upgrader.pro — быстрый апгрейд инвентаря, прозрачные условия, моментальный вывод. Начни прямо сейчас.">
     

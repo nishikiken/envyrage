@@ -45,26 +45,31 @@
     function formatCleanHashUrl(url) {
       if (!url) return url;
       if (typeof url !== 'string') return url;
-      const repoBase = getRepoBase();
-      const base = repoBase ? (repoBase + '/') : '/';
+      const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+      const base = isGH ? '/envyrage/' : '/';
 
-      let name = 'ru';
-      if (url.includes('profile')) name = 'profile';
-      else if (url.includes('settings')) name = 'settings';
-      else if (url.includes('admin')) name = 'admin';
-      else if (url.includes('portfolio') || (window.location.hash === '#portfolio')) name = 'portfolio';
-      else if (url.includes('en')) name = 'en';
-      else if (url.includes('tos')) name = 'tos';
-      else if (url.includes('privacy')) name = 'privacy-policy';
-      else if (url.includes('cookie')) name = 'cookie-policy';
-      else if (url.includes('fair')) name = 'provably-fair';
-      else if (url.includes('ru') || url.includes('cis')) name = 'ru';
-      else {
-        let clean = url.replace(/^[#\/]+/, '').split(/[?#\/]/)[0];
-        name = clean || 'ru';
+      let lang = 'ru';
+      if (url.includes('/en') || url.includes('-en') || url.endsWith('/en') || url === 'en' || (window.location.hash && window.location.hash.endsWith('-en'))) {
+        lang = 'en';
       }
-      name = name.replace(/\//g, '');
-      return base + '#' + name;
+
+      let screen = '';
+      if (url.includes('profile')) screen = 'profile';
+      else if (url.includes('settings')) screen = 'settings';
+      else if (url.includes('admin')) screen = 'admin';
+      else if (url.includes('tos')) screen = 'tos';
+      else if (url.includes('privacy')) screen = 'privacy-policy';
+      else if (url.includes('cookie')) screen = 'cookie-policy';
+      else if (url.includes('fair')) screen = 'provably-fair';
+
+      let hash = '';
+      if (screen) {
+        hash = lang === 'en' ? (screen + '-en') : screen;
+      } else {
+        hash = '-' + lang;
+      }
+
+      return base + '#' + hash;
     }
 
     history.pushState = function(state, title, url) {
@@ -83,22 +88,23 @@
           return;
         }
         if (href.startsWith('/') || href.startsWith('./') || href.startsWith('../') || href.startsWith('#')) {
-          let targetHash = '';
-          if (href.includes('profile')) targetHash = 'profile';
-          else if (href.includes('settings')) targetHash = 'settings';
-          else if (href.includes('admin')) targetHash = 'admin';
-          else if (href.includes('portfolio')) targetHash = 'portfolio';
-          else if (href.includes('en')) targetHash = 'en';
-          else if (href.includes('tos')) targetHash = 'tos';
-          else if (href.includes('privacy')) targetHash = 'privacy-policy';
-          else if (href.includes('cookie')) targetHash = 'cookie-policy';
-          else if (href.includes('fair')) targetHash = 'provably-fair';
-          else if (href.includes('ru') || href.includes('cis')) targetHash = 'ru';
+          let screen = '';
+          if (href.includes('profile')) screen = 'profile';
+          else if (href.includes('settings')) screen = 'settings';
+          else if (href.includes('admin')) screen = 'admin';
+          else if (href.includes('tos')) screen = 'tos';
+          else if (href.includes('privacy')) screen = 'privacy-policy';
+          else if (href.includes('cookie')) screen = 'cookie-policy';
+          else if (href.includes('fair')) screen = 'provably-fair';
 
-          if (targetHash) {
-            e.preventDefault();
-            window.location.hash = targetHash;
+          let lang = 'ru';
+          if (href.includes('/en') || href.includes('-en') || (window.location.hash && window.location.hash.endsWith('-en'))) {
+            lang = 'en';
           }
+
+          let targetHash = screen ? (lang === 'en' ? (screen + '-en') : screen) : ('-' + lang);
+          e.preventDefault();
+          window.location.hash = targetHash;
         }
       }
     }, true);
@@ -108,25 +114,38 @@
       if (typeof window === 'undefined' || !window.location) return;
       const hash = window.location.hash || '';
 
-      // Clean any accidental slashes inside hash (e.g. #/ru -> #ru)
+      // Clean any accidental slashes inside hash (e.g. #/ru -> #-ru)
       if (hash.includes('/')) {
         let clean = hash.replace(/^#\/?/, '').replace(/^\//, '');
-        let name = 'ru';
-        if (clean.includes('profile')) name = 'profile';
-        else if (clean.includes('settings')) name = 'settings';
-        else if (clean.includes('admin')) name = 'admin';
-        else if (clean.includes('en')) name = 'en';
-        else if (clean.includes('portfolio')) name = 'portfolio';
-        else name = clean.replace(/[\/]/g, '') || 'ru';
+        let lang = 'ru';
+        let s = clean;
+        if (clean.endsWith('-en') || clean === 'en') {
+          lang = 'en';
+          s = clean.endsWith('-en') ? clean.slice(0, -3) : '';
+        } else if (clean.endsWith('-ru') || clean === 'ru') {
+          lang = 'ru';
+          s = clean.endsWith('-ru') ? clean.slice(0, -3) : '';
+        }
+        s = s.replace(/^-/, '');
 
-        const repoBase = getRepoBase();
-        const base = repoBase ? (repoBase + '/') : '/';
-        history.replaceState(null, '', base + '#' + name);
+        let screen = '';
+        if (s.includes('profile')) screen = 'profile';
+        else if (s.includes('settings')) screen = 'settings';
+        else if (s.includes('admin')) screen = 'admin';
+        else if (s.includes('tos')) screen = 'tos';
+        else if (s.includes('privacy')) screen = 'privacy-policy';
+        else if (s.includes('cookie')) screen = 'cookie-policy';
+        else if (s.includes('fair')) screen = 'provably-fair';
+
+        let target = screen ? (lang === 'en' ? (screen + '-en') : screen) : ('-' + lang);
+        const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+        const base = isGH ? '/envyrage/' : '/';
+        history.replaceState(null, '', base + '#' + target);
       }
 
       if (window.location.hash === '#admin' || window.location.hash.startsWith('#admin')) {
-        const repoBase = getRepoBase();
-        const adminPath = repoBase ? (repoBase + '/admin/index.html') : '/admin.html';
+        const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+        const adminPath = isGH ? '/envyrage/admin/index.html' : '/admin.html';
         window.location.href = adminPath;
       }
     }
@@ -134,6 +153,153 @@
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
   } catch(e) {}
+
+  // 1.0 SUPABASE CLOUD DATABASE SYNC ENGINE
+  const SUPABASE_CONFIG = {
+    publishKey: 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb',
+    secretKey: 'sb_secret_mk9lVZUGn4BYeXYydR-zfw_bwC8tl4y',
+    urlStorageKey: 'upgrader_supabase_url'
+  };
+
+  const SupabaseDB = {
+    getUrl() {
+      try {
+        return localStorage.getItem(SUPABASE_CONFIG.urlStorageKey) || '';
+      } catch(e) {
+        return '';
+      }
+    },
+    setUrl(url) {
+      try {
+        if (url) {
+          localStorage.setItem(SUPABASE_CONFIG.urlStorageKey, url.trim().replace(/\/+$/, ''));
+          console.log('[SupabaseDB] Project URL set to:', url);
+        }
+      } catch(e) {}
+    },
+    getHeaders(useSecret = false) {
+      const key = useSecret ? SUPABASE_CONFIG.secretKey : SUPABASE_CONFIG.publishKey;
+      return {
+        'apikey': key,
+        'Authorization': 'Bearer ' + key,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      };
+    },
+    async syncAllToDB() {
+      const url = this.getUrl();
+      if (!url) {
+        console.warn('[SupabaseDB] Project URL not configured. Data is stored safely in LocalDB.');
+        return false;
+      }
+      try {
+        const accounts = LocalDB.getAccounts();
+        const userList = [];
+        const invList = [];
+
+        for (const uname in accounts) {
+          const a = accounts[uname];
+          userList.push({
+            id: String(a.id),
+            username: a.username,
+            nickname: a.nickname || a.username,
+            avatar: a.avatar || '',
+            image: a.avatar || '',
+            balance: Number(a.balance || 0),
+            email: a.email || '',
+            is_email_verified: !!a.isEmailVerified,
+            steam_trade_link: a.steamTradeLink || '',
+            steam_privacy: a.steamPrivacy || 'public',
+            updated_at: new Date().toISOString()
+          });
+
+          if (Array.isArray(a.inventory)) {
+            for (const item of a.inventory) {
+              const it = item.item || item;
+              invList.push({
+                id: String(item.id),
+                user_id: String(a.id),
+                market_name: it.marketName || 'CS2 Item',
+                price: Number(item.price || it.price || 0),
+                image: it.image || item.image || '',
+                status: item.status || 'available',
+                extra: it.extra || item.extra || {},
+                updated_at: new Date().toISOString()
+              });
+            }
+          }
+        }
+
+        if (userList.length > 0) {
+          await fetch(`${url}/rest/v1/users`, {
+            method: 'POST',
+            headers: this.getHeaders(true),
+            body: JSON.stringify(userList)
+          });
+        }
+
+        if (invList.length > 0) {
+          await fetch(`${url}/rest/v1/inventory`, {
+            method: 'POST',
+            headers: this.getHeaders(true),
+            body: JSON.stringify(invList)
+          });
+        }
+
+        const adminPayload = [{
+          key: 'global_settings',
+          rig_mode: localStorage.getItem('upgrader_rig_mode') || 'normal',
+          server_upgrades: Number(localStorage.getItem('upgrader_server_upgrades_base') || 487677451),
+          server_online: Number(localStorage.getItem('upgrader_server_online') || 4281),
+          updated_at: new Date().toISOString()
+        }];
+
+        await fetch(`${url}/rest/v1/admin_settings`, {
+          method: 'POST',
+          headers: this.getHeaders(true),
+          body: JSON.stringify(adminPayload)
+        });
+
+        console.log('[SupabaseDB] Synced data to Supabase successfully.');
+        return true;
+      } catch(err) {
+        console.error('[SupabaseDB] Sync error:', err);
+        return false;
+      }
+    },
+    async syncFromDB() {
+      const url = this.getUrl();
+      if (!url) return false;
+      try {
+        const res = await fetch(`${url}/rest/v1/users?select=*`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+        if (res.ok) {
+          const users = await res.json();
+          if (Array.isArray(users) && users.length > 0) {
+            const accounts = LocalDB.getAccounts();
+            for (const u of users) {
+              const uname = u.username;
+              if (accounts[uname]) {
+                accounts[uname].balance = Number(u.balance);
+                if (u.nickname) accounts[uname].nickname = u.nickname;
+                if (u.avatar) accounts[uname].avatar = u.avatar;
+                if (u.email) accounts[uname].email = u.email;
+                if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
+              }
+            }
+            LocalDB.saveAccounts(accounts);
+            console.log('[SupabaseDB] Synced data from Supabase successfully.');
+            return true;
+          }
+        }
+      } catch(e) {}
+      return false;
+    }
+  };
+
+  window.SupabaseDB = SupabaseDB;
 
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
   // Preserves authentic user accounts (test_user with 50,000 balance, full inventory, won items, history and email, plus account 666)
@@ -897,6 +1063,12 @@
     static saveAccounts(accounts) {
       try {
         localStorage.setItem(STORAGE_ACCOUNTS_KEY, JSON.stringify(accounts));
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          clearTimeout(LocalDB._dbTimer);
+          LocalDB._dbTimer = setTimeout(() => {
+            SupabaseDB.syncAllToDB();
+          }, 1000);
+        }
       } catch (e) {}
     }
 
@@ -2896,7 +3068,10 @@
           <div id="up-bound-email-card" data-testid="email-linking-block" class="flex w-full items-center justify-between rounded-[0.75rem] bg-[#282A2D] p-4 lg:bg-[#00000066] border border-white/5">
             <div class="flex items-center gap-3">
               <div class="relative flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-[0.375rem] bg-[#FFFFFF1A]">
-                <img src="${getAssetPath('/assets/icons/email.svg')}" class="h-5 w-5" alt="email-icon" />
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px;">
+                  <path d="M4 7.00005L10.2 11.65C11.2667 12.45 12.7333 12.45 13.8 11.65L20 7" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <rect x="3" y="5" width="18" height="14" rx="3" stroke="#FFFFFF" stroke-width="1.8"/>
+                </svg>
               </div>
               <div class="flex flex-col">
                 <span data-testid="email-linking-email-label" class="text-[0.75rem] text-[#8E8F94] font-medium uppercase tracking-wider">Электронная почта</span>
@@ -2904,7 +3079,9 @@
               </div>
             </div>
             <div data-testid="email-linking-verified-badge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#24D17A1A] text-[#24D17A] text-[0.8125rem] font-bold">
-              <img src="${getAssetPath('/assets/icons/check-green.svg')}" class="h-4 w-4" alt="success-icon" />
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:16px;height:16px;">
+                <path d="M13.3332 4L5.99984 11.3333L2.6665 8" stroke="#24D17A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
               <span>Привязана</span>
             </div>
           </div>
