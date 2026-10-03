@@ -30,6 +30,25 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+
+    *::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none !important;
+      margin: 0 !important;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield !important;
+      appearance: textfield !important;
     }
 
     html, body {
@@ -40,6 +59,8 @@
       font-family: 'Exo 2', sans-serif;
       font-size: 14px;
       line-height: 1.5;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
     }
 
     /* Top Sticky Navigation Bar */

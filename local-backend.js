@@ -1662,48 +1662,714 @@
     } catch (e) {}
   }
 
-  // 5. AUTHENTIC LIVE DROPS DATA (Synced from https://upgrader.best/api/live-drops)
-  // Strictly authentic users from upgrader.best, never fake pro players
+    // 5. AUTHENTIC LIVE DROPS DATA (Synced from https://upgrader.best/api/live-drops)
+  // Strictly authentic users and skins with genuine Steam images and rarities
   const authenticDropsPool = [
-    {
-      id: "167853046",
-      probability: "0.5389",
-      user: { id: "1735142", nickname: "Bartline", image: "https://avatars.steamstatic.com/083127eb3d3af6ba840290790ba5fb832550d648_full.jpg" },
-      item: { id: "15238", appId: 730, marketName: "Souvenir MP9 | Latte Rush (Battle-Scarred)", price: "955.930", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-xsWzu6gRg1sgKJk4jxNWWTZgclDpNzQ7FZsESxxNPgZujksVDf2dkTmS343S1M731t5OcLAvZ05OSJ2NaAMPYY/360fx360f", extra: { r: 10, ch: "eb4b4b" } }
+  {
+    "id": "167862655",
+    "probability": "0.0624",
+    "user": {
+      "id": "609688",
+      "nickname": "𝔏𝔬𝔯𝔡𝔦𝔵𝔵",
+      "image": "https://avatars.steamstatic.com/a5d0241fb9b7e85f81ce54031d9e19daa84c5c5e_full.jpg"
     },
-    {
-      id: "167853047",
-      probability: "0.3210",
-      user: { id: "1735284", nickname: "mindset", image: "https://avatars.steamstatic.com/fe05f00bba2133d460c19e7308cc8549424a84fb_full.jpg" },
-      item: { id: "15239", appId: 730, marketName: "Austin 2025 Mirage Souvenir Highlight Package", price: "286.020", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-xsWzu6gRg1sgKJk4jxNWWTZgclDpNzQ7FZsESxxNPgZujksVDf2dkTmS343S1M731t5OcLAvZ05OSJ2NaAMPYY/360fx360f", extra: { r: 10, ch: "eb4b4b" } }
-    },
-    {
-      id: "167853048",
-      probability: "0.6840",
-      user: { id: "1735391", nickname: "master xm1014", image: "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg" },
-      item: { id: "15240", appId: 730, marketName: "StatTrak™ P250 | Epicenter (Minimal Wear)", price: "1456.050", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-xsWzu6gRg1sgKJk4jxNWWTZgclDpNzQ7FZsESxxNPgZujksVDf2dkTmS343S1M731t5OcLAvZ05OSJ2NaAMPYY/360fx360f", extra: { r: 10, ch: "eb4b4b" } }
-    },
-    {
-      id: "167853049",
-      probability: "0.4502",
-      user: { id: "1735412", nickname: "3xten90cl1xk", image: "https://avatars.steamstatic.com/d0b982bb7df5e12f68bc112bb33f9ce5f99238e8_full.jpg" },
-      item: { id: "15241", appId: 730, marketName: "Sticker | molodoy (Holo) | Austin 2025", price: "477.540", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-xsWzu6gRg1sgKJk4jxNWWTZgclDpNzQ7FZsESxxNPgZujksVDf2dkTmS343S1M731t5OcLAvZ05OSJ2NaAMPYY/360fx360f", extra: { r: 10, ch: "eb4b4b" } }
-    },
-    {
-      id: "167853050",
-      probability: "0.5891",
-      user: { id: "1735520", nickname: "WifiBandit", image: "https://avatars.steamstatic.com/9735d4f3b64c39e2ae2d32697d81a8b2a59a72ad_full.jpg" },
-      item: { id: "15242", appId: 730, marketName: "P90 | Trigon (Well-Worn)", price: "903.240", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-xsWzu6gRg1sgKJk4jxNWWTZgclDpNzQ7FZsESxxNPgZujksVDf2dkTmS343S1M731t5OcLAvZ05OSJ2NaAMPYY/360fx360f", extra: { r: 10, ch: "eb4b4b" } }
-    },
-    {
-      id: "167853051",
-      probability: "0.4120",
-      user: { id: "1735605", nickname: "привет маме PEEK", image: "https://avatars.steamstatic.com/c6cbb38258e92a2a0ff995e8693cba39d5622384_full.jpg" },
-      item: { id: "15243", appId: 730, marketName: "Sticker | Freeman (Foil) | Katowice 2019", price: "413.150", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_OGMWrEwL9lj-xsWzu6gRg1sgKJk4jxNWWTZgclDpNzQ7FZsESxxNPgZujksVDf2dkTmS343S1M731t5OcLAvZ05OSJ2NaAMPYY/360fx360f", extra: { r: 10, ch: "eb4b4b" } }
+    "item": {
+      "id": "21400",
+      "appId": 730,
+      "marketName": "Sticker | Attacker (Gold) | Austin 2025",
+      "price": "827.970",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGJai0ki7VeTHjMu0JinHtwM6547z1VjzVRzylZPywiVU4_bgP_U-efXFVjaRlb0mseU4TnvgkU0i4z_Qmd2qdCmWaw5zWcZ5FuMPug74zINJKCx87Q/360fx360f",
+      "extra": {
+        "e": null,
+        "g": null,
+        "n": [
+          "Sticker",
+          "Attacker (Gold)",
+          "Austin 2025"
+        ],
+        "r": 7,
+        "s": false,
+        "t": 13,
+        "ch": "eb4b4b",
+        "st": false
+      }
     }
+  },
+  {
+    "id": "167862654",
+    "probability": "0.5372",
+    "user": {
+      "id": "1473685",
+      "nickname": "timo4plugg",
+      "image": "https://avatars.steamstatic.com/a15c107e6ed2208600d95b5b05751ec662efee10_full.jpg"
+    },
+    "item": {
+      "id": "4104",
+      "appId": 730,
+      "marketName": "PP-Bizon | Water Sigil (Factory New)",
+      "price": "388.060",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLzl4zv8x1T9s25abBoMs-QHGKD1dF6ueZhW2frwRwh4j7VwoqpdHyWPQcgCpd2TbFYsxC-l4a0Pu2ztA2NgtkUzST-kGoXuZ4FYcbA/360fx360f",
+      "extra": {
+        "e": 2,
+        "g": 25,
+        "n": [
+          "PP-Bizon",
+          "Water Sigil",
+          "Factory New"
+        ],
+        "r": 15,
+        "s": false,
+        "t": 16,
+        "ch": "4b69ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862653",
+    "probability": "0.7835",
+    "user": {
+      "id": "416429",
+      "nickname": "Svarcnederis",
+      "image": "https://avatars.steamstatic.com/df38efb14c072c79bb752ba732feda479ddd8988_full.jpg"
+    },
+    "item": {
+      "id": "5128",
+      "appId": 730,
+      "marketName": "XM1014 | Heaven Guard (Field-Tested)",
+      "price": "412.310",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLpk8ewrHZk7OeRcKk8cKHHMW-VwPhzvt5uWiihkSIqtjmMj4K3IiqXb1B2CpdzTbMOskO-wNbhZLiw51Hfio9NziX-2Hsf5i9v5OpTB71lpPNe0UvU1Q/360fx360f",
+      "extra": {
+        "e": 3,
+        "g": 34,
+        "n": [
+          "XM1014",
+          "Heaven Guard",
+          "Field-Tested"
+        ],
+        "r": 16,
+        "s": false,
+        "t": 16,
+        "ch": "8847ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862652",
+    "probability": "0.7405",
+    "user": {
+      "id": "2087114",
+      "nickname": "Faraon",
+      "image": "https://avatars.steamstatic.com/0380beb661d65058fd68489e3456d45d4bcb709b_full.jpg"
+    },
+    "item": {
+      "id": "7259",
+      "appId": 730,
+      "marketName": "Sticker | Virtus.Pro | MLG Columbus 2016",
+      "price": "437.400",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGJai0ki7VeTHjMmuOW6a50NmptelvBbxUVOnmJPl_HdZvaX9OfA_caDADzLFmOoj4uUwTCrrl0sitWvXytyuIH7DcEZ-XTBBR34J/360fx360f",
+      "extra": {
+        "e": null,
+        "g": null,
+        "n": [
+          "Sticker",
+          "Virtus.Pro",
+          "MLG Columbus 2016"
+        ],
+        "r": 8,
+        "s": false,
+        "t": 13,
+        "ch": "4b69ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862651",
+    "probability": "0.5786",
+    "user": {
+      "id": "1863824",
+      "nickname": "новичок",
+      "image": "https://avatars.steamstatic.com/865b61e660d786751bdab6838d2aa821a8a9355f_full.jpg"
+    },
+    "item": {
+      "id": "3230",
+      "appId": 730,
+      "marketName": "★ Shadow Daggers | Night (Field-Tested)",
+      "price": "4026.930",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1L-uGmV7diH_6aCW-E_uNztOh8QmfixU52626An9qsJXrBbwQhDpImF7MIs0PuktCyZOrm5lbXjt8TnCqtkGoXubObITJw/360fx360f",
+      "extra": {
+        "e": 3,
+        "g": null,
+        "n": [
+          "★ Shadow Daggers",
+          "Night",
+          "Field-Tested"
+        ],
+        "r": 10,
+        "s": false,
+        "t": 9,
+        "ch": "eb4b4b",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862650",
+    "probability": "0.5197",
+    "user": {
+      "id": "23483",
+      "nickname": "☠",
+      "image": "https://avatars.steamstatic.com/0fe87ecbe3b7a41d4ecd8112b1e499a8d3d235ce_full.jpg"
+    },
+    "item": {
+      "id": "20747",
+      "appId": 730,
+      "marketName": "Sticker | kye (Gold) | Austin 2025",
+      "price": "648.160",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGJai0ki7VeTHjMu0JinHtwM6547z1VL-RCL2kZrks3oJvqqrbfQ6JKfLV2TIkL0j6bAxTHuwwBx-tjuHnt_4cX_GOgMjAsBuBbldyR8ymt8/360fx360f",
+      "extra": {
+        "e": null,
+        "g": null,
+        "n": [
+          "Sticker",
+          "kye (Gold)",
+          "Austin 2025"
+        ],
+        "r": 7,
+        "s": false,
+        "t": 13,
+        "ch": "eb4b4b",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862649",
+    "probability": "0.5599",
+    "user": {
+      "id": "116551",
+      "nickname": "сосискин",
+      "image": "https://avatars.steamstatic.com/8d04e92c0b36a562f5e7c02544d21bdd4fc54619_full.jpg"
+    },
+    "item": {
+      "id": "11763",
+      "appId": 730,
+      "marketName": "AK-47 | Panthera onca (Field-Tested)",
+      "price": "15084.890",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlV65sJ-WSHFidxOp_pewnHn-wx0Qk5mrVmderdn2XagQoW8AiRO8K4Be-x9K0ZrjjsQKMg4hMzjK-0H3kfYgSlA/360fx360f",
+      "extra": {
+        "e": 3,
+        "g": 1,
+        "n": [
+          "AK-47",
+          "Panthera onca",
+          "Field-Tested"
+        ],
+        "r": 12,
+        "s": false,
+        "t": 16,
+        "ch": "d32ce6",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862648",
+    "probability": "0.5385",
+    "user": {
+      "id": "330870",
+      "nickname": "maksym96___⚓",
+      "image": "https://avatars.steamstatic.com/6410fe435cb4823fd2c701d6df6d67c83619e095_full.jpg"
+    },
+    "item": {
+      "id": "10863",
+      "appId": 730,
+      "marketName": "M4A1-S | Moss Quartz (Battle-Scarred)",
+      "price": "2073.260",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_GeMWSC2P1ise1lRjO2kSIjsi-OpYjrJC7JAV51W9Q5W7IIsxjpwYfmMOKx7wzYg41HzCn_33tMuy5i5-gLBaBw-PeFjgyXMLcjoc5U0-uLuOE/360fx360f",
+      "extra": {
+        "e": 1,
+        "g": 13,
+        "n": [
+          "M4A1-S",
+          "Moss Quartz",
+          "Battle-Scarred"
+        ],
+        "r": 14,
+        "s": false,
+        "t": 16,
+        "ch": "5e98d9",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862647",
+    "probability": "0.3475",
+    "user": {
+      "id": "1372414",
+      "nickname": "сатор арепыч",
+      "image": "https://avatars.steamstatic.com/867110165318f8daef4224288636f7ba79a3cf01_full.jpg"
+    },
+    "item": {
+      "id": "11148",
+      "appId": 730,
+      "marketName": "Black Mesa Pin",
+      "price": "421.510",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGJai2l-lQ8ndwMWvJjSU6lp58YTg41vrRCLhl5jf_C5C983-Puo5IvWQDTHHkLwg5rFtFyjgzB8lsGTQztmreHuXOgMhWcFwQe4IsELrjJS5YLQKtvDj/360fx360f",
+      "extra": {
+        "e": null,
+        "g": null,
+        "n": [
+          "Black Mesa",
+          "Pin"
+        ],
+        "r": 8,
+        "s": false,
+        "t": 3,
+        "ch": "4b69ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862646",
+    "probability": "0.3597",
+    "user": {
+      "id": "2386197",
+      "nickname": "PIXON1",
+      "image": "https://avatars.steamstatic.com/781f2842d95ff5fbb615802880e040a01645e758_full.jpg"
+    },
+    "item": {
+      "id": "13931",
+      "appId": 730,
+      "marketName": "StatTrak™ M4A1-S | Black Lotus (Well-Worn)",
+      "price": "1139.920",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_3HDzaD_ux6seJicCW8gQg0jDCAnobsLGWTbQQnDsN3QuYOtELqkIazZeLm7lPYj9gQzyj72y8du31i6ulQA6Rx5OSJ2CPXrFUp/360fx360f",
+      "extra": {
+        "e": 5,
+        "g": 13,
+        "n": [
+          "M4A1-S",
+          "Black Lotus",
+          "Well-Worn"
+        ],
+        "r": 12,
+        "s": false,
+        "t": 16,
+        "ch": "d32ce6",
+        "st": true
+      }
+    }
+  },
+  {
+    "id": "167862645",
+    "probability": "0.3800",
+    "user": {
+      "id": "2388366",
+      "nickname": "avgust-5588",
+      "image": "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg"
+    },
+    "item": {
+      "id": "7912",
+      "appId": 730,
+      "marketName": "P2000 | Turf (Minimal Wear)",
+      "price": "376.350",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL5lYayrXIL0PW9V7Q_cKDDQ3SAzvxij-1gSCGn20h14mSByd6vJXmUagQoXpMkQecN40Xsm4DhM-3k4lTY340UxCn53HhXrnE88VIlnLo/360fx360f",
+      "extra": {
+        "e": 4,
+        "g": 22,
+        "n": [
+          "P2000",
+          "Turf",
+          "Minimal Wear"
+        ],
+        "r": 15,
+        "s": false,
+        "t": 16,
+        "ch": "4b69ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862644",
+    "probability": "0.7783",
+    "user": {
+      "id": "2000626",
+      "nickname": "prince",
+      "image": "https://avatars.steamstatic.com/3c42f23a2fcfb31bbe37bcd15239fc90cbdb0771_full.jpg"
+    },
+    "item": {
+      "id": "10768",
+      "appId": 730,
+      "marketName": "XM1014 | Banana Leaf (Factory New)",
+      "price": "1595.720",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLpk8ewrHZk5-uRZKFsJs-UHGKVz9F6ueZhW2e3zRlxsTvVzdqpdy6eOwF0X8ciQOcD5hjqwNLmNu7isQHfjY1Cz3mvkGoXuYSrXADo/360fx360f",
+      "extra": {
+        "e": 2,
+        "g": 34,
+        "n": [
+          "XM1014",
+          "Banana Leaf",
+          "Factory New"
+        ],
+        "r": 14,
+        "s": false,
+        "t": 16,
+        "ch": "5e98d9",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862643",
+    "probability": "0.7820",
+    "user": {
+      "id": "2038614",
+      "nickname": "ALink///aaa",
+      "image": "https://avatars.steamstatic.com/2c43f614e8926a9aab4060723e933b43b63f28e4_full.jpg"
+    },
+    "item": {
+      "id": "5811",
+      "appId": 730,
+      "marketName": "Souvenir CZ75-Auto | Nitro (Well-Worn)",
+      "price": "566.200",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLyhMG1_B1I4M2heqVjJ_WsD2STxOBio7NWQiy3nAgq_Wzdn4msdCmWagcpD8clTbNe4EXuxtLlZuLn7wXfid9GxCirjyhO7Sh1o7FVFCJcSxA/360fx360f",
+      "extra": {
+        "e": 5,
+        "g": 4,
+        "n": [
+          "Souvenir CZ75-Auto",
+          "Nitro",
+          "Well-Worn"
+        ],
+        "r": 15,
+        "s": false,
+        "t": 16,
+        "ch": "4b69ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862642",
+    "probability": "0.7907",
+    "user": {
+      "id": "2387490",
+      "nickname": "Тут",
+      "image": "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg"
+    },
+    "item": {
+      "id": "13816",
+      "appId": 730,
+      "marketName": "Souvenir M4A1-S | Mud-Spec (Factory New)",
+      "price": "529.400",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFS4_ega6F_H_eAMWrEwL9lj-xgQzqjkB4YvzSCkpu3I3rGP1JxDJpwEbEJ40G6mtfjPuqx7wTf3d5AzHn5hy9AuH5p4u9QBb1lpPNjrdVvDA/360fx360f",
+      "extra": {
+        "e": 2,
+        "g": 13,
+        "n": [
+          "Souvenir M4A1-S",
+          "Mud-Spec",
+          "Factory New"
+        ],
+        "r": 14,
+        "s": false,
+        "t": 16,
+        "ch": "5e98d9",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862641",
+    "probability": "0.0718",
+    "user": {
+      "id": "2378325",
+      "nickname": "anqqs1",
+      "image": "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg"
+    },
+    "item": {
+      "id": "16972",
+      "appId": 730,
+      "marketName": "Sticker | Xyp9x (Foil) | Cologne 2015",
+      "price": "1242.790",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGJai0ki7VeTHjMmuOXSQ61MnpNahpUruRiLph4a55R1d4PuiJvJvd6SXXWOTl79347Y_TijnzEh34WTWwt6rdimUZ1N1DZZ2R7NftxSm0oqwvPhP8ho/360fx360f",
+      "extra": {
+        "e": null,
+        "g": null,
+        "n": [
+          "Sticker",
+          "Xyp9x (Foil)",
+          "Cologne 2015"
+        ],
+        "r": 6,
+        "s": false,
+        "t": 13,
+        "ch": "d32ce6",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862640",
+    "probability": "0.7725",
+    "user": {
+      "id": "812770",
+      "nickname": "#999 UnlimitedDev",
+      "image": "https://avatars.steamstatic.com/052bd70f03a3187975eb926ca7c672e89f5c633f_full.jpg"
+    },
+    "item": {
+      "id": "14145",
+      "appId": 730,
+      "marketName": "M4A4 | Polysoup (Battle-Scarred)",
+      "price": "529.400",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFU4M2-Z6h0M_-GHlidle8ij-lsTj-q20V-5mTWw4msdX6ebgcoCJAlE-ZbthPtkNPgZOjn5wXajNhFxX_623tXrnE8XlG-qlc/360fx360f",
+      "extra": {
+        "e": 1,
+        "g": 14,
+        "n": [
+          "M4A4",
+          "Polysoup",
+          "Battle-Scarred"
+        ],
+        "r": 16,
+        "s": false,
+        "t": 16,
+        "ch": "8847ff",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862639",
+    "probability": "0.3625",
+    "user": {
+      "id": "286004",
+      "nickname": "Salamalaykuuum!",
+      "image": "https://avatars.steamstatic.com/ab877f8e4978aba53930932e2dc51f7cd4abf29a_full.jpg"
+    },
+    "item": {
+      "id": "2903",
+      "appId": 730,
+      "marketName": "AK-47 | Point Disarray (Minimal Wear)",
+      "price": "1976.250",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSMP-aAHOvxedlsfN7TjCMmRQguynLnIz_dXnEbFcoDsNzQLMN40S7mte0Zuzl5gbY34JEnnr52ChA7ytisPFCD_Rw7udDlA/360fx360f",
+      "extra": {
+        "e": 4,
+        "g": 1,
+        "n": [
+          "AK-47",
+          "Point Disarray",
+          "Minimal Wear"
+        ],
+        "r": 12,
+        "s": false,
+        "t": 16,
+        "ch": "d32ce6",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862638",
+    "probability": "0.7775",
+    "user": {
+      "id": "2260717",
+      "nickname": "guckerr2 @gg_duckbot",
+      "image": "https://avatars.steamstatic.com/e7a5e8d561e0775c50c8e8dda936aaf1019536a3_full.jpg"
+    },
+    "item": {
+      "id": "2519",
+      "appId": 730,
+      "marketName": "StatTrak™ M4A4 | Turbine (Minimal Wear)",
+      "price": "651.500",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwi8P7qaRbrF-Kf-dMWuZxuZi_rRtGiriwUgh5m6Bn9z4IHLEOA4gDpZxQOULsUW9k4eyMOLitQzd3opbjXKpOa4i6Kc/360fx360f",
+      "extra": {
+        "e": 4,
+        "g": 14,
+        "n": [
+          "M4A4",
+          "Turbine",
+          "Minimal Wear"
+        ],
+        "r": 16,
+        "s": false,
+        "t": 16,
+        "ch": "8847ff",
+        "st": true
+      }
+    }
+  },
+  {
+    "id": "167862637",
+    "probability": "0.3676",
+    "user": {
+      "id": "309918",
+      "nickname": "хз",
+      "image": "https://avatars.steamstatic.com/d6fa40acf854ff8d6ef1b205a9b825b9be7f6ad5_full.jpg"
+    },
+    "item": {
+      "id": "2955",
+      "appId": 730,
+      "marketName": "M4A4 | Cyber Security (Field-Tested)",
+      "price": "1893.450",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afBSI-mRC3WA1OB9j-xsSyCmmFN_5Tvdm9ypcXnGPQ8iXMYjF7EM50a8wdKzMOLntFfb3d5BnnmriH9N8G81tGbS0tGU/360fx360f",
+      "extra": {
+        "e": 3,
+        "g": 14,
+        "n": [
+          "M4A4",
+          "Cyber Security",
+          "Field-Tested"
+        ],
+        "r": 12,
+        "s": false,
+        "t": 16,
+        "ch": "d32ce6",
+        "st": false
+      }
+    }
+  },
+  {
+    "id": "167862636",
+    "probability": "0.7835",
+    "user": {
+      "id": "1451452",
+      "nickname": "wetricss",
+      "image": "https://avatars.steamstatic.com/354fec3d2a3d37f63cbc2b0b04ec1f33de8a6618_full.jpg"
+    },
+    "item": {
+      "id": "2421",
+      "appId": 730,
+      "marketName": "AK-47 | Searing Rage (Field-Tested)",
+      "price": "489.250",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiNQu6WRbbx9LP-AB3GV_uNztOh8QmexlhtwsW7Qno6vc3ufaAd2WZR4TOcJ4RC-lYezMbngsgCLiolHzimvkGoXuYrtgXO6/360fx360f",
+      "extra": {
+        "e": 3,
+        "g": 1,
+        "n": [
+          "AK-47",
+          "Searing Rage",
+          "Field-Tested"
+        ],
+        "r": 12,
+        "s": false,
+        "t": 16,
+        "ch": "d32ce6",
+        "st": false
+      }
+    }
+  }
+];
+
+  const authenticNicknames = [
+    'Celma', 'lixx', 'Bartline', 'mindset', '3xten90cl1xk', 'WifiBandit', 'Каха', 'master xm1014',
+    'del.', 'Kri$tina', 'y4rilo', 'CheezeCaake', 'Kamidzu', 'МэйтХаус', 'Пророк Мухаммед',
+    '𝔏𝔬𝔯𝔡𝔦𝔵𝔵', 'timo4plugg', 'Svarcnederis', 'rkhmmvvv', 'ZİPP HS', 'm o v e r o', 'megiddo', 'Zwe1st'
   ];
 
+  let currentBestDrop = {
+    id: "167862338",
+    probability: "0.5503",
+    wonAmount: "483427.28",
+    user: { id: "1554726", nickname: "Celma", image: "https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp" },
+    item: {
+      id: "27574",
+      appId: 730,
+      marketName: "★ Talon Knife | Doppler Ruby (Factory New)",
+      price: "483427.280",
+      image: "https://cs2-cdn.pricempire.com/panorama/images/econ/default_generated/weapon_knife_widowmaker_am_ruby_marbleized_light_png.avif",
+      imageNew: "https://cs2-cdn.pricempire.com/panorama/images/econ/default_generated/weapon_knife_widowmaker_am_ruby_marbleized_light_png.avif",
+      extra: { e: 1, g: 33, n: ["★ Talon Knife", "Doppler Ruby", "Factory New"], r: 11, s: false, t: 6, ch: "ffae39", st: false }
+    }
+  };
+
+  function syncBestDropInDOM() {
+    if (!currentBestDrop || !currentBestDrop.item) return;
+    const dropRoot = document.querySelector('up-drop [data-testid="live-drop"]');
+    if (!dropRoot) return;
+
+    let bestDropContainer = document.getElementById('upgrader-custom-best-drop-wrapper');
+    if (!bestDropContainer) {
+      bestDropContainer = document.createElement('div');
+      bestDropContainer.id = 'upgrader-custom-best-drop-wrapper';
+      bestDropContainer.className = 'relative bg-block w-full flex-col overflow-hidden !rounded-r-lg !py-1.5 z-[2]';
+      const eggBanner = dropRoot.querySelector('up-egg-event-banner');
+      if (eggBanner && eggBanner.nextSibling) {
+        dropRoot.insertBefore(bestDropContainer, eggBanner.nextSibling);
+      } else {
+        dropRoot.prepend(bestDropContainer);
+      }
+    }
+
+    const item = currentBestDrop.item;
+    const user = currentBestDrop.user || {};
+    const wonAmount = (parseFloat(currentBestDrop.wonAmount || item.price || 0)).toFixed(2);
+    const shortName = (item.extra && item.extra.n && item.extra.n[1]) || item.marketName.split('|')[1] || item.marketName;
+    const subName = (item.extra && item.extra.n && item.extra.n[0]) || item.marketName.split('|')[0] || '';
+    const avatarUrl = user.image || 'https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp';
+    const nickname = user.nickname || 'User';
+    const itemImg = item.imageNew || item.image;
+
+    bestDropContainer.innerHTML = `
+      <div class="z-[1]">
+        <up-best-drop-item _nghost-ng-c3234582991="">
+          <button data-testid="best-drop-item" class="group bg-card relative flex h-[5rem] w-[11.75rem] items-end overflow-hidden rounded-lg p-2 !cursor-default" style="border: 1px solid rgba(251, 213, 6, 0.35); box-shadow: 0 0 12px rgba(251, 213, 6, 0.15);">
+            <div class="pointer-events-none relative z-[2] flex h-full w-full flex-col items-start justify-start space-x-0.5 select-none">
+              <div class="absolute bottom-0 left-0 flex flex-col items-start justify-start space-x-0.5 text-left transition-all duration-700 group-hover:translate-y-[-100%] group-hover:opacity-0">
+                <span class="font-tektur text-xxs max-w-[5.5rem] truncate font-bold uppercase" style="color: #fff;">${shortName.trim()}</span>
+                <span class="font-exo text-xxxs max-w-[6.2rem] truncate font-semibold" style="color: rgba(255, 255, 255, 0.55);">${subName.trim()}</span>
+              </div>
+              <div class="absolute bottom-0 left-0 flex translate-y-[50%] flex-col items-start justify-start space-y-1 opacity-0 transition-all duration-700 group-hover:translate-y-0 group-hover:opacity-100">
+                <up-avatar-with-placeholder class="h-6 w-6">
+                  <img class="h-6 object-cover rounded-full w-6 opacity-100" src="${avatarUrl}" alt="Аватар пользователя">
+                </up-avatar-with-placeholder>
+                <span class="font-tektur text-xxs max-w-[11rem] truncate font-bold text-white uppercase">${nickname}</span>
+              </div>
+            </div>
+            <div class="absolute top-2 right-2 z-[3] flex translate-y-[-50%] items-center justify-center space-x-0.5 opacity-0 transition-all duration-700 group-hover:translate-y-0 group-hover:opacity-100">
+              <span class="text-[0.625rem] leading-none font-semibold text-white">${wonAmount}</span>
+              <img alt="" class="h-2.5 w-2.5" src="https://s3.upgrader.best/cdn/fa/icons/coins.svg">
+            </div>
+            <img alt="drop-item" class="absolute top-1/2 right-0 z-[2] h-full max-h-[5.6875rem] w-full max-w-[5.8125rem] -translate-y-1/2 object-contain transition-transform duration-300 group-hover:scale-105" src="${itemImg}">
+            <div class="absolute top-0 left-0 h-full w-0.5" style="background: rgb(251, 213, 6);"></div>
+            <div class="absolute top-0 left-0 h-full w-full pointer-events-none" style="background: linear-gradient(270deg, rgba(35, 35, 37, 0.2) 25.06%, rgba(251, 213, 6, 0.25) 100%);"></div>
+            <img alt="" class="absolute top-1/2 -right-1.5 h-[6.6875rem] w-[4.125rem] -translate-y-1/2 opacity-0 transition-opacity duration-700 group-hover:opacity-100" src="https://s3.upgrader.best/cdn/fa/images/upgrader-arrow-up.svg">
+          </button>
+        </up-best-drop-item>
+      </div>
+    `;
+  }
+  setInterval(syncBestDropInDOM, 1000);
+
   function generateRandomDrop() {
+    const catalog = window.UPGRADER_CONFIG && window.UPGRADER_CONFIG.catalog;
+    if (catalog && catalog.length > 0) {
+      const skin = catalog[Math.floor(Math.random() * catalog.length)];
+      const nick = authenticNicknames[Math.floor(Math.random() * authenticNicknames.length)];
+      return {
+        id: String(Date.now() + '_' + Math.floor(Math.random() * 10000)),
+        probability: ((Math.random() * 75 + 4) / 100).toFixed(4),
+        user: {
+          id: String(Math.floor(Math.random() * 900000) + 1735000),
+          nickname: nick,
+          image: "https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp"
+        },
+        item: {
+          id: String(skin.id),
+          appId: 730,
+          marketName: skin.marketName,
+          price: String(skin.price),
+          image: skin.image,
+          imageNew: skin.image,
+          extra: skin.extra || { r: 12, ch: 'd32ce6', n: skin.marketName.split('|').map(s=>s.trim()) }
+        }
+      };
+    }
     if (authenticDropsPool.length > 0) {
       const base = authenticDropsPool[Math.floor(Math.random() * authenticDropsPool.length)];
       return {
@@ -1712,24 +2378,11 @@
         probability: ((Math.random() * 75 + 4) / 100).toFixed(4)
       };
     }
-    const catalog = window.UPGRADER_CONFIG.catalog;
-    const skin = catalog[Math.floor(Math.random() * Math.min(catalog.length, 500))] || catalog[0];
     return {
       id: String(Date.now() + '_' + Math.floor(Math.random() * 10000)),
-      user: {
-        id: String(Math.floor(Math.random() * 50000) + 1735000),
-        nickname: "User_" + Math.floor(Math.random() * 8999 + 1000),
-        image: "https://avatars.steamstatic.com/fe05f00bba2133d460c19e7308cc8549424a84fb_full.jpg"
-      },
-      item: {
-        id: String(skin.id),
-        appId: 730,
-        marketName: skin.marketName,
-        price: String(skin.price),
-        image: skin.image,
-        extra: skin.extra || { r: 10, ch: 'eb4b4b' }
-      },
-      probability: ((Math.random() * 75 + 4) / 100).toFixed(4)
+      probability: "0.5230",
+      user: { id: "1735100", nickname: "Player", image: "https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp" },
+      item: { id: "15238", appId: 730, marketName: "AK-47 | Redline (Field-Tested)", price: "1850.00", image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSNeODHViUzulxqd5hSiiljFN0tjncn4mheS3BZgQiCZsiTOJb4RW8loaxML_itAzW34lCni-oin8c8G81tPcb6H_-/360fx360f", extra: { r: 12, ch: "d32ce6" } }
     };
   }
 
@@ -1830,6 +2483,14 @@
       if (Array.isArray(feed.newDrops) && feed.newDrops.length > 0) {
         enqueueDrops(feed.newDrops);
       }
+      if (feed.bestLiveDrop && feed.bestLiveDrop.item) {
+        currentBestDrop = feed.bestLiveDrop;
+        WsMock.broadcast({
+          event: 'live_drops.best_hour_updated',
+          data: { bestLiveDrop: currentBestDrop }
+        });
+        syncBestDropInDOM();
+      }
     } catch(e) {}
   }
   setInterval(pollRealtimeFeed, 1000);
@@ -1886,12 +2547,13 @@
           try {
             const data = JSON.parse(msg);
             if (data && data.id) {
+              const respData = (data.event === 'online') ? currentOnline : 'ok';
               setTimeout(() => {
                 if (fakeWs.onmessage) {
                   fakeWs.onmessage({
                     data: JSON.stringify({
                       id: data.id,
-                      data: 'ok'
+                      data: respData
                     })
                   });
                 }
@@ -2505,6 +3167,9 @@
 
     // /live-drops (Directly populated with authentic drops from upgrader.best)
     if (path.includes('/live-drops')) {
+      if (path.includes('/best-hour')) {
+        return { status: 200, data: { bestLiveDrop: currentBestDrop } };
+      }
       if (cachedRealtimeDrops && cachedRealtimeDrops.length > 0) {
         return { status: 200, data: { liveDrops: cachedRealtimeDrops } };
       }
@@ -3317,7 +3982,25 @@
     if (existing) existing.remove();
   }
 
-  // 10.2 PROFILE SETTINGS MODAL (Authentic upgrader.best Settings design matching media_1791044016275.png)
+  // 10.1 SITE LANGUAGE HELPER
+  function isSiteEnglish() {
+    try {
+      const loc = (localStorage.getItem('user_last_locale') || localStorage.getItem('locale') || localStorage.getItem('language') || '').toLowerCase();
+      if (loc.startsWith('en')) return true;
+      if (loc.startsWith('ru') || loc.startsWith('cis')) return false;
+      if (window.location.pathname.startsWith('/en')) return true;
+      if (window.location.pathname.startsWith('/ru') || window.location.pathname.startsWith('/cis')) return false;
+      const docLang = (document.documentElement.lang || '').toLowerCase();
+      if (docLang.startsWith('en')) return true;
+      if (docLang.startsWith('ru')) return false;
+      if (document.body && /Sign in|Inventory|Upgrade/i.test(document.body.innerText) && !/Войти|Инвентарь|Прокачать/i.test(document.body.innerText)) {
+        return true;
+      }
+    } catch(e) {}
+    return false;
+  }
+
+  // 10.2 PROFILE SETTINGS MODAL (Authentic upgrader.best Settings design matching media_1791046449805.png)
   function renderProfileEditModal() {
     const existing = document.getElementById('upgrader-profile-edit-modal');
     if (existing) existing.remove();
@@ -3328,7 +4011,7 @@
       return;
     }
 
-    let selectedCurrency = activeUser.currency || 'COINS';
+    const isEn = isSiteEnglish();
     let selectedPrivacy = activeUser.privacy || 'private';
     let pendingAvatar = activeUser.avatar;
 
@@ -3345,111 +4028,79 @@
           position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .2s; border-radius: 50%;
         }
         input:checked + .up-modal-switch-slider {
-          background: #FDD911;
+          background: #FBD506;
         }
         input:checked + .up-modal-switch-slider:before {
           transform: translateX(20px);
           background: #121316;
         }
-        .up-currency-pill {
-          display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #1B1C21; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; transition: all .15s ease;
+        .up-privacy-row {
+          display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; cursor: pointer; user-select: none;
         }
-        .up-currency-pill.active {
-          border-color: #FDD911; background: rgba(253,217,17,0.04);
+        .up-radio-circle {
+          width: 16px; height: 16px; border-radius: 50%; border: 2px solid #3A3B43; background: transparent; flex-shrink: 0; margin-top: 2px; box-sizing: border-box; transition: all .15s ease;
         }
-        .up-privacy-option {
-          display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: #1B1C21; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; cursor: pointer; transition: all .15s ease;
-        }
-        .up-privacy-option.active {
-          border-color: #FDD911; background: rgba(253,217,17,0.04);
-        }
-        .up-radio-dot {
-          width: 14px; height: 14px; border-radius: 50%; border: 2px solid #555; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px;
-        }
-        .active .up-radio-dot {
-          border-color: #FDD911; background: #FDD911;
+        .up-privacy-row.active .up-radio-circle {
+          border: 5px solid #FBD506; background: #17181C;
         }
       </style>
 
-      <div style="position:relative;width:100%;max-width:480px;background:#17181C;border:1px solid rgba(255,255,255,0.1);border-radius:22px;box-shadow:0 25px 60px rgba(0,0,0,0.75);padding:26px 28px;color:#fff;max-height:92vh;overflow-y:auto;box-sizing:border-box;">
+      <div style="position:relative;width:100%;max-width:460px;background:#17181C;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.85);padding:24px 26px;color:#fff;box-sizing:border-box;">
         
         <!-- Header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
-          <h3 style="font-family:Tektur,sans-serif;font-size:20px;font-weight:700;margin:0;color:#fff;">Настройки</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <h3 style="font-family:Tektur,sans-serif;font-size:20px;font-weight:700;margin:0;color:#fff;">${isEn ? 'Settings' : 'Настройки'}</h3>
           <button type="button" id="up-profile-edit-close" style="background:none;border:none;color:#8E8F94;font-size:22px;cursor:pointer;line-height:1;padding:0;">✕</button>
         </div>
 
         <!-- Nickname -->
         <div style="margin-bottom:18px;">
-          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:8px;">Никнейм</label>
-          <input type="text" id="edit-nickname-input" value="${activeUser.nickname}" style="width:100%;box-sizing:border-box;background:#121316;border:1px solid #FDD911;color:#fff;padding:12px 14px;border-radius:10px;font-size:14px;outline:none;" />
+          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:8px;">${isEn ? 'Nickname' : 'Никнейм'}</label>
+          <input type="text" id="edit-nickname-input" value="${activeUser.nickname}" style="width:100%;box-sizing:border-box;background:#17181C;border:1px solid #FBD506;box-shadow:0 0 0 1px #FBD506;color:#fff;padding:12px 14px;border-radius:10px;font-size:14px;outline:none;" />
         </div>
 
         <!-- Trade Link -->
-        <div style="margin-bottom:18px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label style="font-size:13px;font-weight:600;color:#fff;margin:0;">Трейд-ссылка</label>
-            <a href="https://steamcommunity.com/id/me/tradeoffers/privacy#trade_offer_access_url" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#8E8F94;text-decoration:none;">Ссылку можно взять <span style="text-decoration:underline;color:#fff;">здесь</span></a>
-          </div>
-          <input type="text" id="edit-tradelink-input" value="${activeUser.steamTradeLink || activeUser.tradeLink || ''}" placeholder="https://steamcommunity.com/tradeoffer/new/?partner=..." style="width:100%;box-sizing:border-box;background:#121316;border:1px solid rgba(255,255,255,0.08);color:#fff;padding:12px 14px;border-radius:10px;font-size:13px;outline:none;" />
-        </div>
-
-        <!-- Display Currency -->
         <div style="margin-bottom:20px;">
-          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:10px;">Отображаемая валюта</label>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="currency-pills-list">
-            <div class="up-currency-pill ${selectedCurrency === 'COINS' ? 'active' : ''}" data-currency="COINS">
-              <span style="font-size:12px;font-weight:700;color:#fff;">🪙 COINS</span>
-              <div class="up-radio-dot"></div>
-            </div>
-            <div class="up-currency-pill ${selectedCurrency === 'USCOINS' ? 'active' : ''}" data-currency="USCOINS">
-              <span style="font-size:12px;font-weight:700;color:#fff;">💵 USCOINS</span>
-              <div class="up-radio-dot"></div>
-            </div>
-            <div class="up-currency-pill ${selectedCurrency === 'EUCOINS' ? 'active' : ''}" data-currency="EUCOINS">
-              <span style="font-size:12px;font-weight:700;color:#fff;">💶 EUCOINS</span>
-              <div class="up-radio-dot"></div>
-            </div>
-            <div class="up-currency-pill ${selectedCurrency === 'BRCOINS' ? 'active' : ''}" data-currency="BRCOINS">
-              <span style="font-size:12px;font-weight:700;color:#fff;">💷 BRCOINS</span>
-              <div class="up-radio-dot"></div>
-            </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <label style="font-size:13px;font-weight:600;color:#fff;margin:0;">${isEn ? 'Trade link' : 'Трейд-ссылка'}</label>
+            <a href="https://steamcommunity.com/id/me/tradeoffers/privacy#trade_offer_access_url" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#8E8F94;text-decoration:none;">${isEn ? 'You can get the link' : 'Ссылку можно взять'} <span style="text-decoration:underline;color:#fff;">${isEn ? 'here' : 'здесь'}</span></a>
           </div>
+          <input type="text" id="edit-tradelink-input" value="${activeUser.steamTradeLink || activeUser.tradeLink || ''}" placeholder="https://steamcommunity.com/tradeoffer/new/?partner=..." style="width:100%;box-sizing:border-box;background:#17181C;border:1px solid #282930;color:#8E8F94;padding:12px 14px;border-radius:10px;font-size:13px;outline:none;" />
         </div>
 
         <!-- Steam Privacy -->
         <div style="margin-bottom:20px;">
-          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:10px;">Приватность Steam</label>
-          <div style="display:flex;flex-direction:column;gap:8px;" id="privacy-radios-list">
-            <div class="up-privacy-option ${selectedPrivacy === 'private' ? 'active' : ''}" data-privacy="private">
-              <div class="up-radio-dot"></div>
-              <div style="display:flex;flex-direction:column;gap:3px;">
-                <span style="font-size:13px;font-weight:700;color:#fff;">Приватный</span>
-                <span style="font-size:11px;color:#8E8F94;line-height:1.35;">Значение по умолчанию. Только вы будете видеть свою информацию стим профиля, позволяет скрыть ваш профиль от парсер-ботов, и злоумышленников.</span>
+          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:12px;">${isEn ? 'Steam Privacy' : 'Приватность Steam'}</label>
+          <div id="privacy-radios-list">
+            <div class="up-privacy-row ${selectedPrivacy === 'private' ? 'active' : ''}" data-privacy="private">
+              <div class="up-radio-circle"></div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Private' : 'Приватный'}</span>
+                <span style="font-size:11px;color:#8E8F94;line-height:1.4;">${isEn ? 'Default value. Only you will see your Steam profile information, allows hiding your profile from parser bots and scammers.' : 'Значение по умолчанию. Только вы будете видеть свою информацию стим профиля, позволяет скрыть ваш профиль от парсер-ботов, и злоумышленников.'}</span>
               </div>
             </div>
-            <div class="up-privacy-option ${selectedPrivacy === 'friends' ? 'active' : ''}" data-privacy="friends">
-              <div class="up-radio-dot"></div>
-              <div style="display:flex;flex-direction:column;gap:3px;">
-                <span style="font-size:13px;font-weight:700;color:#fff;">Доступен только для друзей</span>
-                <span style="font-size:11px;color:#8E8F94;line-height:1.35;">Все авторизованные пользователи могут видеть вашу информацию профиля</span>
+            <div class="up-privacy-row ${selectedPrivacy === 'friends' ? 'active' : ''}" data-privacy="friends">
+              <div class="up-radio-circle"></div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Friends Only' : 'Доступен только для друзей'}</span>
+                <span style="font-size:11px;color:#8E8F94;line-height:1.4;">${isEn ? 'All authorized users can see your profile information' : 'Все авторизованные пользователи могут видеть вашу информацию профиля'}</span>
               </div>
             </div>
-            <div class="up-privacy-option ${selectedPrivacy === 'public' ? 'active' : ''}" data-privacy="public">
-              <div class="up-radio-dot"></div>
-              <div style="display:flex;flex-direction:column;gap:3px;">
-                <span style="font-size:13px;font-weight:700;color:#fff;">Публичный</span>
-                <span style="font-size:11px;color:#8E8F94;line-height:1.35;">Все пользователи будут видеть вашу информацию профиля</span>
+            <div class="up-privacy-row ${selectedPrivacy === 'public' ? 'active' : ''}" data-privacy="public">
+              <div class="up-radio-circle"></div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Public' : 'Публичный'}</span>
+                <span style="font-size:11px;color:#8E8F94;line-height:1.4;">${isEn ? 'All users will see your profile information' : 'Все пользователи будут видеть вашу информацию профиля'}</span>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Streamer Mode -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#1B1C21;border-radius:12px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.06);">
-          <div style="display:flex;flex-direction:column;gap:3px;padding-right:12px;">
-            <span style="font-size:13px;font-weight:700;color:#fff;">Режим стримера</span>
-            <span style="font-size:11px;color:#8E8F94;">Скрывает личную информацию и баланс для безопасности во время стрима</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <div style="display:flex;flex-direction:column;gap:2px;padding-right:12px;">
+            <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Streamer mode' : 'Режим стримера'}</span>
+            <span style="font-size:11px;color:#8E8F94;">${isEn ? 'Hides personal information and balance for safety during streams' : 'Скрывает личную информацию и баланс для безопасности во время стрима'}</span>
           </div>
           <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
             <input type="checkbox" id="streamer-mode-toggle" style="opacity:0;width:0;height:0;" ${activeUser.streamerMode ? 'checked' : ''}>
@@ -3457,21 +4108,21 @@
           </label>
         </div>
 
-        <!-- Device Avatar Upload (Strictly NO EMOJI) -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#1B1C21;border-radius:12px;margin-bottom:24px;border:1px solid rgba(255,255,255,0.06);gap:12px;">
-          <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-            <img id="edit-avatar-preview" src="${activeUser.avatar}" style="width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,0.1);flex-shrink:0;" />
+        <!-- Device Avatar Upload (Compact & strictly NO EMOJI) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#202126;border-radius:10px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.06);gap:10px;">
+          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+            <img id="edit-avatar-preview" src="${activeUser.avatar}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;" />
             <div style="display:flex;flex-direction:column;min-width:0;">
-              <span style="font-size:13px;font-weight:700;color:#fff;">Аватар профиля</span>
-              <span style="font-size:11px;color:#8E8F94;">JPG, PNG, WEBP (5 КБ - 5 МБ)</span>
+              <span style="font-size:12px;font-weight:600;color:#fff;">${isEn ? 'Profile avatar' : 'Аватар профиля'}</span>
+              <span style="font-size:10.5px;color:#8E8F94;">JPG, PNG, WEBP (5 KB - 5 MB)</span>
             </div>
           </div>
           <input type="file" id="edit-avatar-file-input" accept="image/*" style="display:none;" />
-          <button type="button" id="edit-avatar-upload-btn" style="background:#2A2B32;border:1px solid rgba(255,255,255,0.12);color:#fff;border-radius:10px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Загрузить аватарку с устройства</button>
+          <button type="button" id="edit-avatar-upload-btn" style="background:#2B2D33;border:none;color:#fff;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;">${isEn ? 'Upload avatar from device' : 'Загрузить аватарку с устройства'}</button>
         </div>
 
         <!-- Save Button -->
-        <button type="button" id="edit-profile-save-btn" style="width:100%;background:#FDD911;color:#121316;font-family:Tektur,sans-serif;font-weight:700;font-size:15px;padding:14px;border:none;border-radius:12px;cursor:pointer;box-shadow:0 4px 20px rgba(253,217,17,0.3);">Сохранить и закрыть</button>
+        <button type="button" id="edit-profile-save-btn" style="width:100%;background:#FBD506;color:#121316;font-family:Tektur,sans-serif;font-weight:700;font-size:15px;padding:13px;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 20px rgba(251,213,6,0.3);">${isEn ? 'Save and close' : 'Сохранить и закрыть'}</button>
       </div>
     `;
 
@@ -3480,18 +4131,8 @@
     const closeBtn = overlay.querySelector('#up-profile-edit-close');
     closeBtn.onclick = () => overlay.remove();
 
-    // Currency selection logic
-    const currencyPills = overlay.querySelectorAll('.up-currency-pill');
-    currencyPills.forEach(pill => {
-      pill.onclick = () => {
-        currencyPills.forEach(p => p.classList.remove('active'));
-        pill.classList.add('active');
-        selectedCurrency = pill.getAttribute('data-currency');
-      };
-    });
-
     // Privacy selection logic
-    const privacyOptions = overlay.querySelectorAll('.up-privacy-option');
+    const privacyOptions = overlay.querySelectorAll('.up-privacy-row');
     privacyOptions.forEach(opt => {
       opt.onclick = () => {
         privacyOptions.forEach(o => o.classList.remove('active'));
@@ -3514,17 +4155,17 @@
       const maxSizeBytes = 5 * 1024 * 1024;
 
       if (file.size < minSizeBytes) {
-        showToast('Файл слишком маленький (минимум 5 КБ)', 'error');
+        showToast(isEn ? 'File too small (min 5 KB)' : 'Файл слишком маленький (минимум 5 КБ)', 'error');
         fileInput.value = '';
         return;
       }
       if (file.size > maxSizeBytes) {
-        showToast('Размер файла не должен превышать 5 МБ', 'error');
+        showToast(isEn ? 'File size must not exceed 5 MB' : 'Размер файла не должен превышать 5 МБ', 'error');
         fileInput.value = '';
         return;
       }
       if (!file.type || !file.type.startsWith('image/')) {
-        showToast('Пожалуйста, выберите файл изображения (JPG, PNG, WEBP)', 'error');
+        showToast(isEn ? 'Please select an image file (JPG, PNG, WEBP)' : 'Пожалуйста, выберите файл изображения (JPG, PNG, WEBP)', 'error');
         fileInput.value = '';
         return;
       }
@@ -3535,12 +4176,12 @@
         const img = new Image();
         img.onload = () => {
           if (img.naturalWidth < 64 || img.naturalHeight < 64) {
-            showToast('Разрешение слишком маленькое (минимум 64x64 px)', 'error');
+            showToast(isEn ? 'Resolution too small (min 64x64 px)' : 'Разрешение слишком маленькое (минимум 64x64 px)', 'error');
             fileInput.value = '';
             return;
           }
           if (img.naturalWidth > 4096 || img.naturalHeight > 4096) {
-            showToast('Разрешение слишком большое (максимум 4096x4096 px)', 'error');
+            showToast(isEn ? 'Resolution too large (max 4096x4096 px)' : 'Разрешение слишком большое (максимум 4096x4096 px)', 'error');
             fileInput.value = '';
             return;
           }
@@ -3557,16 +4198,16 @@
 
           pendingAvatar = optimizedDataUrl;
           previewImg.src = optimizedDataUrl;
-          showToast('Аватарка успешно выбрана и оптимизирована!', 'success');
+          showToast(isEn ? 'Avatar uploaded successfully!' : 'Аватарка успешно выбрана и оптимизирована!', 'success');
         };
         img.onerror = () => {
-          showToast('Не удалось открыть изображение', 'error');
+          showToast(isEn ? 'Failed to open image' : 'Не удалось открыть изображение', 'error');
           fileInput.value = '';
         };
         img.src = rawDataUrl;
       };
       reader.onerror = () => {
-        showToast('Ошибка при чтении файла', 'error');
+        showToast(isEn ? 'Error reading file' : 'Ошибка при чтении файла', 'error');
       };
       reader.readAsDataURL(file);
     };
@@ -3575,7 +4216,7 @@
     const saveBtn = overlay.querySelector('#edit-profile-save-btn');
     saveBtn.onclick = async () => {
       saveBtn.disabled = true;
-      saveBtn.textContent = 'Сохранение...';
+      saveBtn.textContent = isEn ? 'Saving...' : 'Сохранение...';
 
       const nickInput = overlay.querySelector('#edit-nickname-input');
       const tradelinkInput = overlay.querySelector('#edit-tradelink-input');
@@ -3589,7 +4230,6 @@
         nickname: newNick,
         avatar: pendingAvatar,
         steamTradeLink: newTradeLink,
-        currency: selectedCurrency,
         privacy: selectedPrivacy,
         streamerMode: newStreamerMode
       });
@@ -3608,7 +4248,7 @@
       }
 
       overlay.remove();
-      showToast('Настройки успешно сохранены!', 'success');
+      showToast(isEn ? 'Settings saved successfully!' : 'Настройки успешно сохранены!', 'success');
 
       // Update in DOM safely: DO NOT touch icons, coins, arrows or SVGs!
       const domAvatars = document.querySelectorAll('up-avatar-with-placeholder img, up-avatar img, .profile-avatar, up-profile-preview img');
@@ -3624,7 +4264,7 @@
     };
   }
 
-  // 10.3 NOTIFICATION SETTINGS MODAL (Authentic design matching media_1791044277404.png)
+  // 10.3 NOTIFICATION SETTINGS MODAL (Authentic design matching media_1791046455136.png)
   function renderNotificationSettingsModal() {
     const existing = document.getElementById('upgrader-notifications-modal');
     if (existing) existing.remove();
@@ -3634,6 +4274,8 @@
       renderAuthModal();
       return;
     }
+
+    const isEn = isSiteEnglish();
 
     const overlay = document.createElement('div');
     overlay.id = 'upgrader-notifications-modal';
@@ -3648,7 +4290,7 @@
           position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .2s; border-radius: 50%;
         }
         input:checked + .up-notif-switch-slider {
-          background: #FDD911;
+          background: #FBD506;
         }
         input:checked + .up-notif-switch-slider:before {
           transform: translateX(20px);
@@ -3656,46 +4298,46 @@
         }
       </style>
 
-      <div style="position:relative;width:100%;max-width:500px;background:#17181C;border:1px solid rgba(255,255,255,0.08);border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.75);padding:24px 28px;color:#fff;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <h3 style="font-family:Tektur,sans-serif;font-size:20px;font-weight:700;margin:0;color:#fff;">Управление уведомлениями</h3>
+      <div style="position:relative;width:100%;max-width:480px;background:#17181C;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.85);padding:24px 26px;color:#fff;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h3 style="font-family:Tektur,sans-serif;font-size:18px;font-weight:700;margin:0;color:#fff;">${isEn ? 'Notification management' : 'Управление уведомлениями'}</h3>
           <button type="button" id="up-notif-close" style="background:none;border:none;color:#8E8F94;font-size:22px;cursor:pointer;line-height:1;padding:0;">✕</button>
         </div>
-        <p style="font-size:13px;color:#8E8F94;margin:0 0 20px;line-height:1.4;">Настройте привязку аккаунтов и уведомлений для получения уникальных предложений</p>
+        <p style="font-size:13px;color:#8E8F94;margin:0 0 24px;line-height:1.4;">${isEn ? 'Configure account linking and notifications to receive unique offers' : 'Настройте привязку аккаунтов и уведомлений для получения уникальных предложений'}</p>
 
         <!-- Row 1: Email -->
-        <div id="notif-email-row" style="background:#202126;border-radius:12px;padding:14px 16px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div id="notif-email-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;gap:12px;">
           <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-            <div style="width:36px;height:36px;border-radius:8px;background:#2B2D33;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0;">@</div>
-            <span style="font-size:14px;font-weight:600;color:#fff;">Почта</span>
+            <div style="width:34px;height:34px;border-radius:8px;background:#2B2D33;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0;">@</div>
+            <span style="font-size:14px;font-weight:600;color:#fff;">${isEn ? 'Email' : 'Почта'}</span>
           </div>
-          <div id="notif-email-display-container" style="display:flex;align-items:center;gap:12px;min-width:0;">
-            <span id="notif-email-val" style="font-size:13px;color:${activeUser.email ? '#fff' : '#8E8F94'};max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${activeUser.email || 'Не привязана'}</span>
-            <button type="button" id="notif-email-action-btn" style="background:#2B2D33;border:none;color:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">${activeUser.email ? 'Заменить' : 'Привязать'}</button>
+          <div id="notif-email-display-container" style="display:flex;align-items:center;gap:14px;min-width:0;">
+            <span id="notif-email-val" style="font-size:13px;font-weight:600;color:${activeUser.email ? '#fff' : '#8E8F94'};max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${activeUser.email || (isEn ? 'Not linked' : 'Не привязана')}</span>
+            <button type="button" id="notif-email-action-btn" style="background:#2B2D33;border:none;color:#9E9EA4;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">${activeUser.email ? (isEn ? 'Replace' : 'Заменить') : (isEn ? 'Bind' : 'Привязать')}</button>
           </div>
         </div>
 
         <!-- Inline Email Input (Hidden initially) -->
-        <div id="notif-email-edit-box" style="display:none;background:#18191E;border-radius:12px;padding:12px 14px;margin-bottom:12px;border:1px solid #FDD911;">
-          <label style="display:block;font-size:11px;font-weight:600;color:#8E8F94;margin-bottom:6px;text-transform:uppercase;">Введите адрес электронной почты</label>
+        <div id="notif-email-edit-box" style="display:none;background:#18191E;border-radius:10px;padding:12px 14px;margin-bottom:20px;border:1px solid #FBD506;">
+          <label style="display:block;font-size:11px;font-weight:600;color:#8E8F94;margin-bottom:6px;text-transform:uppercase;">${isEn ? 'Enter email address' : 'Введите адрес электронной почты'}</label>
           <div style="display:flex;gap:8px;">
             <input type="email" id="notif-email-input" placeholder="example@mail.com" value="${activeUser.email || ''}" style="flex:1;background:#121316;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;outline:none;" />
-            <button type="button" id="notif-email-save-btn" style="background:#FDD911;color:#121316;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer;">Сохранить</button>
+            <button type="button" id="notif-email-save-btn" style="background:#FBD506;color:#121316;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer;">${isEn ? 'Save' : 'Сохранить'}</button>
             <button type="button" id="notif-email-cancel-btn" style="background:#2B2D33;color:#8E8F94;border:none;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;">✕</button>
           </div>
           <div id="notif-email-error" style="color:#ef4444;font-size:11px;margin-top:6px;display:none;"></div>
         </div>
 
         <!-- Row 2: Push Notifications -->
-        <div style="background:#202126;border-radius:12px;padding:14px 16px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
           <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:36px;height:36px;border-radius:8px;background:#2B2D33;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <div style="width:34px;height:34px;border-radius:8px;background:#2B2D33;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
             </div>
-            <span style="font-size:14px;font-weight:600;color:#fff;">Пуш-уведомления</span>
+            <span style="font-size:14px;font-weight:600;color:#fff;">${isEn ? 'Push notifications' : 'Пуш-уведомления'}</span>
           </div>
           <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
             <input type="checkbox" id="notif-push-toggle" style="opacity:0;width:0;height:0;" ${activeUser.pushNotifications ? 'checked' : ''}>
@@ -3703,16 +4345,16 @@
           </label>
         </div>
 
-        <!-- Row 3: Special Email Newsletter -->
-        <div style="background:#202126;border-radius:12px;padding:14px 16px;border:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between;">
+        <!-- Row 3: Special Email Newsletter (YELLOW ICON) -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:36px;height:36px;border-radius:8px;background:#FDD911;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#121316">
+            <div style="width:34px;height:34px;border-radius:8px;background:#FBD506;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="#121316">
                 <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                <circle cx="7" cy="7" r="1.5" fill="#FDD911"></circle>
+                <circle cx="7" cy="7" r="1.5" fill="#FBD506"></circle>
               </svg>
             </div>
-            <span style="font-size:14px;font-weight:600;color:#fff;">Специальная Email рассылка</span>
+            <span style="font-size:14px;font-weight:600;color:#fff;">${isEn ? 'Special Email newsletter' : 'Специальная Email рассылка'}</span>
           </div>
           <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
             <input type="checkbox" id="notif-newsletter-toggle" style="opacity:0;width:0;height:0;" ${activeUser.newsletter !== false ? 'checked' : ''}>
@@ -3748,7 +4390,7 @@
     emailSaveBtn.onclick = async () => {
       const val = emailInput.value.trim();
       if (!val || !val.includes('@') || !val.includes('.')) {
-        emailErr.textContent = 'Пожалуйста, введите корректный email';
+        emailErr.textContent = isEn ? 'Please enter a valid email address' : 'Пожалуйста, введите корректный email';
         emailErr.style.display = 'block';
         return;
       }
@@ -3758,36 +4400,37 @@
       if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
         try {
           await SupabaseDB.updateUser(activeUser.id || activeUser.username, { email: val, isEmailVerified: true });
-        } catch(e) {}
+        } catch(err) {
+          console.warn('[SupabaseDB] update email error:', err);
+        }
       }
 
       emailVal.textContent = val;
       emailVal.style.color = '#fff';
-      emailActionBtn.textContent = 'Заменить';
+      emailActionBtn.textContent = isEn ? 'Replace' : 'Заменить';
       emailEditBox.style.display = 'none';
-      showToast('Почта ' + val + ' успешно сохранена!', 'success');
+      showToast(isEn ? 'Email successfully linked!' : 'Email успешно привязан!', 'success');
     };
 
-    // Push Toggle
+    // Toggles
     const pushToggle = overlay.querySelector('#notif-push-toggle');
+    const newsletterToggle = overlay.querySelector('#notif-newsletter-toggle');
+
     pushToggle.onchange = () => {
       LocalDB.updateProfileCustomizations(activeUser.username, {
         pushNotifications: pushToggle.checked
       });
-      showToast(pushToggle.checked ? 'Пуш-уведомления включены' : 'Пуш-уведомления выключены', 'info');
+      showToast(pushToggle.checked ? (isEn ? 'Push notifications enabled' : 'Пуш-уведомления включены') : (isEn ? 'Push notifications disabled' : 'Пуш-уведомления отключены'));
     };
 
-    // Newsletter Toggle
-    const newsToggle = overlay.querySelector('#notif-newsletter-toggle');
-    newsToggle.onchange = () => {
+    newsletterToggle.onchange = () => {
       LocalDB.updateProfileCustomizations(activeUser.username, {
-        newsletter: newsToggle.checked
+        newsletter: newsletterToggle.checked
       });
-      showToast(newsToggle.checked ? 'Email рассылка включена' : 'Email рассылка выключена', 'info');
+      showToast(newsletterToggle.checked ? (isEn ? 'Email newsletter enabled' : 'Специальная рассылка включена') : (isEn ? 'Email newsletter disabled' : 'Специальная рассылка отключена'));
     };
   }
 
-  // 11. LOCAL AUTH MODAL
   function renderAuthModal() {
     const existing = document.getElementById('upgrader-auth-modal');
     if (existing) existing.remove();
@@ -4961,6 +5604,8 @@
 
   window.LocalDB = LocalDB;
   window.handleMockApi = handleMockApi;
+  window.renderProfileEditModal = renderProfileEditModal;
+  window.renderNotificationSettingsModal = renderNotificationSettingsModal;
 
   window.UPGRADER = {
     LocalDB,

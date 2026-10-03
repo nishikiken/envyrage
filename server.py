@@ -23,11 +23,12 @@ DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 class UpgraderLiveSync:
     def __init__(self):
-        self.online = 6720
-        self.games_count = 488710000
+        self.online = 5680
+        self.games_count = 488830000
         self.live_drops = []
         self.seen_drop_ids = set()
         self.new_drops_queue = []
+        self.best_live_drop = None
         self._lock = threading.Lock()
         self._running = True
 
@@ -63,14 +64,17 @@ class UpgraderLiveSync:
                         await ws.send(json.dumps({"event": "subscribe", "room": "online"}))
                         await ws.send(json.dumps({"id": "init_online", "event": "online"}))
                         while self._running:
-                            msg = await ws.recv()
-                            data = json.loads(msg)
-                            val = data.get("data")
-                            if (data.get("event") == "online" or data.get("id") == "init_online") and isinstance(val, (int, float)):
-                                with self._lock:
-                                    self.online = int(val)
+                            try:
+                                msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                                data = json.loads(msg)
+                                val = data.get("data")
+                                if isinstance(val, (int, float)):
+                                    with self._lock:
+                                        self.online = int(val)
+                            except asyncio.TimeoutError:
+                                await ws.send(json.dumps({"id": f"poll_online_{time.time()}", "event": "online"}))
                 except Exception:
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(2)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -80,9 +84,11 @@ class UpgraderLiveSync:
         ssl_ctx = ssl.create_default_context()
         ssl_ctx.check_hostname = False
         ssl_ctx.verify_mode = ssl.CERT_NONE
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
+        poll_counter = 0
         while self._running:
+            poll_counter += 1
             # 1. Poll games count
             try:
                 req = urllib.request.Request("https://upgrader.best/api/statistics/games-count", headers=headers)
@@ -118,6 +124,19 @@ class UpgraderLiveSync:
             except Exception:
                 pass
 
+            # 3. Poll best-hour drop
+            if poll_counter % 3 == 0 or not self.best_live_drop:
+                try:
+                    req = urllib.request.Request("https://upgrader.best/api/live-drops/best-hour", headers=headers)
+                    with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
+                        res = json.loads(r.read().decode())
+                        best = res.get("bestLiveDrop")
+                        if best:
+                            with self._lock:
+                                self.best_live_drop = best
+                except Exception:
+                    pass
+
             time.sleep(1.0)
 
     def get_snapshot(self):
@@ -128,7 +147,8 @@ class UpgraderLiveSync:
                 "online": self.online,
                 "gamesCount": self.games_count,
                 "liveDrops": list(self.live_drops),
-                "newDrops": fresh
+                "newDrops": fresh,
+                "bestLiveDrop": self.best_live_drop
             }
 
 LIVE_SYNC = UpgraderLiveSync()
@@ -176,6 +196,11 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path in ['/api/statistics/online', '/statistics/online']:
             return self.send_json({"data": LIVE_SYNC.online, "event": "online"})
 
+        if parsed.path in ['/api/live-drops/best-hour', '/live-drops/best-hour']:
+            snap = LIVE_SYNC.get_snapshot()
+            best = snap.get("bestLiveDrop")
+            return self.send_json({"bestLiveDrop": best} if best else {"bestLiveDrop": None})
+
         # 1. Root redirect to cis/index.html
         if parsed.path in ['', '/', '/index.html']:
             self.path = '/cis/index.html'
@@ -197,12 +222,15 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             self.path = '/admin.html'
             return super().do_GET()
 
-        # 4. If path starts with /cis or /en, serve that directory's index.html
+        # 4. If path starts with /cis, /en, or /ru, serve that directory's index.html
         if parsed.path.startswith('/cis'):
             self.path = '/cis/index.html'
             return super().do_GET()
         if parsed.path.startswith('/en'):
             self.path = '/en/index.html'
+            return super().do_GET()
+        if parsed.path.startswith('/ru'):
+            self.path = '/ru/index.html'
             return super().do_GET()
 
         # 5. Missing media fallback
