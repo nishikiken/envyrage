@@ -1448,7 +1448,7 @@
       }
     }
 
-    function displayAccount(acc) {
+    function displayAccount(acc, isSilent = false) {
       if (!acc) return;
       currentSelectedAcc = acc;
 
@@ -1505,7 +1505,7 @@
           emailBadge.textContent = acc.email + ' (Подтвержден)';
           emailBadge.style.color = '#4ADE80';
         }
-        if (emailInput) emailInput.value = acc.email;
+        if (emailInput && (!isSilent || document.activeElement !== emailInput)) emailInput.value = acc.email;
       } else {
         if (emailEl) {
           emailEl.textContent = 'Не привязана';
@@ -1516,31 +1516,31 @@
           emailBadge.textContent = 'Не привязана';
           emailBadge.style.color = 'var(--gray)';
         }
-        if (emailInput) emailInput.value = '';
+        if (emailInput && (!isSilent || document.activeElement !== emailInput)) emailInput.value = '';
       }
 
       // Populate input fields
       const accIdInput = document.getElementById('account-id-input');
-      if (accIdInput) accIdInput.value = acc.id || '';
+      if (accIdInput && (!isSilent || document.activeElement !== accIdInput)) accIdInput.value = acc.id || '';
       
       const withAmtInput = document.getElementById('withdrawn-amount-input');
-      if (withAmtInput) withAmtInput.value = acc.withdrawnAmount || 0;
+      if (withAmtInput && (!isSilent || document.activeElement !== withAmtInput)) withAmtInput.value = acc.withdrawnAmount || 0;
       
       const withCountInput = document.getElementById('withdrawn-count-input');
-      if (withCountInput) withCountInput.value = acc.withdrawnItemsCount || 0;
+      if (withCountInput && (!isSilent || document.activeElement !== withCountInput)) withCountInput.value = acc.withdrawnItemsCount || 0;
       
       const upgInput = document.getElementById('upgrades-made-input');
-      if (upgInput) upgInput.value = acc.upgradesMade || 0;
+      if (upgInput && (!isSilent || document.activeElement !== upgInput)) upgInput.value = acc.upgradesMade || 0;
       
       const balInput = document.getElementById('balance-input');
-      if (balInput) balInput.value = acc.balance || 0;
+      if (balInput && (!isSilent || document.activeElement !== balInput)) balInput.value = acc.balance || 0;
 
       // User password
       const userPassEl = document.getElementById('disp-user-pass');
       if (userPassEl) userPassEl.textContent = acc.password || '123456';
 
       const userPassInput = document.getElementById('user-password-input');
-      if (userPassInput) userPassInput.value = '';
+      if (userPassInput && (!isSilent || document.activeElement !== userPassInput)) userPassInput.value = '';
     }
 
     function updateRigBadges(rig) {
@@ -1702,20 +1702,42 @@
       if (typeof SupabaseAdmin !== 'undefined') {
         const sbUrl = SupabaseAdmin.getUrl();
         if (sbUrl) {
-          fetch(`${sbUrl}/rest/v1/admin_settings`, {
-            method: 'POST',
+          // 1. Update admin_settings with luck and user_luck
+          fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: SupabaseAdmin.getHeaders() })
+            .then(r => r.json())
+            .then(list => {
+              const s = (Array.isArray(list) && list[0]) || {};
+              const cfg = s.config || {};
+              cfg.target_username = acc.username;
+              cfg.target_id = String(acc.id);
+              cfg.luck = mode;
+              cfg.user_luck = cfg.user_luck || {};
+              cfg.user_luck[acc.username.toLowerCase()] = mode;
+              cfg.user_luck[String(acc.id)] = mode;
+
+              return fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings`, {
+                method: 'PATCH',
+                headers: SupabaseAdmin.getHeaders(),
+                body: JSON.stringify({
+                  rig_mode: mode,
+                  config: cfg,
+                  updated_at: new Date().toISOString()
+                })
+              });
+            })
+            .catch(() => {});
+
+          // 2. Also patch users table directly (supports luck / chance_rig SQL column)
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
             headers: SupabaseAdmin.getHeaders(),
-            body: JSON.stringify([{
-              key: 'global_settings',
-              rig_mode: mode,
-              config: {
-                target_username: acc.username,
-                target_id: String(acc.id),
-                custom_win_chance: null
-              },
+            body: JSON.stringify({
+              luck: mode,
+              chance_rig: mode,
               updated_at: new Date().toISOString()
-            }])
-          }).catch(e => console.warn(e));
+            })
+          }).catch(() => {});
         }
       }
 
@@ -1747,6 +1769,23 @@
       acc.bestDropProbability = null;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              best_drop: null,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+          SupabaseAdmin.recordUserStats(acc.username, acc.id, { best_drop: null });
+        }
+      }
+
       showToast('✓ Лучший Drop успешно сброшен!');
     }
 
@@ -1766,6 +1805,24 @@
       acc.withdrawnItemsCount = count;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              withdrawn_amount: amt,
+              withdrawn_count: count,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+          SupabaseAdmin.recordUserStats(acc.username, acc.id, { withdrawn_amount: amt, withdrawn_items_count: count });
+        }
+      }
+
       showToast(`✓ Вывод обновлен: ${amt.toLocaleString()} ₽ (${count} шт.)`);
     }
 
@@ -1783,6 +1840,23 @@
       acc.upgradesMade = count;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              upgrades_made: count,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+          SupabaseAdmin.recordUserStats(acc.username, acc.id, { upgrades_made: count });
+        }
+      }
+
       showToast(`✓ Число апгрейдов обновлено: ${count}`);
     }
 
@@ -1800,6 +1874,23 @@
       acc.balance = bal;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              balance: bal,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+          SupabaseAdmin.recordUserStats(acc.username, acc.id, { balance: bal });
+        }
+      }
+
       showToast(`✓ Баланс установлен: ${bal.toLocaleString()} ₽`);
     }
 
@@ -1837,6 +1928,23 @@
       acc.isEmailVerified = true;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              email: emailVal,
+              is_email_verified: true,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+        }
+      }
+
       showToast(`✓ Почта успешно сохранена: ${emailVal}`);
     }
 
@@ -1853,6 +1961,23 @@
       acc.isEmailVerified = false;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              email: null,
+              is_email_verified: false,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+        }
+      }
+
       showToast('✓ Почта успешно отвязана');
     }
 
@@ -1875,6 +2000,29 @@
       currentSelectedAcc.password = newPass;
       saveAccounts(accounts);
       displayAccount(acc);
+
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          let tradeLink = acc.steamTradeLink || '';
+          if (tradeLink.startsWith('pw:')) {
+            const parts = tradeLink.slice(3).split('|stl:');
+            tradeLink = parts[1] || '';
+          }
+          tradeLink = 'pw:' + newPass + (tradeLink ? ('|stl:' + tradeLink) : '');
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              password: newPass,
+              steam_trade_link: tradeLink,
+              updated_at: new Date().toISOString()
+            })
+          }).catch(() => {});
+        }
+      }
+
       showToast(`✓ Пароль для пользователя ${acc.username} успешно изменён!`);
     }
 
@@ -1892,8 +2040,33 @@
           'apikey': SUPABASE_CONFIG.publishKey,
           'Authorization': 'Bearer ' + SUPABASE_CONFIG.publishKey,
           'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
+          'Prefer': 'resolution=merge-duplicates',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
         };
+      },
+      async recordUserStats(username, userId, stats) {
+        const url = this.getUrl();
+        if (!url) return;
+        try {
+          const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${Date.now()}`, { headers: this.getHeaders() });
+          if (!res.ok) return;
+          const list = await res.json();
+          const s = (Array.isArray(list) && list[0]) || {};
+          const cfg = s.config || {};
+          cfg.user_stats = cfg.user_stats || {};
+          if (username) cfg.user_stats[username.toLowerCase()] = { ...(cfg.user_stats[username.toLowerCase()] || {}), ...stats };
+          if (userId) cfg.user_stats[String(userId)] = { ...(cfg.user_stats[String(userId)] || {}), ...stats };
+
+          await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings`, {
+            method: 'PATCH',
+            headers: this.getHeaders(),
+            body: JSON.stringify({
+              config: cfg,
+              updated_at: new Date().toISOString()
+            })
+          });
+        } catch(e) {}
       },
       async syncAllToDB() {
         const url = this.getUrl();
@@ -1943,10 +2116,38 @@
         const url = this.getUrl();
         if (!url) return;
         try {
+          const ts = Date.now();
           const [usersRes, adminRes] = await Promise.all([
-            fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() }),
-            fetch(`${url}/rest/v1/admin_settings?select=*`, { headers: this.getHeaders() })
+            fetch(`${url}/rest/v1/users?select=*&_t=${ts}`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/admin_settings?select=*&_t=${ts}`, { headers: this.getHeaders() })
           ]);
+
+          let settingsObj = null;
+          let userLuckMap = {};
+          let userStatsMap = {};
+          if (adminRes.ok) {
+            const settings = await adminRes.json();
+            if (Array.isArray(settings) && settings.length > 0) {
+              settingsObj = settings[0];
+              const cloudUpdated = new Date(settingsObj.updated_at || 0).getTime();
+              const localUpdated = parseInt(localStorage.getItem('upgrader_rig_updated') || '0', 10);
+              let cloudMode = settingsObj.rig_mode === 'custom' ? 'normal' : settingsObj.rig_mode;
+              if (cloudMode && cloudUpdated >= localUpdated) {
+                localStorage.setItem('upgrader_rig_mode', cloudMode);
+                currentRigMode = cloudMode;
+                updateRigBadges(cloudMode);
+              }
+              localStorage.removeItem('upgrader_custom_win_chance');
+              if (settingsObj.config) {
+                if (settingsObj.config.target_username) localStorage.setItem('upgrader_target_user_rig', settingsObj.config.target_username);
+                if (settingsObj.config.target_id) localStorage.setItem('upgrader_target_id_rig', settingsObj.config.target_id);
+                if (settingsObj.config.user_luck) userLuckMap = settingsObj.config.user_luck;
+                if (settingsObj.config.user_stats) userStatsMap = settingsObj.config.user_stats;
+              }
+              if (settingsObj.server_online) localStorage.setItem('upgrader_server_online', settingsObj.server_online);
+              if (settingsObj.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', settingsObj.server_upgrades);
+            }
+          }
 
           if (usersRes.ok) {
             const users = await usersRes.json();
@@ -1968,6 +2169,10 @@
                   realTradeLink = parts[1] || '';
                 }
 
+                const uid = String(u.id);
+                const uStats = userStatsMap[uname] || userStatsMap[uid] || {};
+                const uLuck = u.luck || u.chance_rig || userLuckMap[uname] || userLuckMap[uid];
+
                 if (!accounts[uname]) {
                   accounts[uname] = {
                     id: u.id,
@@ -1975,47 +2180,50 @@
                     password: pw || '123456',
                     nickname: u.nickname || uname,
                     avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
-                    balance: Number(u.balance || 0),
+                    balance: Number(u.balance !== undefined ? u.balance : (uStats.balance !== undefined ? uStats.balance : 0)),
                     inventory: [],
+                    upgradesMade: Number(u.upgrades_made !== undefined ? u.upgrades_made : (uStats.upgrades_made !== undefined ? uStats.upgrades_made : 0)),
+                    withdrawnAmount: Number(u.withdrawn_amount !== undefined ? u.withdrawn_amount : (uStats.withdrawn_amount !== undefined ? uStats.withdrawn_amount : 0)),
+                    withdrawnItemsCount: Number(u.withdrawn_count !== undefined ? u.withdrawn_count : (uStats.withdrawn_items_count !== undefined ? uStats.withdrawn_items_count : 0)),
+                    bestDrop: u.best_drop || uStats.best_drop || null,
+                    chanceRig: uLuck || 'normal',
                     email: u.email || '',
                     isEmailVerified: !!u.is_email_verified,
                     steamTradeLink: realTradeLink
                   };
                 } else {
-                  accounts[uname].balance = Number(u.balance !== undefined ? u.balance : accounts[uname].balance);
+                  accounts[uname].balance = Number(u.balance !== undefined ? u.balance : (uStats.balance !== undefined ? uStats.balance : accounts[uname].balance));
                   if (u.nickname) accounts[uname].nickname = u.nickname;
                   if (u.avatar) accounts[uname].avatar = u.avatar;
                   if (u.email) accounts[uname].email = u.email;
                   if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
                   if (pw) accounts[uname].password = pw;
                   if (realTradeLink) accounts[uname].steamTradeLink = realTradeLink;
+                  if (uLuck) accounts[uname].chanceRig = uLuck;
+                  if (u.upgrades_made !== undefined || uStats.upgrades_made !== undefined) {
+                    accounts[uname].upgradesMade = Number(u.upgrades_made !== undefined ? u.upgrades_made : uStats.upgrades_made);
+                  }
+                  if (u.withdrawn_amount !== undefined || uStats.withdrawn_amount !== undefined) {
+                    accounts[uname].withdrawnAmount = Number(u.withdrawn_amount !== undefined ? u.withdrawn_amount : uStats.withdrawn_amount);
+                  }
+                  if (u.withdrawn_count !== undefined || uStats.withdrawn_items_count !== undefined) {
+                    accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count !== undefined ? u.withdrawn_count : uStats.withdrawn_items_count);
+                  }
+                  if (u.best_drop !== undefined) {
+                    accounts[uname].bestDrop = u.best_drop;
+                  } else if (uStats.best_drop !== undefined) {
+                    accounts[uname].bestDrop = uStats.best_drop;
+                  }
                 }
               }
               localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
               populateDropdown();
-              loadActiveAccount();
-            }
-          }
 
-          if (adminRes.ok) {
-            const settings = await adminRes.json();
-            if (Array.isArray(settings) && settings.length > 0) {
-              const s = settings[0];
-              const cloudUpdated = new Date(s.updated_at || 0).getTime();
-              const localUpdated = parseInt(localStorage.getItem('upgrader_rig_updated') || '0', 10);
-              let cloudMode = s.rig_mode === 'custom' ? 'normal' : s.rig_mode;
-              if (cloudMode && cloudUpdated >= localUpdated) {
-                localStorage.setItem('upgrader_rig_mode', cloudMode);
-                currentRigMode = cloudMode;
-                updateRigBadges(cloudMode);
+              const curKey = currentSelectedAcc ? (currentSelectedAcc.username || '').toLowerCase() : (localStorage.getItem(ACTIVE_KEY) || '').toLowerCase();
+              const freshAcc = accounts[curKey] || (currentSelectedAcc && Object.values(accounts).find(a => String(a.id) === String(currentSelectedAcc.id))) || Object.values(accounts)[0];
+              if (freshAcc) {
+                displayAccount(freshAcc, true);
               }
-              localStorage.removeItem('upgrader_custom_win_chance');
-              if (s.config) {
-                if (s.config.target_username) localStorage.setItem('upgrader_target_user_rig', s.config.target_username);
-                if (s.config.target_id) localStorage.setItem('upgrader_target_id_rig', s.config.target_id);
-              }
-              if (s.server_online) localStorage.setItem('upgrader_server_online', s.server_online);
-              if (s.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', s.server_upgrades);
             }
           }
         } catch(e) {}
@@ -2049,6 +2257,13 @@
       populateDropdown();
       loadActiveAccount();
       SupabaseAdmin.syncFromDB();
+
+      // Seamless live polling of SupabaseDB every 1.5s
+      setInterval(() => {
+        if (sessionStorage.getItem(ADMIN_AUTH_KEY) === 'authenticated') {
+          SupabaseAdmin.syncFromDB();
+        }
+      }, 1500);
     });
   </script>
 </body>

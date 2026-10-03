@@ -267,7 +267,9 @@
         'apikey': SUPABASE_CONFIG.publishKey,
         'Authorization': 'Bearer ' + SUPABASE_CONFIG.publishKey,
         'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
+        'Prefer': 'resolution=merge-duplicates',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
       };
     },
     async syncAllToDB() {
@@ -666,6 +668,10 @@
         if (fields.isEmailVerified !== undefined) payload.is_email_verified = !!fields.isEmailVerified;
         if (fields.steamTradeLink !== undefined) payload.steam_trade_link = fields.steamTradeLink;
         if (fields.steam_trade_link !== undefined) payload.steam_trade_link = fields.steam_trade_link;
+        if (fields.luck !== undefined) payload.luck = fields.luck;
+        if (fields.chance_rig !== undefined) payload.chance_rig = fields.chance_rig;
+        if (fields.upgrades_made !== undefined) payload.upgrades_made = Number(fields.upgrades_made);
+        if (fields.best_drop !== undefined) payload.best_drop = fields.best_drop;
         if (fields.password !== undefined) {
           let stl = payload.steam_trade_link || '';
           if (!stl.startsWith('pw:')) {
@@ -739,7 +745,7 @@
         if (uname && uname !== String(userId)) {
           query = `or=(user_id.eq.${encodeURIComponent(userId)},user_id.eq.${encodeURIComponent(uname)})`;
         }
-        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*`, {
+        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*&_t=${Date.now()}`, {
           method: 'GET',
           headers: this.getHeaders()
         });
@@ -750,20 +756,192 @@
         return null;
       }
     },
-    async syncLiveInventory() {
-      const activeUser = LocalDB.getActiveUser();
-      if (!activeUser || !activeUser.id) return;
-      const cloudInv = await this.fetchUserInventory(activeUser.id);
-      if (cloudInv === null) return;
-      const cloudIds = new Set(cloudInv.map(x => String(x.id)));
-      const localInv = activeUser.inventory || [];
-      const kept = localInv.filter(x => cloudIds.has(String(x.id)));
-      if (kept.length !== localInv.length) {
-        console.log(`[SupabaseDB] Live sync purged ${localInv.length - kept.length} items deleted from DB`);
-        activeUser.inventory = kept;
-        LocalDB.saveUser(activeUser);
-        window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+    async recordUserStatsInAdminSettings(username, userId, stats) {
+      const url = this.getUrl();
+      if (!url) return;
+      try {
+        const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${Date.now()}`, { headers: this.getHeaders() });
+        if (!res.ok) return;
+        const list = await res.json();
+        const s = (Array.isArray(list) && list[0]) || {};
+        const cfg = s.config || {};
+        cfg.user_stats = cfg.user_stats || {};
+        if (username) cfg.user_stats[username.toLowerCase()] = stats;
+        if (userId) cfg.user_stats[String(userId)] = stats;
+
+        await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings`, {
+          method: 'PATCH',
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            config: cfg,
+            updated_at: new Date().toISOString()
+          })
+        });
+      } catch(e) {}
+    },
+    async syncLiveAccountAndRig() {
+      if (this._isLiveSyncing) return;
+      this._isLiveSyncing = true;
+      try {
+        const url = this.getUrl();
+        if (!url) return;
+
+        const activeUser = LocalDB.getActiveUser();
+        const ts = Date.now();
+
+        // 1. Fetch admin_settings for real-time cloud luck / rig mode
+        const adminRes = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${ts}`, { headers: this.getHeaders() });
+        let cloudRigMode = 'normal';
+        let cloudConfig = {};
+        if (adminRes.ok) {
+          const settings = await adminRes.json();
+          if (Array.isArray(settings) && settings.length > 0) {
+            const s = settings[0];
+            cloudRigMode = s.rig_mode === 'custom' ? 'normal' : (s.rig_mode || 'normal');
+            cloudConfig = s.config || {};
+            if (s.server_online) {
+              currentOnline = s.server_online;
+              updateOnlineBadgeInDOM();
+            }
+          }
+        }
+
+        if (activeUser) {
+          const uname = (activeUser.username || '').toLowerCase().trim();
+          const uid = String(activeUser.id);
+
+          // Determine user's luck from cloudConfig
+          let userLuck = null;
+          if (cloudConfig.user_luck) {
+            userLuck = cloudConfig.user_luck[uname] || cloudConfig.user_luck[uid];
+          }
+          if (!userLuck && cloudConfig.target_username && cloudConfig.target_username.toLowerCase() === uname) {
+            userLuck = cloudConfig.luck || cloudRigMode;
+          }
+          if (!userLuck && cloudConfig.target_id && String(cloudConfig.target_id) === uid) {
+            userLuck = cloudConfig.luck || cloudRigMode;
+          }
+          if (!userLuck && !cloudConfig.target_username && !cloudConfig.target_id) {
+            userLuck = cloudRigMode;
+          }
+
+          // 2. Fetch user's latest row and inventory from Supabase
+          const targetQuery = `or=(id.eq.${encodeURIComponent(uid)},username.eq.${encodeURIComponent(uname)})`;
+          const [userRes, invRes] = await Promise.all([
+            fetch(`${url}/rest/v1/users?${targetQuery}&select=*&_t=${ts}`, { headers: this.getHeaders() }),
+            this.fetchUserInventory(uid)
+          ]);
+
+          let cloudUser = null;
+          if (userRes.ok) {
+            const list = await userRes.json();
+            if (Array.isArray(list) && list.length > 0) cloudUser = list[0];
+          }
+
+          if (cloudUser) {
+            // Direct luck column from SQL table if created
+            if (cloudUser.luck || cloudUser.chance_rig) {
+              userLuck = cloudUser.luck || cloudUser.chance_rig;
+            }
+
+            // Sync balance from cloud if updated on another device or admin panel
+            const cloudBalance = Number(cloudUser.balance);
+            if (!isNaN(cloudBalance) && Math.abs(cloudBalance - activeUser.balance) > 0.001) {
+              activeUser.balance = cloudBalance;
+              const accounts = LocalDB.getAccounts();
+              if (accounts[activeUser.username]) accounts[activeUser.username].balance = cloudBalance;
+              LocalDB.saveAccounts(accounts);
+              LocalDB.setActiveUser(activeUser.username);
+              WsMock.broadcastBalance(cloudBalance);
+
+              // Update DOM balance silently
+              document.querySelectorAll('[data-testid="header-balance-amount"], up-balance span, .header-balance, .up-header-balance').forEach(el => {
+                el.textContent = cloudBalance.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+              });
+            }
+          }
+
+          // Apply luck mode
+          const effectiveLuck = userLuck || cloudRigMode || 'normal';
+          if (effectiveLuck !== activeUser.chanceRig || localStorage.getItem('upgrader_rig_mode') !== effectiveLuck) {
+            activeUser.chanceRig = effectiveLuck;
+            localStorage.setItem('upgrader_rig_mode', effectiveLuck);
+            localStorage.setItem('upgrader_target_user_rig', activeUser.username);
+            localStorage.setItem('upgrader_target_id_rig', uid);
+            const accounts = LocalDB.getAccounts();
+            if (accounts[activeUser.username]) accounts[activeUser.username].chanceRig = effectiveLuck;
+            LocalDB.saveAccounts(accounts);
+            try {
+              if (typeof BroadcastChannel !== 'undefined') {
+                new BroadcastChannel('upgrader_channel').postMessage({
+                  type: 'RIG_UPDATED',
+                  mode: effectiveLuck,
+                  targetUser: activeUser.username,
+                  targetId: uid,
+                  t: Date.now()
+                });
+              }
+            } catch(e) {}
+          }
+
+          // 3. Live Inventory Sync: detect added items and removed items across devices
+          if (Array.isArray(invRes)) {
+            const localInv = activeUser.inventory || [];
+            const localIds = new Set(localInv.map(x => String(x.id)));
+            const cloudIds = new Set(invRes.map(x => String(x.id)));
+
+            const newItems = [];
+            for (const ci of invRes) {
+              if (!localIds.has(String(ci.id))) {
+                const it = ci.extra || ci;
+                const skinObj = {
+                  id: String(ci.id),
+                  marketName: ci.market_name || it.marketName || 'CS2 Item',
+                  market_name: ci.market_name || it.marketName || 'CS2 Item',
+                  price: Number(ci.price || it.price || 0),
+                  image: ci.image || it.image || '',
+                  status: ci.status || 'available',
+                  extra: ci.extra || it.extra || {}
+                };
+                newItems.push(skinObj);
+              }
+            }
+
+            const deletedIds = [];
+            for (const li of localInv) {
+              if (!cloudIds.has(String(li.id))) {
+                deletedIds.push(String(li.id));
+              }
+            }
+
+            if (newItems.length > 0 || deletedIds.length > 0) {
+              const kept = localInv.filter(x => cloudIds.has(String(x.id)));
+              activeUser.inventory = [...newItems, ...kept];
+              const accounts = LocalDB.getAccounts();
+              if (accounts[activeUser.username]) accounts[activeUser.username].inventory = activeUser.inventory;
+              LocalDB.saveAccounts(accounts);
+              LocalDB.setActiveUser(activeUser.username);
+
+              if (newItems.length > 0) {
+                for (const item of newItems) {
+                  WsMock.broadcastInventoryItem(item);
+                }
+              }
+              if (deletedIds.length > 0) {
+                WsMock.broadcastDeletedItems(deletedIds);
+              }
+
+              window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+            }
+          }
+        }
+      } catch(err) {
+      } finally {
+        this._isLiveSyncing = false;
       }
+    },
+    async syncLiveInventory() {
+      return this.syncLiveAccountAndRig();
     },
     async updateAdminSettings(settings) {
       const url = this.getUrl();
@@ -791,15 +969,15 @@
 
   window.SupabaseDB = SupabaseDB;
 
-  // Background live inventory sync with SupabaseDB
+  // Background live sync with SupabaseDB every 1.5s
   setInterval(() => {
     if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-      SupabaseDB.syncLiveInventory().catch(() => {});
+      SupabaseDB.syncLiveAccountAndRig().catch(() => {});
     }
-  }, 4000);
+  }, 1500);
   window.addEventListener('focus', () => {
     if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-      SupabaseDB.syncLiveInventory().catch(() => {});
+      SupabaseDB.syncLiveAccountAndRig().catch(() => {});
     }
   });
 
@@ -1475,6 +1653,20 @@
 
       this.saveAccounts(accounts);
       this.setActiveUser(username);
+
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        const stats = {
+          upgrades_made: acc.upgradesMade,
+          best_drop: acc.bestDrop,
+          balance: acc.balance
+        };
+        SupabaseDB.updateUser(acc.id || acc.username, {
+          balance: acc.balance,
+          upgrades_made: acc.upgradesMade,
+          best_drop: acc.bestDrop
+        }).catch(() => {});
+        SupabaseDB.recordUserStatsInAdminSettings(acc.username, String(acc.id), stats).catch(() => {});
+      }
     }
 
     static startWithdrawal(username, item) {
