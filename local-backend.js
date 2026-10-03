@@ -469,13 +469,16 @@
           const settings = await adminRes.json();
           if (Array.isArray(settings) && settings.length > 0) {
             const s = settings[0];
-            if (s.rig_mode) localStorage.setItem('upgrader_rig_mode', s.rig_mode);
+            const cloudUpdated = new Date(s.updated_at || 0).getTime();
+            const localUpdated = parseInt(localStorage.getItem('upgrader_rig_updated') || '0', 10);
+            let cloudMode = s.rig_mode === 'custom' ? 'normal' : s.rig_mode;
+            if (cloudMode && cloudUpdated >= localUpdated) {
+              localStorage.setItem('upgrader_rig_mode', cloudMode);
+            }
             if (s.server_online) localStorage.setItem('upgrader_server_online', s.server_online);
             if (s.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', s.server_upgrades);
             if (s.config) {
-              if (s.config.custom_win_chance !== undefined && s.config.custom_win_chance !== null) {
-                localStorage.setItem('upgrader_custom_win_chance', String(s.config.custom_win_chance));
-              }
+              localStorage.removeItem('upgrader_custom_win_chance');
               if (s.config.target_username) {
                 localStorage.setItem('upgrader_target_user_rig', s.config.target_username);
               }
@@ -1546,13 +1549,17 @@
         activeUser.chanceRig = mode;
         localStorage.setItem('upgrader_rig_mode', mode);
       }
-      if (customChance !== undefined && customChance !== null) {
+      if (mode !== 'custom' || customChance === null || customChance === undefined) {
+        delete activeUser.customWinChance;
+        localStorage.removeItem('upgrader_custom_win_chance');
+      } else {
         activeUser.customWinChance = parseFloat(customChance);
         localStorage.setItem('upgrader_custom_win_chance', String(customChance));
       }
       LocalDB.saveUser(activeUser);
-      console.log(`[local-backend] Instant rig applied in real-time to active user ${activeUser.username}: ${mode} (custom: ${customChance}%)`);
+      console.log(`[local-backend] Instant rig applied in real-time to active user ${activeUser.username}: ${mode}`);
       window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+      window.dispatchEvent(new CustomEvent('upgrader:rig-changed', { detail: { mode, user: activeUser } }));
     }
   }
 
@@ -1565,7 +1572,7 @@
       } catch (err) {}
     } else if (e.key === 'upgrader_rig_mode' && e.newValue) {
       const mode = e.newValue;
-      const customVal = parseFloat(localStorage.getItem('upgrader_custom_win_chance'));
+      const customVal = mode === 'custom' ? parseFloat(localStorage.getItem('upgrader_custom_win_chance')) : null;
       const targetUser = localStorage.getItem('upgrader_target_user_rig');
       const targetId = localStorage.getItem('upgrader_target_id_rig');
       applyLiveRigUpdate({ mode, customChance: customVal, targetUser, targetId });
@@ -2697,30 +2704,34 @@
         const idMatches = !targetIdRig || targetIdRig === String(activeUser.id) || targetIdRig === (activeUser.username || '').toLowerCase();
         if (uMatches || idMatches) {
           rig = fastRigMode;
-          const fastCustom = parseFloat(localStorage.getItem('upgrader_custom_win_chance'));
-          if (!isNaN(fastCustom)) customVal = fastCustom;
+          if (rig === 'custom') {
+            const fastCustom = parseFloat(localStorage.getItem('upgrader_custom_win_chance'));
+            if (!isNaN(fastCustom)) customVal = fastCustom;
+          } else {
+            customVal = null;
+          }
         }
       }
 
       let roll = Math.random();
       let isWin = false;
 
-      if (rig === 'force_win') {
+      if (rig === 'force_win' || rig === 'win') {
         isWin = true;
         chance = Math.max(0.10, chance);
         roll = Math.min(chance * 0.35, 0.015); // Guaranteed win: strictly inside winning sector
-      } else if (rig === 'force_lose') {
+      } else if (rig === 'force_lose' || rig === 'lose') {
         isWin = false;
         roll = Math.max(chance + 0.10, 0.98); // Guaranteed lose: strictly outside winning sector
-      } else if (rig === 'bonus_25') {
+      } else if (rig === 'bonus_25' || rig === 'boost25') {
         chance = Math.min(0.98, chance + 0.25);
         isWin = Math.random() <= chance;
         roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
-      } else if (rig === 'bonus_50') {
+      } else if (rig === 'bonus_50' || rig === 'boost50') {
         chance = Math.min(0.98, chance + 0.50);
         isWin = Math.random() <= chance;
         roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
-      } else if (rig === 'mult_2x') {
+      } else if (rig === 'mult_2x' || rig === 'double') {
         chance = Math.min(0.98, chance * 2.0);
         isWin = Math.random() <= chance;
         roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
