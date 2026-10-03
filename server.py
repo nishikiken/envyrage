@@ -23,8 +23,8 @@ DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 class UpgraderLiveSync:
     def __init__(self):
-        self.online = 4307
-        self.games_count = 486540000
+        self.online = 6720
+        self.games_count = 488710000
         self.live_drops = []
         self.seen_drop_ids = set()
         self.new_drops_queue = []
