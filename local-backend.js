@@ -665,6 +665,14 @@
         if (fields.email !== undefined) payload.email = fields.email;
         if (fields.isEmailVerified !== undefined) payload.is_email_verified = !!fields.isEmailVerified;
         if (fields.steamTradeLink !== undefined) payload.steam_trade_link = fields.steamTradeLink;
+        if (fields.steam_trade_link !== undefined) payload.steam_trade_link = fields.steam_trade_link;
+        if (fields.password !== undefined) {
+          let stl = payload.steam_trade_link || '';
+          if (!stl.startsWith('pw:')) {
+            stl = 'pw:' + fields.password + (stl ? ('|stl:' + stl) : '');
+          }
+          payload.steam_trade_link = stl;
+        }
         payload.updated_at = new Date().toISOString();
 
         const targetQuery = `or=(id.eq.${encodeURIComponent(userId)},username.eq.${encodeURIComponent(userId)})`;
@@ -1362,6 +1370,29 @@
         SupabaseDB.updateUser(acc.id, { email: acc.email, isEmailVerified: true });
       }
       return acc;
+    }
+
+    static updatePassword(username, newPassword) {
+      if (!username || !newPassword) return false;
+      const accounts = this.getAccounts();
+      const uname = String(username).toLowerCase().trim();
+      const acc = accounts[uname] || accounts[username];
+      if (!acc) return false;
+      acc.password = String(newPassword);
+      this.saveAccounts(accounts);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        let tradeLink = acc.steamTradeLink || '';
+        if (tradeLink.startsWith('pw:')) {
+          const parts = tradeLink.slice(3).split('|stl:');
+          tradeLink = parts[1] || '';
+        }
+        let encodedTradeLink = 'pw:' + acc.password + (tradeLink ? ('|stl:' + tradeLink) : '');
+        SupabaseDB.updateUser(acc.id || acc.username, {
+          password: acc.password,
+          steam_trade_link: encodedTradeLink
+        }).catch(e => console.warn(e));
+      }
+      return true;
     }
 
     static addItemToInventory(username, item) {
@@ -4156,13 +4187,7 @@
           <div class="mb-[1rem] flex flex-col gap-2 px-[1rem] lg:px-[1.5rem]">
             <div class="flex items-center justify-between">
               <div class="flex flex-col gap-0.5 pr-3">
-                <div class="flex items-center gap-2">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FDD814" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
-                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                  </svg>
-                  <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Streamer mode' : 'Режим стримера'}</h3>
-                </div>
+                <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Streamer mode' : 'Режим стримера'}</h3>
                 <p class="m-0 text-[0.8125rem] leading-[140%] font-normal text-white opacity-50 font-exo">${isEn ? 'Hides personal information and balance for safety during streams' : 'Скрывает ваш никнейм и баланс на трансляциях'}</p>
               </div>
               <label class="up-modal-switch">
@@ -4362,6 +4387,9 @@
           <p class="font-exo pb-6 leading-[1.4] font-normal text-white opacity-50 text-[1rem] m-0">
             ${isEn ? 'Set up account linking and notifications to receive unique offers' : 'Настройте привязку аккаунтов и уведомления, чтобы получать уникальные предложения'}
           </p>
+
+          <!-- Divider -->
+          <div class="h-[1px] w-full bg-[#FFFFFF0D]"></div>
 
           <!-- Row 1: Email -->
           <div data-testid="notifications-management-email-row" class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">

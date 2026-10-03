@@ -645,8 +645,8 @@
       background: var(--card-inner);
       border: 1px solid var(--border);
       border-radius: 9px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
+      padding: 10px 14px;
+      margin-bottom: 9px;
     }
 
     .tool-section:last-child {
@@ -1213,6 +1213,20 @@
             </div>
           </div>
 
+          <!-- Tool: User Password Management -->
+          <div class="tool-section masked-pass-container">
+            <div class="tool-header-row">
+              <span class="tool-title-mini">🔑 Пароль аккаунта</span>
+              <span style="font-size: 11.5px; color: var(--gray);">
+                Текущий: <span id="disp-user-pass" class="masked-pass" title="Наведите курсор, чтобы увидеть пароль">••••••</span>
+              </span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="user-password-input" class="input-field" placeholder="Новый пароль пользователя (мин. 3 симв.)..." style="flex: 1;" onkeydown="if(event.key==='Enter') saveUserPassword()" />
+              <button type="button" class="btn-action btn-yellow" onclick="saveUserPassword()">Сменить пароль</button>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -1520,6 +1534,13 @@
       
       const balInput = document.getElementById('balance-input');
       if (balInput) balInput.value = acc.balance || 0;
+
+      // User password
+      const userPassEl = document.getElementById('disp-user-pass');
+      if (userPassEl) userPassEl.textContent = acc.password || '123456';
+
+      const userPassInput = document.getElementById('user-password-input');
+      if (userPassInput) userPassInput.value = '';
     }
 
     function updateRigBadges(rig) {
@@ -1835,6 +1856,28 @@
       showToast('✓ Почта успешно отвязана');
     }
 
+    function saveUserPassword() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала выберите аккаунт', false);
+        return;
+      }
+      const passInput = document.getElementById('user-password-input');
+      const newPass = (passInput ? passInput.value : '').trim();
+      if (!newPass || newPass.length < 3) {
+        showToast('Пароль должен содержать не менее 3 символов', false);
+        return;
+      }
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.password = newPass;
+      currentSelectedAcc.password = newPass;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast(`✓ Пароль для пользователя ${acc.username} успешно изменён!`);
+    }
+
     const SUPABASE_CONFIG = {
       url: 'https://hyxyablgkjtoxcxnurkk.supabase.co',
       publishKey: 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb'
@@ -1851,6 +1894,50 @@
           'Content-Type': 'application/json',
           'Prefer': 'resolution=merge-duplicates'
         };
+      },
+      async syncAllToDB() {
+        const url = this.getUrl();
+        if (!url) return false;
+        try {
+          const accounts = getAccounts();
+          const userList = [];
+          for (const uname in accounts) {
+            const a = accounts[uname];
+            if (isLegacyAccount(a, uname)) continue;
+            let tradeLink = a.steamTradeLink || '';
+            if (tradeLink.startsWith('pw:')) {
+              const parts = tradeLink.slice(3).split('|stl:');
+              tradeLink = parts[1] || '';
+            }
+            if (a.password) {
+              tradeLink = 'pw:' + a.password + (tradeLink ? ('|stl:' + tradeLink) : '');
+            }
+            userList.push({
+              id: String(a.id),
+              username: a.username,
+              nickname: a.nickname || a.username,
+              avatar: a.avatar || '',
+              image: a.avatar || '',
+              balance: Number(a.balance || 0),
+              email: a.email || '',
+              is_email_verified: !!a.isEmailVerified,
+              steam_trade_link: tradeLink,
+              steam_privacy: a.steamPrivacy || 'public',
+              updated_at: new Date().toISOString()
+            });
+          }
+          if (userList.length > 0) {
+            await fetch(`${url}/rest/v1/users`, {
+              method: 'POST',
+              headers: this.getHeaders(),
+              body: JSON.stringify(userList)
+            });
+          }
+          return true;
+        } catch(e) {
+          console.warn('[SupabaseAdmin] syncAllToDB error:', e);
+          return false;
+        }
       },
       async syncFromDB() {
         const url = this.getUrl();
@@ -1872,17 +1959,27 @@
                   fetch(`${url}/rest/v1/users?id=eq.${encodeURIComponent(u.id)}`, { method: 'DELETE', headers: this.getHeaders() }).catch(() => {});
                   continue;
                 }
+
+                let pw = u.password || '';
+                let realTradeLink = u.steam_trade_link || '';
+                if (realTradeLink.startsWith('pw:')) {
+                  const parts = realTradeLink.slice(3).split('|stl:');
+                  if (!pw) pw = parts[0];
+                  realTradeLink = parts[1] || '';
+                }
+
                 if (!accounts[uname]) {
                   accounts[uname] = {
                     id: u.id,
                     username: uname,
-                    password: u.password || '123456',
+                    password: pw || '123456',
                     nickname: u.nickname || uname,
                     avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
                     balance: Number(u.balance || 0),
                     inventory: [],
                     email: u.email || '',
-                    isEmailVerified: !!u.is_email_verified
+                    isEmailVerified: !!u.is_email_verified,
+                    steamTradeLink: realTradeLink
                   };
                 } else {
                   accounts[uname].balance = Number(u.balance !== undefined ? u.balance : accounts[uname].balance);
@@ -1890,6 +1987,8 @@
                   if (u.avatar) accounts[uname].avatar = u.avatar;
                   if (u.email) accounts[uname].email = u.email;
                   if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
+                  if (pw) accounts[uname].password = pw;
+                  if (realTradeLink) accounts[uname].steamTradeLink = realTradeLink;
                 }
               }
               localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
