@@ -4399,9 +4399,13 @@
     setupDomHooks();
   }
 
+  window.LocalDB = LocalDB;
+  window.handleMockApi = handleMockApi;
+
   window.UPGRADER = {
     LocalDB,
     GlobalStats,
+    handleMockApi,
     renderAuthModal,
     renderDepositModal,
     openNativePaymentModal,
