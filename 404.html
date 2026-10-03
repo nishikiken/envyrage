@@ -5,18 +5,28 @@
   <meta name="referrer" content="no-referrer">
   <title>UPGRADER</title>
   <script>
-    // GitHub Pages SPA router redirect: keeps /envyrage/ repository path intact without /cis/
+    // GitHub Pages SPA hash redirect: converts subpath requests to /#screen_name
     var path = window.location.pathname;
-    var repoPrefix = path.startsWith('/envyrage') ? '/envyrage' : '';
+    var match = path.match(/^(\/[^\/]+)/);
+    var repoPrefix = (window.location.hostname.includes('github.io') && match) ? match[1] : (path.startsWith('/envyrage') ? '/envyrage' : (path.startsWith('/portfolio') ? '/portfolio' : ''));
+    var cleanPath = path.replace(repoPrefix, '').replace(/^\/+/, '');
+    var segment = cleanPath.split('/')[0];
+    
+    var target = 'ru';
+    if (segment.includes('profile')) target = 'profile';
+    else if (segment.includes('settings')) target = 'settings';
+    else if (segment.includes('en')) target = 'en';
+    else if (segment.includes('portfolio')) target = 'portfolio';
+
     if (path.includes('/admin')) {
-      window.location.replace((repoPrefix || '/envyrage') + '/admin/index.html');
+      window.location.replace((repoPrefix || '') + '/admin/index.html');
     } else {
-      window.location.replace((repoPrefix || '/envyrage') + '/index.html');
+      window.location.replace((repoPrefix || '') + '/#' + target);
     }
   </script>
-  <meta http-equiv="refresh" content="0; url=./index.html">
+  <meta http-equiv="refresh" content="0; url=./#ru">
 </head>
 <body>
-  <p>Загрузка UPGRADER... <a href="./index.html">Нажмите сюда, если переход не произошел</a></p>
+  <p>Загрузка UPGRADER... <a href="./#ru">Нажмите сюда, если переход не произошел</a></p>
 </body>
 </html>

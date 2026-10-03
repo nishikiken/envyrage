@@ -25,61 +25,114 @@
     }
   } catch(e) {}
 
-  // Fix GitHub Pages Subdirectory Routing & Links (/envyrage/...)
-  // Automatically intercepts history.pushState / replaceState so Angular Router never drops /envyrage/
+  // Pure Hash Routing Engine for GitHub Pages & Localhost
+  // Ensures all URLs strictly follow /#название with NO slashes after '#'
   try {
-    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-    if (isGH) {
-      const origPush = history.pushState;
-      const origReplace = history.replaceState;
-      const fixUrl = function(url) {
-        if (!url) return url;
-        if (typeof url === 'string') {
-          let clean = url.replace(/\/cis\/(en|ru|profile)/g, '/$1');
-          if (clean.includes('/cis/')) {
-            clean = clean.replace(/\/cis\//g, '/');
-          }
-          if (clean === '/cis') {
-            clean = '/';
-          }
-          if (clean.startsWith('/') && !clean.startsWith('/envyrage')) {
-            return '/envyrage' + clean;
-          }
-          return clean;
-        }
-        return url;
-      };
-      history.pushState = function(state, title, url) {
-        return origPush.call(this, state, title, fixUrl(url));
-      };
-      history.replaceState = function(state, title, url) {
-        return origReplace.call(this, state, title, fixUrl(url));
-      };
+    const origPush = history.pushState;
+    const origReplace = history.replaceState;
 
-      document.addEventListener('click', function(e) {
-        const a = e.target.closest('a');
-        if (a && a.getAttribute('href')) {
-          const href = a.getAttribute('href');
-          if (href.startsWith('/') && !href.startsWith('/envyrage') && !href.startsWith('//')) {
-            a.setAttribute('href', '/envyrage' + href);
-          }
-        }
-      }, true);
+    function getRepoBase() {
+      const p = window.location.pathname || '/';
+      const m = p.match(/^(\/[^\/]+)/);
+      if (window.location.hostname.includes('github.io') && m) {
+        return m[1];
+      }
+      if (p.startsWith('/envyrage')) return '/envyrage';
+      if (p.startsWith('/portfolio')) return '/portfolio';
+      return '';
     }
-  } catch(e) {}
 
-  // Hash Route Admin Listener (#/admin)
-  function checkHashAdmin() {
-    if (typeof window !== 'undefined' && window.location && window.location.hash) {
-      if (window.location.hash.includes('admin')) {
-        const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-        window.location.href = isGH ? '/envyrage/admin/index.html' : '/admin.html';
+    function formatCleanHashUrl(url) {
+      if (!url) return url;
+      if (typeof url !== 'string') return url;
+      const repoBase = getRepoBase();
+      const base = repoBase ? (repoBase + '/') : '/';
+
+      let name = 'ru';
+      if (url.includes('profile')) name = 'profile';
+      else if (url.includes('settings')) name = 'settings';
+      else if (url.includes('admin')) name = 'admin';
+      else if (url.includes('portfolio') || (window.location.hash === '#portfolio')) name = 'portfolio';
+      else if (url.includes('en')) name = 'en';
+      else if (url.includes('tos')) name = 'tos';
+      else if (url.includes('privacy')) name = 'privacy-policy';
+      else if (url.includes('cookie')) name = 'cookie-policy';
+      else if (url.includes('fair')) name = 'provably-fair';
+      else if (url.includes('ru') || url.includes('cis')) name = 'ru';
+      else {
+        let clean = url.replace(/^[#\/]+/, '').split(/[?#\/]/)[0];
+        name = clean || 'ru';
+      }
+      name = name.replace(/\//g, '');
+      return base + '#' + name;
+    }
+
+    history.pushState = function(state, title, url) {
+      return origPush.call(this, state, title, formatCleanHashUrl(url));
+    };
+    history.replaceState = function(state, title, url) {
+      return origReplace.call(this, state, title, formatCleanHashUrl(url));
+    };
+
+    // Global Click Interceptor for Navigation Links
+    document.addEventListener('click', function(e) {
+      const a = e.target.closest('a');
+      if (a && a.getAttribute('href')) {
+        const href = a.getAttribute('href');
+        if (href.startsWith('mailto:') || href.startsWith('tel:') || (href.startsWith('http') && !href.includes(window.location.host))) {
+          return;
+        }
+        if (href.startsWith('/') || href.startsWith('./') || href.startsWith('../') || href.startsWith('#')) {
+          let targetHash = '';
+          if (href.includes('profile')) targetHash = 'profile';
+          else if (href.includes('settings')) targetHash = 'settings';
+          else if (href.includes('admin')) targetHash = 'admin';
+          else if (href.includes('portfolio')) targetHash = 'portfolio';
+          else if (href.includes('en')) targetHash = 'en';
+          else if (href.includes('tos')) targetHash = 'tos';
+          else if (href.includes('privacy')) targetHash = 'privacy-policy';
+          else if (href.includes('cookie')) targetHash = 'cookie-policy';
+          else if (href.includes('fair')) targetHash = 'provably-fair';
+          else if (href.includes('ru') || href.includes('cis')) targetHash = 'ru';
+
+          if (targetHash) {
+            e.preventDefault();
+            window.location.hash = targetHash;
+          }
+        }
+      }
+    }, true);
+
+    // Hash Route Admin & Sanitizer Listener
+    function handleHashChange() {
+      if (typeof window === 'undefined' || !window.location) return;
+      const hash = window.location.hash || '';
+
+      // Clean any accidental slashes inside hash (e.g. #/ru -> #ru)
+      if (hash.includes('/')) {
+        let clean = hash.replace(/^#\/?/, '').replace(/^\//, '');
+        let name = 'ru';
+        if (clean.includes('profile')) name = 'profile';
+        else if (clean.includes('settings')) name = 'settings';
+        else if (clean.includes('admin')) name = 'admin';
+        else if (clean.includes('en')) name = 'en';
+        else if (clean.includes('portfolio')) name = 'portfolio';
+        else name = clean.replace(/[\/]/g, '') || 'ru';
+
+        const repoBase = getRepoBase();
+        const base = repoBase ? (repoBase + '/') : '/';
+        history.replaceState(null, '', base + '#' + name);
+      }
+
+      if (window.location.hash === '#admin' || window.location.hash.startsWith('#admin')) {
+        const repoBase = getRepoBase();
+        const adminPath = repoBase ? (repoBase + '/admin/index.html') : '/admin.html';
+        window.location.href = adminPath;
       }
     }
-  }
-  try {
-    checkHashAdmin();
-    window.addEventListener('hashchange', checkHashAdmin);
+
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
   } catch(e) {}
 
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
