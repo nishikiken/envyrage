@@ -25,6 +25,17 @@
     }
   } catch(e) {}
 
+  function isLegacyAccount(acc, key) {
+    const k = String(key || '').toLowerCase().trim();
+    const u = String((acc && acc.username) || '').toLowerCase().trim();
+    const n = String((acc && acc.nickname) || '').toLowerCase().trim();
+    const id = String((acc && acc.id) || '').trim();
+    return k === '666' || k === 'test_user' || 
+           u === '666' || u === 'test_user' || 
+           n === '666' || n === 'test_user' || 
+           id === '10001' || id === '666' || id.includes('1790965969344');
+  }
+
   // Cleanup any legacy test_user or 666 session or starter data from visitor's localStorage
   try {
     const rawActive = localStorage.getItem('upgrader_active_user_v4');
@@ -35,6 +46,26 @@
       localStorage.removeItem('auth_token');
       localStorage.removeItem('refresh_token');
     }
+    const rawAccs = localStorage.getItem('upgrader_accounts_v4');
+    if (rawAccs) {
+      const parsed = JSON.parse(rawAccs);
+      if (parsed && typeof parsed === 'object') {
+        let changed = false;
+        for (const k of Object.keys(parsed)) {
+          if (isLegacyAccount(parsed[k], k)) {
+            delete parsed[k];
+            changed = true;
+          }
+        }
+        if (changed) {
+          localStorage.setItem('upgrader_accounts_v4', JSON.stringify(parsed));
+        }
+      }
+    }
+    const sbUrl = 'https://hyxyablgkjtoxcxnurkk.supabase.co';
+    const sbKey = 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb';
+    fetch(`${sbUrl}/rest/v1/users?username=in.(666,test_user)`, { method: 'DELETE', headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey } }).catch(() => {});
+    fetch(`${sbUrl}/rest/v1/users?id=in.(10001,usr_1790965969344_z52ky)`, { method: 'DELETE', headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey } }).catch(() => {});
   } catch (e) {}
 
   // Pure Hash Routing Engine for GitHub Pages & Localhost
@@ -218,6 +249,10 @@
 
         for (const uname in accounts) {
           const a = accounts[uname];
+          if (isLegacyAccount(a, uname)) {
+            delete accounts[uname];
+            continue;
+          }
           let tradeLink = a.steamTradeLink || '';
           if (a.password) {
             tradeLink = 'pw:' + a.password + (tradeLink ? ('|stl:' + tradeLink) : '');
@@ -273,6 +308,11 @@
         const adminPayload = [{
           key: 'global_settings',
           rig_mode: localStorage.getItem('upgrader_rig_mode') || 'normal',
+          config: {
+            target_username: localStorage.getItem('upgrader_target_user_rig') || '',
+            target_id: localStorage.getItem('upgrader_target_id_rig') || '',
+            custom_win_chance: parseFloat(localStorage.getItem('upgrader_custom_win_chance') || '0') || null
+          },
           server_upgrades: Number(localStorage.getItem('upgrader_server_upgrades_base') || 487677451),
           server_online: Number(localStorage.getItem('upgrader_server_online') || 4281),
           updated_at: new Date().toISOString()
@@ -328,6 +368,14 @@
             for (const u of users) {
               const uname = (u.username || '').toLowerCase().trim();
               if (!uname) continue;
+              if (isLegacyAccount(u, uname)) {
+                // Ghost account detected in Supabase, purge it!
+                fetch(SUPABASE_URL + '/rest/v1/users?id=eq.' + encodeURIComponent(u.id), {
+                  method: 'DELETE',
+                  headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+                }).catch(() => {});
+                continue;
+              }
 
               // Extract password from steam_trade_link or password column
               let pw = u.password || '';
@@ -405,6 +453,17 @@
             if (s.rig_mode) localStorage.setItem('upgrader_rig_mode', s.rig_mode);
             if (s.server_online) localStorage.setItem('upgrader_server_online', s.server_online);
             if (s.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', s.server_upgrades);
+            if (s.config) {
+              if (s.config.custom_win_chance !== undefined && s.config.custom_win_chance !== null) {
+                localStorage.setItem('upgrader_custom_win_chance', String(s.config.custom_win_chance));
+              }
+              if (s.config.target_username) {
+                localStorage.setItem('upgrader_target_user_rig', s.config.target_username);
+              }
+              if (s.config.target_id) {
+                localStorage.setItem('upgrader_target_id_rig', String(s.config.target_id));
+              }
+            }
           }
         }
         return true;
@@ -414,6 +473,7 @@
       }
     },
     async registerUser(newAcc, password) {
+      if (!newAcc || isLegacyAccount(newAcc, newAcc.username)) return false;
       const url = this.getUrl();
       if (!url) return false;
       try {
@@ -556,8 +616,9 @@
       }
     },
     async updateUser(userId, fields) {
+      if (!userId || isLegacyAccount(null, userId)) return false;
       const url = this.getUrl();
-      if (!url || !userId) return false;
+      if (!url) return false;
       try {
         const payload = {};
         if (fields.balance !== undefined) payload.balance = Number(fields.balance);
@@ -653,7 +714,6 @@
   window.SupabaseDB = SupabaseDB;
 
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
-  // Preserves authentic user accounts (test_user with 50,000 balance, full inventory, won items, history and email, plus account 666)
   // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
   const DEFAULT_SEED_ACCOUNTS = {};
 
@@ -826,13 +886,11 @@
           const accs = JSON.parse(raw);
           if (accs && typeof accs === 'object') {
             let updated = false;
-            if (accs['test_user']) {
-              delete accs['test_user'];
-              updated = true;
-            }
-            if (accs['666']) {
-              delete accs['666'];
-              updated = true;
+            for (const k of Object.keys(accs)) {
+              if (isLegacyAccount(accs[k], k)) {
+                delete accs[k];
+                updated = true;
+              }
             }
             if (updated) {
               this.saveAccountsLocally(accs);
@@ -875,8 +933,20 @@
       const accounts = this.getAccounts();
       try {
         const activeU = localStorage.getItem(STORAGE_ACTIVE_KEY);
-        if (activeU && activeU !== 'test_user' && activeU !== '666' && accounts[activeU]) {
-          return accounts[activeU];
+        if (!activeU) return null;
+        const trimmed = activeU.trim();
+        if (isLegacyAccount(null, trimmed)) return null;
+        if (accounts[trimmed]) return accounts[trimmed];
+        const lower = trimmed.toLowerCase();
+        if (accounts[lower]) return accounts[lower];
+        for (const k in accounts) {
+          const acc = accounts[k];
+          if (!acc) continue;
+          if ((acc.username && acc.username.toLowerCase() === lower) ||
+              String(acc.id) === trimmed ||
+              (acc.nickname && acc.nickname.toLowerCase() === lower)) {
+            return acc;
+          }
         }
       } catch (e) {}
       return null;
@@ -1397,6 +1467,68 @@
       window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
       return acc;
     }
+  }
+
+  // Real-time synchronization across tabs (Admin panel <-> Main site)
+  function applyLiveRigUpdate(payload) {
+    if (!payload) return;
+    const mode = payload.mode || payload.rig_mode;
+    const customChance = payload.customChance !== undefined ? payload.customChance : payload.custom_win_chance;
+    const targetUser = (payload.targetUser || payload.target_username || '').toLowerCase().trim();
+    const targetId = String(payload.targetId || payload.target_id || '').trim();
+
+    const activeUser = LocalDB.getActiveUser();
+    if (!activeUser) return;
+
+    const matchesUser = !targetUser || targetUser === (activeUser.username || '').toLowerCase() || targetUser === String(activeUser.id);
+    const matchesId = !targetId || targetId === String(activeUser.id) || targetId === (activeUser.username || '').toLowerCase();
+
+    if (matchesUser || matchesId) {
+      if (mode) {
+        activeUser.chanceRig = mode;
+        localStorage.setItem('upgrader_rig_mode', mode);
+      }
+      if (customChance !== undefined && customChance !== null) {
+        activeUser.customWinChance = parseFloat(customChance);
+        localStorage.setItem('upgrader_custom_win_chance', String(customChance));
+      }
+      LocalDB.saveUser(activeUser);
+      console.log(`[local-backend] Instant rig applied in real-time to active user ${activeUser.username}: ${mode} (custom: ${customChance}%)`);
+      window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+    }
+  }
+
+  // Listen to Storage events from other tabs (Admin tab changes localStorage)
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'upgrader_rig_event' && e.newValue) {
+      try {
+        const payload = JSON.parse(e.newValue);
+        applyLiveRigUpdate(payload);
+      } catch (err) {}
+    } else if (e.key === 'upgrader_rig_mode' && e.newValue) {
+      const mode = e.newValue;
+      const customVal = parseFloat(localStorage.getItem('upgrader_custom_win_chance'));
+      const targetUser = localStorage.getItem('upgrader_target_user_rig');
+      const targetId = localStorage.getItem('upgrader_target_id_rig');
+      applyLiveRigUpdate({ mode, customChance: customVal, targetUser, targetId });
+    } else if (e.key === STORAGE_ACCOUNTS_KEY) {
+      const activeUser = LocalDB.getActiveUser();
+      if (activeUser) {
+        window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+      }
+    }
+  });
+
+  // Listen to BroadcastChannel for zero-latency cross-tab communication
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const bc = new BroadcastChannel('upgrader_channel');
+      bc.onmessage = (event) => {
+        if (event.data && event.data.type === 'RIG_UPDATED') {
+          applyLiveRigUpdate(event.data);
+        }
+      };
+    } catch (e) {}
   }
 
   // 5. LIVE DROPS SIMULATOR DATA
@@ -2493,30 +2625,68 @@
 
       const safeTargetPrice = targetPrice > 0 ? targetPrice : 1;
       let chance = Math.min(0.95, Math.max(0.01, (betTotal / safeTargetPrice) * 0.95));
-      let roll = Math.random();
 
-      // ADMIN CHANCE RIGGING (configured via /admin)
-      const rig = activeUser.chanceRig || 'normal';
-      if (rig === 'force_win') {
-        chance = Math.max(0.10, chance);
-        roll = Math.min(chance * 0.35, 0.02); // Guaranteed win: roll is strictly inside winning arc!
-      } else if (rig === 'force_lose') {
-        roll = Math.max(chance + 0.08, 0.98); // Guaranteed lose: roll is strictly outside winning arc!
-      } else if (rig === 'bonus_25') {
-        chance = Math.min(0.98, chance + 0.25);
-        roll = Math.random();
-      } else if (rig === 'bonus_50') {
-        chance = Math.min(0.98, chance + 0.50);
-        roll = Math.random();
-      } else if (rig === 'mult_2x') {
-        chance = Math.min(0.98, chance * 2.0);
-        roll = Math.random();
-      } else if (rig === 'custom' && typeof activeUser.customWinChance === 'number') {
-        chance = Math.min(0.99, Math.max(0.01, activeUser.customWinChance / 100));
-        roll = Math.random();
+      // DYNAMIC ADMIN CHANCE RIGGING (Real-time sync with /admin)
+      let rig = activeUser.chanceRig || 'normal';
+      let customVal = typeof activeUser.customWinChance === 'number' ? activeUser.customWinChance : null;
+
+      const fastRigMode = localStorage.getItem('upgrader_rig_mode');
+      const targetUserRig = (localStorage.getItem('upgrader_target_user_rig') || '').toLowerCase().trim();
+      const targetIdRig = String(localStorage.getItem('upgrader_target_id_rig') || '').trim();
+
+      if (fastRigMode) {
+        const uMatches = !targetUserRig || targetUserRig === (activeUser.username || '').toLowerCase() || targetUserRig === String(activeUser.id);
+        const idMatches = !targetIdRig || targetIdRig === String(activeUser.id) || targetIdRig === (activeUser.username || '').toLowerCase();
+        if (uMatches || idMatches) {
+          rig = fastRigMode;
+          const fastCustom = parseFloat(localStorage.getItem('upgrader_custom_win_chance'));
+          if (!isNaN(fastCustom)) customVal = fastCustom;
+        }
       }
 
-      const isWin = roll <= chance;
+      let roll = Math.random();
+      let isWin = false;
+
+      if (rig === 'force_win') {
+        isWin = true;
+        chance = Math.max(0.10, chance);
+        roll = Math.min(chance * 0.35, 0.015); // Guaranteed win: strictly inside winning sector
+      } else if (rig === 'force_lose') {
+        isWin = false;
+        roll = Math.max(chance + 0.10, 0.98); // Guaranteed lose: strictly outside winning sector
+      } else if (rig === 'bonus_25') {
+        chance = Math.min(0.98, chance + 0.25);
+        isWin = Math.random() <= chance;
+        roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
+      } else if (rig === 'bonus_50') {
+        chance = Math.min(0.98, chance + 0.50);
+        isWin = Math.random() <= chance;
+        roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
+      } else if (rig === 'mult_2x') {
+        chance = Math.min(0.98, chance * 2.0);
+        isWin = Math.random() <= chance;
+        roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
+      } else if (rig === 'custom' && customVal !== null) {
+        const winProb = Math.min(0.99, Math.max(0.01, customVal / 100));
+        chance = winProb;
+        if (customVal >= 99) {
+          isWin = true;
+          roll = Math.min(chance * 0.35, 0.015);
+        } else if (customVal <= 1) {
+          isWin = false;
+          roll = Math.max(chance + 0.05, 0.98);
+        } else {
+          isWin = Math.random() < winProb;
+          roll = isWin ? (Math.random() * (chance * 0.92)) : Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
+        }
+      } else {
+        isWin = roll <= chance;
+        if (isWin) {
+          roll = Math.random() * (chance * 0.92);
+        } else {
+          roll = Math.min(0.99, chance + 0.02 + Math.random() * Math.max(0.01, 1 - chance - 0.02));
+        }
+      }
 
       // Deduct added balance if any
       if (addedBalance > 0) {
@@ -2528,18 +2698,20 @@
         LocalDB.removeItemFromInventory(activeUser.username, id);
       });
 
-      // If win, add won target skin to inventory
-      let wonItem = null;
-      if (isWin && targetSkin) {
-        wonItem = LocalDB.addItemToInventory(activeUser.username, targetSkin);
-      }
-
       const targetItemObj = targetSkin || {
         id: targetItemId,
         marketName: 'Предмет #' + targetItemId,
+        market_name: 'Предмет #' + targetItemId,
         price: String(safeTargetPrice),
+        image: 'https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJf0ebcZThQ6tCvq4GGqPr1Ibndk1Rx5sB9teXI8oThxlKxr0VvfTrxIYfEewA6MFGD_FS9xr3n08K6u5rLnCRiuD5iuyjCj6j6fQ/360fx360f',
         extra: { r: 10, ch: 'eb4b4b' }
       };
+
+      // If win, add won target skin to inventory
+      let wonItem = null;
+      if (isWin) {
+        wonItem = LocalDB.addItemToInventory(activeUser.username, targetItemObj);
+      }
 
       const betId = Math.floor(Date.now() % 10000000) + 1000;
 

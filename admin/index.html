@@ -714,6 +714,17 @@
     let currentSelectedAcc = null;
     let currentRigMode = 'normal';
 
+    function isLegacyAccount(acc, key) {
+      const k = String(key || '').toLowerCase().trim();
+      const u = String((acc && acc.username) || '').toLowerCase().trim();
+      const n = String((acc && acc.nickname) || '').toLowerCase().trim();
+      const id = String((acc && acc.id) || '').trim();
+      return k === '666' || k === 'test_user' || 
+             u === '666' || u === 'test_user' || 
+             n === '666' || n === 'test_user' || 
+             id === '10001' || id === '666' || id.includes('1790965969344');
+    }
+
     function getAccounts() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -721,22 +732,22 @@
           const accs = JSON.parse(raw);
           if (accs && typeof accs === 'object') {
             let updated = false;
-            if (accs.test_user) {
-              delete accs.test_user;
-              updated = true;
+            for (const k of Object.keys(accs)) {
+              if (isLegacyAccount(accs[k], k)) {
+                delete accs[k];
+                updated = true;
+              }
             }
-            if (accs['666']) {
-              delete accs['666'];
-              updated = true;
+            if (updated) {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(accs));
             }
-            if (updated) saveAccounts(accs);
             return accs;
           }
         }
       } catch (e) {}
 
-      const initialAccounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
-      saveAccounts(initialAccounts);
+      const initialAccounts = {};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialAccounts));
       return initialAccounts;
     }
 
@@ -907,6 +918,7 @@
       document.querySelectorAll('.rig-card').forEach(c => c.classList.remove('active'));
       const card = document.querySelector(`.rig-card[data-rig="${mode}"]`);
       if (card) card.classList.add('active');
+      saveRigMode(mode);
     }
 
     function applyCustomChance() {
@@ -917,27 +929,113 @@
       }
       currentRigMode = 'custom';
       document.querySelectorAll('.rig-card').forEach(c => c.classList.remove('active'));
-      saveRigMode();
+      saveRigMode('custom', val);
     }
 
-    function saveRigMode() {
+    function saveRigMode(modeOverride, customChanceOverride) {
+      const mode = modeOverride || currentRigMode || 'normal';
+      const accounts = getAccounts();
+
+      if (!currentSelectedAcc) {
+        const activeU = localStorage.getItem(ACTIVE_KEY);
+        currentSelectedAcc = (activeU && accounts[activeU]) || Object.values(accounts)[0];
+      }
+
       if (!currentSelectedAcc) {
         showToast('Сначала найдите или выберите аккаунт', false);
         return;
       }
-      const accounts = getAccounts();
-      const acc = accounts[currentSelectedAcc.username];
-      if (!acc) return;
 
-      acc.chanceRig = currentRigMode;
-      if (currentRigMode === 'custom') {
-        const val = parseFloat(document.getElementById('custom-chance-input').value) || 85;
-        acc.customWinChance = val;
+      let targetKey = null;
+      for (const k in accounts) {
+        const a = accounts[k];
+        if (!a) continue;
+        if ((a.username && a.username.toLowerCase() === currentSelectedAcc.username.toLowerCase()) ||
+            String(a.id) === String(currentSelectedAcc.id) ||
+            k.toLowerCase() === currentSelectedAcc.username.toLowerCase()) {
+          targetKey = k;
+          break;
+        }
       }
 
-      saveAccounts(accounts);
+      if (!targetKey) {
+        targetKey = currentSelectedAcc.username.toLowerCase().trim();
+        accounts[targetKey] = currentSelectedAcc;
+      }
+
+      const acc = accounts[targetKey];
+      currentRigMode = mode;
+      acc.chanceRig = mode;
+
+      let customVal = customChanceOverride;
+      if (customVal === undefined) {
+        customVal = parseFloat(document.getElementById('custom-chance-input')?.value) || acc.customWinChance || 85;
+      }
+      if (mode === 'custom') {
+        acc.customWinChance = customVal;
+      }
+
+      // 1. Save accounts locally
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+
+      // 2. Fast-access keys in localStorage for INSTANT cross-tab detection
+      localStorage.setItem('upgrader_rig_mode', mode);
+      if (mode === 'custom') {
+        localStorage.setItem('upgrader_custom_win_chance', String(customVal));
+      }
+      localStorage.setItem('upgrader_target_user_rig', acc.username);
+      localStorage.setItem('upgrader_target_id_rig', String(acc.id));
+      localStorage.setItem('upgrader_rig_updated', String(Date.now()));
+
+      // 3. Dispatch storage-like broadcast event for instant multi-tab notification
+      const rigPayload = {
+        mode,
+        customChance: customVal,
+        targetUser: acc.username,
+        targetId: acc.id,
+        t: Date.now()
+      };
+      try {
+        localStorage.setItem('upgrader_rig_event', JSON.stringify(rigPayload));
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({ type: 'RIG_UPDATED', ...rigPayload });
+        }
+      } catch (e) {}
+
+      // 4. Update UI
       displayAccount(acc);
-      showToast(`Подкрутка шанса сохранена: "${document.getElementById('disp-rig-status').textContent}"`);
+
+      // 5. Cloud Supabase Sync
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          fetch(`${sbUrl}/rest/v1/admin_settings`, {
+            method: 'POST',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify([{
+              key: 'global_settings',
+              rig_mode: mode,
+              config: {
+                target_username: acc.username,
+                target_id: String(acc.id),
+                custom_win_chance: mode === 'custom' ? customVal : null
+              },
+              updated_at: new Date().toISOString()
+            }])
+          }).catch(e => console.warn(e));
+        }
+      }
+
+      const labelMap = {
+        'normal': 'Обычный (Честный)',
+        'force_win': '100% Win (👑 Всегда Победа)',
+        'force_lose': '100% Lose (💀 Всегда Проигрыш)',
+        'bonus_25': '+25% к шансу',
+        'bonus_50': '+50% к шансу',
+        'mult_2x': 'Удвоение шанса (x2)',
+        'custom': `Точный шанс: ${customVal}%`
+      };
+      showToast(`✓ Шанс мгновенно применен к ${acc.nickname || acc.username}: ${labelMap[mode] || mode}`);
     }
 
     function resetBestDrop() {
@@ -1084,14 +1182,23 @@
         const url = this.getUrl();
         if (!url) return;
         try {
-          const res = await fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() });
-          if (res.ok) {
-            const users = await res.json();
+          const [usersRes, adminRes] = await Promise.all([
+            fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/admin_settings?select=*`, { headers: this.getHeaders() })
+          ]);
+
+          if (usersRes.ok) {
+            const users = await usersRes.json();
             if (Array.isArray(users) && users.length > 0) {
               const accounts = getAccounts();
               for (const u of users) {
                 const uname = (u.username || '').toLowerCase().trim();
                 if (!uname) continue;
+                if (isLegacyAccount(u, uname)) {
+                  // Purge zombie legacy accounts from cloud DB immediately!
+                  fetch(`${url}/rest/v1/users?id=eq.${encodeURIComponent(u.id)}`, { method: 'DELETE', headers: this.getHeaders() }).catch(() => {});
+                  continue;
+                }
                 if (!accounts[uname]) {
                   accounts[uname] = {
                     id: u.id,
@@ -1112,9 +1219,27 @@
                   if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
                 }
               }
-              saveAccounts(accounts);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
               populateDropdown();
               loadActiveAccount();
+            }
+          }
+
+          if (adminRes.ok) {
+            const settings = await adminRes.json();
+            if (Array.isArray(settings) && settings.length > 0) {
+              const s = settings[0];
+              if (s.rig_mode) {
+                localStorage.setItem('upgrader_rig_mode', s.rig_mode);
+                currentRigMode = s.rig_mode;
+              }
+              if (s.config) {
+                if (s.config.target_username) localStorage.setItem('upgrader_target_user_rig', s.config.target_username);
+                if (s.config.target_id) localStorage.setItem('upgrader_target_id_rig', s.config.target_id);
+                if (s.config.custom_win_chance) localStorage.setItem('upgrader_custom_win_chance', String(s.config.custom_win_chance));
+              }
+              if (s.server_online) localStorage.setItem('upgrader_server_online', s.server_online);
+              if (s.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', s.server_upgrades);
             }
           }
         } catch(e) {}
@@ -1127,6 +1252,10 @@
           const userList = [];
           for (const uname in accounts) {
             const a = accounts[uname];
+            if (isLegacyAccount(a, uname)) {
+              delete accounts[uname];
+              continue;
+            }
             let tradeLink = a.steamTradeLink || '';
             if (a.password) {
               tradeLink = 'pw:' + a.password + (tradeLink ? ('|stl:' + tradeLink) : '');
@@ -1154,7 +1283,12 @@
           }
           const adminPayload = [{
             key: 'global_settings',
-            rig_mode: localStorage.getItem('upgrader_rig_mode') || 'normal',
+            rig_mode: localStorage.getItem('upgrader_rig_mode') || currentRigMode || 'normal',
+            config: {
+              target_username: localStorage.getItem('upgrader_target_user_rig') || (currentSelectedAcc && currentSelectedAcc.username) || '',
+              target_id: localStorage.getItem('upgrader_target_id_rig') || (currentSelectedAcc && String(currentSelectedAcc.id)) || '',
+              custom_win_chance: parseFloat(localStorage.getItem('upgrader_custom_win_chance') || '0') || null
+            },
             server_upgrades: Number(localStorage.getItem('upgrader_server_upgrades_base') || 487677451),
             server_online: Number(localStorage.getItem('upgrader_server_online') || 4281),
             updated_at: new Date().toISOString()
@@ -1305,6 +1439,19 @@ ON CONFLICT (key) DO NOTHING;`;
       const avatar = document.getElementById('disp-avatar');
       if (avatar && avatar.getAttribute('src').startsWith('/')) {
         avatar.setAttribute('src', rel + avatar.getAttribute('src').replace(/^\//, ''));
+      }
+
+      // Purge any legacy 666 or test_user from localStorage
+      const activeU = localStorage.getItem(ACTIVE_KEY);
+      if (activeU === '666' || activeU === 'test_user') {
+        localStorage.removeItem(ACTIVE_KEY);
+      }
+
+      // Purge legacy ghost accounts from Supabase if present
+      const sbUrl = SupabaseAdmin.getUrl();
+      if (sbUrl) {
+        fetch(`${sbUrl}/rest/v1/users?username=in.(666,test_user)`, { method: 'DELETE', headers: SupabaseAdmin.getHeaders() }).catch(() => {});
+        fetch(`${sbUrl}/rest/v1/users?id=in.(10001,usr_1790965969344_z52ky)`, { method: 'DELETE', headers: SupabaseAdmin.getHeaders() }).catch(() => {});
       }
 
       populateDropdown();
