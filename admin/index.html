@@ -1897,6 +1897,18 @@
         }
       }
 
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'USER_STATS_SYNCED',
+            stats: { bestDrop: null },
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
+
       showToast('✓ Лучший Drop успешно сброшен!');
     }
 
@@ -1934,6 +1946,21 @@
         }
       }
 
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'USER_STATS_SYNCED',
+            stats: {
+              withdrawnAmount: amt,
+              withdrawnItemsCount: count
+            },
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
+
       showToast(`✓ Вывод обновлен: ${amt.toLocaleString()} ₽ (${count} шт.)`);
     }
 
@@ -1967,6 +1994,20 @@
           SupabaseAdmin.recordUserStats(acc.username, acc.id, { upgrades_made: count });
         }
       }
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'USER_STATS_SYNCED',
+            stats: {
+              upgradesMade: count
+            },
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
 
       showToast(`✓ Число апгрейдов обновлено: ${count}`);
     }
@@ -2007,6 +2048,15 @@
           new BroadcastChannel('upgrader_channel').postMessage({
             type: 'BALANCE_UPDATED',
             balance: bal,
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'USER_STATS_SYNCED',
+            stats: {
+              balance: bal
+            },
             username: acc.username,
             id: acc.id,
             t: Date.now()
@@ -2142,9 +2192,32 @@
               steam_trade_link: tradeLink,
               updated_at: new Date().toISOString()
             })
+          }).then(res => {
+            if (!res.ok) {
+              fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+                method: 'PATCH',
+                headers: SupabaseAdmin.getHeaders(),
+                body: JSON.stringify({
+                  steam_trade_link: tradeLink,
+                  updated_at: new Date().toISOString()
+                })
+              }).catch(() => {});
+            }
           }).catch(() => {});
         }
       }
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'PASSWORD_UPDATED',
+            password: newPass,
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
 
       showToast(`✓ Пароль для пользователя ${acc.username} успешно изменён!`);
     }
@@ -2241,8 +2314,8 @@
         try {
           const ts = Date.now();
           const [usersRes, adminRes] = await Promise.all([
-            fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() }),
-            fetch(`${url}/rest/v1/admin_settings?select=*`, { headers: this.getHeaders() })
+            fetch(`${url}/rest/v1/users?select=*&_t=${ts}`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/admin_settings?select=*&_t=${ts}`, { headers: this.getHeaders() })
           ]);
 
           let settingsObj = null;
