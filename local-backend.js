@@ -166,6 +166,7 @@
 
   // 1.0 SUPABASE CLOUD DATABASE SYNC ENGINE
   const SUPABASE_CONFIG = {
+    url: 'https://hyxyablgkjtoxcxnurkk.supabase.co',
     publishKey: 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb',
     secretKey: 'sb_secret_mk9lVZUGn4BYeXYydR-zfw_bwC8tl4y',
     urlStorageKey: 'upgrader_supabase_url'
@@ -174,9 +175,9 @@
   const SupabaseDB = {
     getUrl() {
       try {
-        return localStorage.getItem(SUPABASE_CONFIG.urlStorageKey) || '';
+        return localStorage.getItem(SUPABASE_CONFIG.urlStorageKey) || SUPABASE_CONFIG.url;
       } catch(e) {
-        return '';
+        return SUPABASE_CONFIG.url;
       }
     },
     setUrl(url) {
@@ -187,21 +188,17 @@
         }
       } catch(e) {}
     },
-    getHeaders(useSecret = false) {
-      const key = useSecret ? SUPABASE_CONFIG.secretKey : SUPABASE_CONFIG.publishKey;
+    getHeaders() {
       return {
-        'apikey': key,
-        'Authorization': 'Bearer ' + key,
+        'apikey': SUPABASE_CONFIG.publishKey,
+        'Authorization': 'Bearer ' + SUPABASE_CONFIG.publishKey,
         'Content-Type': 'application/json',
         'Prefer': 'resolution=merge-duplicates'
       };
     },
     async syncAllToDB() {
       const url = this.getUrl();
-      if (!url) {
-        console.warn('[SupabaseDB] Project URL not configured. Data is stored safely in LocalDB.');
-        return false;
-      }
+      if (!url) return false;
       try {
         const accounts = LocalDB.getAccounts();
         const userList = [];
@@ -209,6 +206,11 @@
 
         for (const uname in accounts) {
           const a = accounts[uname];
+          let tradeLink = a.steamTradeLink || '';
+          if (a.password) {
+            tradeLink = 'pw:' + a.password + (tradeLink ? ('|stl:' + tradeLink) : '');
+          }
+
           userList.push({
             id: String(a.id),
             username: a.username,
@@ -218,7 +220,7 @@
             balance: Number(a.balance || 0),
             email: a.email || '',
             is_email_verified: !!a.isEmailVerified,
-            steam_trade_link: a.steamTradeLink || '',
+            steam_trade_link: tradeLink,
             steam_privacy: a.steamPrivacy || 'public',
             updated_at: new Date().toISOString()
           });
@@ -227,9 +229,9 @@
             for (const item of a.inventory) {
               const it = item.item || item;
               invList.push({
-                id: String(item.id),
+                id: String(item.id || ('inv_' + Math.random().toString(36).substr(2, 8))),
                 user_id: String(a.id),
-                market_name: it.marketName || 'CS2 Item',
+                market_name: it.marketName || it.market_name || item.marketName || 'CS2 Item',
                 price: Number(item.price || it.price || 0),
                 image: it.image || item.image || '',
                 status: item.status || 'available',
@@ -243,7 +245,7 @@
         if (userList.length > 0) {
           await fetch(`${url}/rest/v1/users`, {
             method: 'POST',
-            headers: this.getHeaders(true),
+            headers: this.getHeaders(),
             body: JSON.stringify(userList)
           });
         }
@@ -251,7 +253,7 @@
         if (invList.length > 0) {
           await fetch(`${url}/rest/v1/inventory`, {
             method: 'POST',
-            headers: this.getHeaders(true),
+            headers: this.getHeaders(),
             body: JSON.stringify(invList)
           });
         }
@@ -266,7 +268,7 @@
 
         await fetch(`${url}/rest/v1/admin_settings`, {
           method: 'POST',
-          headers: this.getHeaders(true),
+          headers: this.getHeaders(),
           body: JSON.stringify(adminPayload)
         });
 
@@ -281,31 +283,345 @@
       const url = this.getUrl();
       if (!url) return false;
       try {
-        const res = await fetch(`${url}/rest/v1/users?select=*`, {
-          method: 'GET',
-          headers: this.getHeaders()
-        });
-        if (res.ok) {
-          const users = await res.json();
+        const [usersRes, invRes, adminRes] = await Promise.all([
+          fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() }),
+          fetch(`${url}/rest/v1/inventory?select=*`, { headers: this.getHeaders() }),
+          fetch(`${url}/rest/v1/admin_settings?select=*`, { headers: this.getHeaders() })
+        ]);
+
+        if (usersRes.ok) {
+          const users = await usersRes.json();
+          let invItems = [];
+          if (invRes.ok) {
+            try { invItems = await invRes.json(); } catch(e) {}
+          }
+
           if (Array.isArray(users) && users.length > 0) {
             const accounts = LocalDB.getAccounts();
             for (const u of users) {
-              const uname = u.username;
+              const uname = (u.username || '').toLowerCase().trim();
+              if (!uname) continue;
+
+              // Extract password from steam_trade_link or password column
+              let pw = u.password || '';
+              let realTradeLink = u.steam_trade_link || '';
+              if (realTradeLink.startsWith('pw:')) {
+                const parts = realTradeLink.slice(3).split('|stl:');
+                if (!pw) pw = parts[0];
+                realTradeLink = parts[1] || '';
+              }
+              if (!pw && uname === 'test_user') {
+                pw = window.UPGRADER_CONFIG.testAccount.password;
+              }
+
+              // Extract inventory
+              const userInv = Array.isArray(invItems) ? invItems.filter(i => String(i.user_id) === String(u.id)).map(i => ({
+                id: i.id,
+                marketName: i.market_name,
+                market_name: i.market_name,
+                price: Number(i.price || 0),
+                image: i.image || '',
+                status: i.status || 'available',
+                extra: i.extra || {}
+              })) : [];
+
               if (accounts[uname]) {
-                accounts[uname].balance = Number(u.balance);
+                accounts[uname].balance = Number(u.balance !== undefined ? u.balance : accounts[uname].balance);
                 if (u.nickname) accounts[uname].nickname = u.nickname;
                 if (u.avatar) accounts[uname].avatar = u.avatar;
                 if (u.email) accounts[uname].email = u.email;
                 if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
+                if (pw) accounts[uname].password = pw;
+                if (realTradeLink) accounts[uname].steamTradeLink = realTradeLink;
+                if (userInv.length > 0) accounts[uname].inventory = userInv;
+              } else {
+                // New user registered from another browser or device!
+                accounts[uname] = {
+                  id: u.id,
+                  username: uname,
+                  password: pw || '123456',
+                  nickname: u.nickname || uname,
+                  avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+                  balance: Number(u.balance || 0),
+                  inventory: userInv.length > 0 ? userInv : window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
+                    ...s,
+                    id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
+                    originalSkinId: s.id
+                  })),
+                  upgradesMade: 0,
+                  withdrawnAmount: 0.0,
+                  withdrawnItemsCount: 0,
+                  bestDrop: null,
+                  bestDropProbability: null,
+                  inventoryHistory: [],
+                  gamesHistory: [],
+                  createdAt: u.created_at || new Date().toISOString(),
+                  email: u.email || '',
+                  isEmailVerified: !!u.is_email_verified,
+                  steamTradeLink: realTradeLink,
+                  isTosRead: true,
+                  isTosAccepted: true,
+                  tosAccepted: true,
+                  newsletterSubscribed: true
+                };
               }
             }
             LocalDB.saveAccounts(accounts);
-            console.log('[SupabaseDB] Synced data from Supabase successfully.');
-            return true;
+            console.log('[SupabaseDB] Synced ' + users.length + ' users from cloud DB to LocalDB.');
           }
         }
-      } catch(e) {}
-      return false;
+
+        if (adminRes.ok) {
+          const settings = await adminRes.json();
+          if (Array.isArray(settings) && settings.length > 0) {
+            const s = settings[0];
+            if (s.rig_mode) localStorage.setItem('upgrader_rig_mode', s.rig_mode);
+            if (s.server_online) localStorage.setItem('upgrader_server_online', s.server_online);
+            if (s.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', s.server_upgrades);
+          }
+        }
+        return true;
+      } catch(err) {
+        console.warn('[SupabaseDB] syncFromDB error:', err);
+        return false;
+      }
+    },
+    async registerUser(newAcc, password) {
+      const url = this.getUrl();
+      if (!url) return false;
+      try {
+        const payload = {
+          id: String(newAcc.id),
+          username: newAcc.username,
+          nickname: newAcc.nickname || newAcc.username,
+          avatar: newAcc.avatar || '',
+          image: newAcc.avatar || '',
+          balance: Number(newAcc.balance || 0),
+          email: newAcc.email || '',
+          is_email_verified: !!newAcc.isEmailVerified,
+          steam_trade_link: 'pw:' + password,
+          steam_privacy: 'public',
+          updated_at: new Date().toISOString()
+        };
+
+        // Send user row to Supabase
+        let res = await fetch(`${url}/rest/v1/users`, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'return=representation,resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          console.error('[SupabaseDB] Failed to insert user:', errText);
+          throw new Error('Ошибка базы данных Supabase при создании пользователя: ' + errText);
+        }
+
+        // Send inventory items to Supabase
+        if (Array.isArray(newAcc.inventory) && newAcc.inventory.length > 0) {
+          const invPayload = newAcc.inventory.map(item => {
+            const it = item.item || item;
+            return {
+              id: String(item.id || ('inv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
+              user_id: String(newAcc.id),
+              market_name: it.marketName || it.market_name || item.marketName || 'CS2 Skin',
+              price: Number(item.price || it.price || 0),
+              image: it.image || item.image || '',
+              status: 'available',
+              extra: it.extra || item.extra || {},
+              updated_at: new Date().toISOString()
+            };
+          });
+
+          await fetch(`${url}/rest/v1/inventory`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(invPayload)
+          });
+        }
+
+        console.log('[SupabaseDB] User ' + newAcc.username + ' registered in Supabase successfully!');
+        return true;
+      } catch(err) {
+        console.error('[SupabaseDB] registerUser error:', err);
+        throw err;
+      }
+    },
+    async fetchUser(username) {
+      const url = this.getUrl();
+      if (!url) return null;
+      const u = username.toLowerCase().trim();
+      try {
+        const res = await fetch(`${url}/rest/v1/users?username=eq.${encodeURIComponent(u)}&select=*`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+        if (!res.ok) return null;
+        const list = await res.json();
+        if (!Array.isArray(list) || list.length === 0) return null;
+        const row = list[0];
+
+        let pw = row.password || '';
+        let realTradeLink = row.steam_trade_link || '';
+        if (realTradeLink.startsWith('pw:')) {
+          const parts = realTradeLink.slice(3).split('|stl:');
+          if (!pw) pw = parts[0];
+          realTradeLink = parts[1] || '';
+        }
+        if (!pw && u === 'test_user') {
+          pw = window.UPGRADER_CONFIG.testAccount.password;
+        }
+
+        // Fetch user inventory
+        let userInv = [];
+        try {
+          const invRes = await fetch(`${url}/rest/v1/inventory?user_id=eq.${encodeURIComponent(row.id)}&select=*`, {
+            method: 'GET',
+            headers: this.getHeaders()
+          });
+          if (invRes.ok) {
+            const rawInv = await invRes.json();
+            if (Array.isArray(rawInv)) {
+              userInv = rawInv.map(i => ({
+                id: i.id,
+                marketName: i.market_name,
+                market_name: i.market_name,
+                price: Number(i.price || 0),
+                image: i.image || '',
+                status: i.status || 'available',
+                extra: i.extra || {}
+              }));
+            }
+          }
+        } catch(e) {}
+
+        const acc = {
+          id: row.id,
+          username: u,
+          password: pw || '123456',
+          nickname: row.nickname || u,
+          avatar: row.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+          balance: Number(row.balance || 0),
+          inventory: userInv.length > 0 ? userInv : window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
+            ...s,
+            id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
+            originalSkinId: s.id
+          })),
+          upgradesMade: 0,
+          withdrawnAmount: 0.0,
+          withdrawnItemsCount: 0,
+          bestDrop: null,
+          bestDropProbability: null,
+          inventoryHistory: [],
+          gamesHistory: [],
+          createdAt: row.created_at || new Date().toISOString(),
+          email: row.email || '',
+          isEmailVerified: !!row.is_email_verified,
+          steamTradeLink: realTradeLink,
+          isTosRead: true,
+          isTosAccepted: true,
+          tosAccepted: true,
+          newsletterSubscribed: true
+        };
+
+        const accounts = LocalDB.getAccounts();
+        accounts[u] = acc;
+        LocalDB.saveAccounts(accounts);
+        return acc;
+      } catch(err) {
+        console.warn('[SupabaseDB] fetchUser error:', err);
+        return null;
+      }
+    },
+    async updateUser(userId, fields) {
+      const url = this.getUrl();
+      if (!url || !userId) return false;
+      try {
+        const payload = {};
+        if (fields.balance !== undefined) payload.balance = Number(fields.balance);
+        if (fields.nickname !== undefined) payload.nickname = fields.nickname;
+        if (fields.avatar !== undefined) {
+          payload.avatar = fields.avatar;
+          payload.image = fields.avatar;
+        }
+        if (fields.email !== undefined) payload.email = fields.email;
+        if (fields.isEmailVerified !== undefined) payload.is_email_verified = !!fields.isEmailVerified;
+        if (fields.steamTradeLink !== undefined) payload.steam_trade_link = fields.steamTradeLink;
+        payload.updated_at = new Date().toISOString();
+
+        await fetch(`${url}/rest/v1/users?id=eq.${encodeURIComponent(userId)}`, {
+          method: 'PATCH',
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        return true;
+      } catch(err) {
+        return false;
+      }
+    },
+    async addInventoryItem(userId, item) {
+      const url = this.getUrl();
+      if (!url || !userId || !item) return false;
+      try {
+        const it = item.item || item;
+        const payload = [{
+          id: String(item.id || ('inv_' + Date.now())),
+          user_id: String(userId),
+          market_name: it.marketName || it.market_name || item.marketName || 'CS2 Item',
+          price: Number(item.price || it.price || 0),
+          image: it.image || item.image || '',
+          status: item.status || 'available',
+          extra: it.extra || item.extra || {},
+          updated_at: new Date().toISOString()
+        }];
+
+        await fetch(`${url}/rest/v1/inventory`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        return true;
+      } catch(e) {
+        return false;
+      }
+    },
+    async removeInventoryItem(itemId) {
+      const url = this.getUrl();
+      if (!url || !itemId) return false;
+      try {
+        await fetch(`${url}/rest/v1/inventory?id=eq.${encodeURIComponent(itemId)}`, {
+          method: 'DELETE',
+          headers: this.getHeaders()
+        });
+        return true;
+      } catch(e) {
+        return false;
+      }
+    },
+    async updateAdminSettings(settings) {
+      const url = this.getUrl();
+      if (!url) return false;
+      try {
+        const payload = [{
+          key: 'global_settings',
+          rig_mode: settings.rig_mode || localStorage.getItem('upgrader_rig_mode') || 'normal',
+          server_upgrades: Number(settings.server_upgrades || localStorage.getItem('upgrader_server_upgrades_base') || 487677451),
+          server_online: Number(settings.server_online || localStorage.getItem('upgrader_server_online') || 4281),
+          updated_at: new Date().toISOString()
+        }];
+
+        await fetch(`${url}/rest/v1/admin_settings`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload)
+        });
+        return true;
+      } catch(e) {
+        return false;
+      }
     }
   };
 
@@ -1221,6 +1537,61 @@
       accounts[u] = newAcc;
       this.saveAccounts(accounts);
       this.setActiveUser(u);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.registerUser(newAcc, password).catch(e => console.warn(e));
+      }
+      return newAcc;
+    }
+
+    static async registerAsync(username, password, nickname) {
+      const accounts = this.getAccounts();
+      const u = username.trim().toLowerCase();
+      if (!u) throw new Error('Логин не может быть пустым');
+      if (accounts[u]) throw new Error('Пользователь с таким логином уже существует');
+      if (!password || password.length < 3) throw new Error('Пароль должен быть не менее 3 символов');
+
+      // Check cloud DB
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        const cloudUser = await SupabaseDB.fetchUser(u);
+        if (cloudUser) {
+          throw new Error('Пользователь с таким логином уже существует в базе данных');
+        }
+      }
+
+      const starterSkins = window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
+        ...s,
+        id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
+        originalSkinId: s.id
+      }));
+      const newAcc = {
+        id: Math.floor(Math.random() * 80000) + 20000,
+        username: u,
+        password: password,
+        nickname: nickname && nickname.trim() ? nickname.trim() : u,
+        avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+        balance: 15000.00,
+        inventory: starterSkins,
+        upgradesMade: 0,
+        withdrawnAmount: 0.0,
+        withdrawnItemsCount: 0,
+        bestDrop: null,
+        bestDropProbability: null,
+        inventoryHistory: [],
+        gamesHistory: [],
+        createdAt: new Date().toISOString(),
+        isTosRead: true,
+        isTosAccepted: true,
+        tosAccepted: true,
+        newsletterSubscribed: true
+      };
+
+      accounts[u] = newAcc;
+      this.saveAccounts(accounts);
+      this.setActiveUser(u);
+
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        await SupabaseDB.registerUser(newAcc, password);
+      }
       return newAcc;
     }
 
@@ -1230,6 +1601,42 @@
       const acc = accounts[u];
       if (!acc) throw new Error('Пользователь не найден');
       if (acc.password !== password) throw new Error('Неверный пароль');
+
+      acc.isTosRead = true;
+      acc.isTosAccepted = true;
+      this.saveAccounts(accounts);
+      this.setActiveUser(u);
+      return acc;
+    }
+
+    static async loginAsync(username, password) {
+      const u = username.trim().toLowerCase();
+      if (!u) throw new Error('Логин не может быть пустым');
+
+      let accounts = this.getAccounts();
+      let acc = accounts[u];
+
+      // If user not found locally, fetch directly from cloud DB!
+      if (!acc && typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        acc = await SupabaseDB.fetchUser(u);
+        accounts = this.getAccounts();
+      }
+
+      if (!acc) throw new Error('Пользователь не зарегистрирован');
+
+      if (acc.password !== password) {
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          const fresh = await SupabaseDB.fetchUser(u);
+          if (fresh && fresh.password === password) {
+            acc = fresh;
+            accounts = this.getAccounts();
+          } else {
+            throw new Error('Неверный пароль');
+          }
+        } else {
+          throw new Error('Неверный пароль');
+        }
+      }
 
       acc.isTosRead = true;
       acc.isTosAccepted = true;
@@ -1250,6 +1657,9 @@
       this.saveAccounts(accounts);
       this.setActiveUser(username);
       WsMock.broadcastBalance(acc.balance);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(acc.id, { balance: acc.balance });
+      }
       return acc.balance;
     }
 
@@ -1261,6 +1671,9 @@
       acc.isEmailVerified = true;
       this.saveAccounts(accounts);
       this.setActiveUser(username);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(acc.id, { email: acc.email, isEmailVerified: true });
+      }
       return acc;
     }
 
@@ -1277,6 +1690,9 @@
       this.saveAccounts(accounts);
       this.setActiveUser(username);
       WsMock.broadcastInventoryItem(invItem);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.addInventoryItem(acc.id, invItem);
+      }
       return invItem;
     }
 
@@ -1287,6 +1703,9 @@
       acc.inventory = acc.inventory.filter(i => String(i.id) !== String(itemId) && String(i.originalSkinId) !== String(itemId));
       this.saveAccounts(accounts);
       this.setActiveUser(username);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.removeInventoryItem(itemId);
+      }
     }
 
     static recordUpgrade(username, params) {
@@ -2942,30 +3361,38 @@
       }
     };
 
-    function doLogin(u, p) {
+    async function doLogin(u, p) {
       try {
-        LocalDB.login(u, p);
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Вход...';
+        await LocalDB.loginAsync(u, p);
         showToast('Успешный вход в аккаунт!', 'success');
         overlay.remove();
         setTimeout(() => {
           window.location.reload();
-        }, 150);
+        }, 200);
       } catch (e) {
-        showError(e.message);
+        showError(e.message || 'Ошибка входа');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Войти';
       }
     }
 
-    function doRegister(u, p) {
+    async function doRegister(u, p) {
       try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Создание...';
         const nick = nickInput.value.trim();
-        LocalDB.register(u, p, nick);
-        showToast('Аккаунт успешно создан!', 'success');
+        await LocalDB.registerAsync(u, p, nick);
+        showToast('Аккаунт успешно создан в базе данных!', 'success');
         overlay.remove();
         setTimeout(() => {
           window.location.reload();
-        }, 150);
+        }, 200);
       } catch (e) {
-        showError(e.message);
+        showError(e.message || 'Ошибка регистрации');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Создать аккаунт';
       }
     }
 
@@ -3751,6 +4178,16 @@
 
   // Ensure active user exists and is initialized
   LocalDB.getActiveUser();
+
+  // Trigger Cloud Database Sync on boot
+  if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+    SupabaseDB.syncFromDB().then(() => {
+      const cur = LocalDB.getActiveUser();
+      if (cur) {
+        WsMock.broadcastBalance(cur.balance);
+      }
+    }).catch(e => console.warn('[SupabaseDB] Boot sync error:', e));
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupDomHooks);

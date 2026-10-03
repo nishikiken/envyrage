@@ -1309,6 +1309,12 @@
 
     function saveAccounts(accounts) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+      if (typeof SupabaseAdmin !== 'undefined') {
+        clearTimeout(window._sbSyncTimer);
+        window._sbSyncTimer = setTimeout(() => {
+          SupabaseAdmin.syncAllToDB();
+        }, 600);
+      }
     }
 
     function showToast(msg, isSuccess = true) {
@@ -1613,8 +1619,117 @@
       showToast('Электронная почта успешно отвязана');
     }
 
+    const SUPABASE_CONFIG = {
+      url: 'https://hyxyablgkjtoxcxnurkk.supabase.co',
+      publishKey: 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb'
+    };
+
+    const SupabaseAdmin = {
+      getUrl() {
+        return localStorage.getItem('upgrader_supabase_url') || SUPABASE_CONFIG.url;
+      },
+      getHeaders() {
+        return {
+          'apikey': SUPABASE_CONFIG.publishKey,
+          'Authorization': 'Bearer ' + SUPABASE_CONFIG.publishKey,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        };
+      },
+      async syncFromDB() {
+        const url = this.getUrl();
+        if (!url) return;
+        try {
+          const res = await fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() });
+          if (res.ok) {
+            const users = await res.json();
+            if (Array.isArray(users) && users.length > 0) {
+              const accounts = getAccounts();
+              for (const u of users) {
+                const uname = (u.username || '').toLowerCase().trim();
+                if (!uname) continue;
+                if (!accounts[uname]) {
+                  accounts[uname] = {
+                    id: u.id,
+                    username: uname,
+                    password: u.password || '123456',
+                    nickname: u.nickname || uname,
+                    avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+                    balance: Number(u.balance || 0),
+                    inventory: [],
+                    email: u.email || '',
+                    isEmailVerified: !!u.is_email_verified
+                  };
+                } else {
+                  accounts[uname].balance = Number(u.balance !== undefined ? u.balance : accounts[uname].balance);
+                  if (u.nickname) accounts[uname].nickname = u.nickname;
+                  if (u.avatar) accounts[uname].avatar = u.avatar;
+                  if (u.email) accounts[uname].email = u.email;
+                  if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
+                }
+              }
+              saveAccounts(accounts);
+              populateDropdown();
+              loadActiveAccount();
+            }
+          }
+        } catch(e) {}
+      },
+      async syncAllToDB() {
+        const url = this.getUrl();
+        if (!url) return false;
+        try {
+          const accounts = getAccounts();
+          const userList = [];
+          for (const uname in accounts) {
+            const a = accounts[uname];
+            let tradeLink = a.steamTradeLink || '';
+            if (a.password) {
+              tradeLink = 'pw:' + a.password + (tradeLink ? ('|stl:' + tradeLink) : '');
+            }
+            userList.push({
+              id: String(a.id),
+              username: a.username,
+              nickname: a.nickname || a.username,
+              avatar: a.avatar || a.image || '',
+              image: a.avatar || a.image || '',
+              balance: Number(a.balance || 0),
+              email: a.email || '',
+              is_email_verified: !!a.isEmailVerified,
+              steam_trade_link: tradeLink,
+              steam_privacy: 'public',
+              updated_at: new Date().toISOString()
+            });
+          }
+          if (userList.length > 0) {
+            await fetch(`${url}/rest/v1/users`, {
+              method: 'POST',
+              headers: this.getHeaders(),
+              body: JSON.stringify(userList)
+            });
+          }
+          const adminPayload = [{
+            key: 'global_settings',
+            rig_mode: localStorage.getItem('upgrader_rig_mode') || 'normal',
+            server_upgrades: Number(localStorage.getItem('upgrader_server_upgrades_base') || 487677451),
+            server_online: Number(localStorage.getItem('upgrader_server_online') || 4281),
+            updated_at: new Date().toISOString()
+          }];
+          await fetch(`${url}/rest/v1/admin_settings`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(adminPayload)
+          });
+          return true;
+        } catch(e) {
+          return false;
+        }
+      }
+    };
+    window.SupabaseDB = SupabaseAdmin;
+
     function loadSupabaseSettings() {
-      const url = localStorage.getItem('upgrader_supabase_url') || '';
+      const url = SupabaseAdmin.getUrl();
       const input = document.getElementById('sb-project-url');
       if (input && url) {
         input.value = url;
@@ -1625,20 +1740,15 @@
       const input = document.getElementById('sb-project-url');
       const url = input ? input.value.trim().replace(/\/+$/, '') : '';
       if (!url) {
-        showToast('Пожалуйста, введите URL вашего проекта Supabase (https://xxxx.supabase.co)', false);
+        showToast('Пожалуйста, введите URL вашего проекта Supabase', false);
         return;
       }
       localStorage.setItem('upgrader_supabase_url', url);
       showToast('Синхронизация с базой данных...');
 
-      if (window.SupabaseDB) {
-        window.SupabaseDB.setUrl(url);
-        const ok = await window.SupabaseDB.syncAllToDB();
-        if (ok) {
-          showToast('✓ Успешно синхронизировано с базой данных Supabase!');
-        } else {
-          showToast('✓ URL сохранен. Создайте таблицы в Supabase SQL Editor.');
-        }
+      const ok = await SupabaseAdmin.syncAllToDB();
+      if (ok) {
+        showToast('✓ Успешно синхронизировано с базой данных Supabase!');
       } else {
         showToast('✓ URL проекта Supabase сохранен!');
       }
@@ -1772,6 +1882,7 @@ ON CONFLICT (key) DO NOTHING;`;
       populateDropdown();
       loadActiveAccount();
       loadSupabaseSettings();
+      SupabaseAdmin.syncFromDB();
     });
   </script>
 </body>
