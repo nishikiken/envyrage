@@ -32,11 +32,18 @@
       padding: 0;
     }
 
+    html {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--bg);
+    }
+
     body {
+      width: 100%;
+      min-height: 100vh;
       background-color: var(--bg);
       color: var(--white);
       font-family: 'Exo 2', sans-serif;
-      min-height: 100vh;
       display: flex;
       flex-direction: column;
       line-height: 1.5;
@@ -433,9 +440,166 @@
       transform: translateY(0);
       opacity: 1;
     }
+
+    /* Admin Auth Gate Screen */
+    #admin-auth-overlay {
+      position: fixed;
+      inset: 0;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at center, #1c1e24 0%, #0d0e12 100%);
+      z-index: 999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 440px;
+      min-width: 360px;
+      background: var(--card-bg);
+      border: 1px solid rgba(253, 217, 17, 0.35);
+      border-radius: 24px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(253, 217, 17, 0.12);
+      padding: 38px 32px;
+      text-align: center;
+      position: relative;
+    }
+
+    .auth-icon {
+      width: 68px;
+      height: 68px;
+      background: rgba(253, 217, 17, 0.12);
+      border: 1px solid rgba(253, 217, 17, 0.35);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin: 0 auto 20px;
+      color: var(--yellow);
+    }
+
+    .auth-title {
+      font-family: 'Tektur', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .auth-subtitle {
+      font-size: 13px;
+      color: var(--gray);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .auth-input-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .auth-input {
+      width: 100%;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      color: var(--white);
+      padding: 13px 44px 13px 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-family: 'Exo 2', sans-serif;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .auth-input:focus {
+      border-color: var(--yellow);
+      box-shadow: 0 0 12px rgba(253, 217, 17, 0.25);
+    }
+
+    .auth-toggle-pass {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--gray);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .auth-submit {
+      width: 100%;
+      background: var(--yellow);
+      color: #17181D;
+      font-family: 'Tektur', sans-serif;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+
+    .auth-submit:hover {
+      background: var(--yellow-hover);
+      box-shadow: 0 4px 18px rgba(253, 217, 17, 0.4);
+    }
+
+    .auth-error {
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 12px;
+      min-height: 20px;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-8px); }
+      40%, 80% { transform: translateX(8px); }
+    }
+
+    .shake {
+      animation: shake 0.4s ease-in-out;
+    }
   </style>
 </head>
 <body>
+
+  <!-- Admin Authentication Gate -->
+  <div id="admin-auth-overlay">
+    <div class="auth-card">
+      <div class="auth-icon">🔒</div>
+      <h1 class="auth-title">UPGRADER ADMIN</h1>
+      <p class="auth-subtitle">Доступ к панели управления защищен паролем.<br>Пожалуйста, введите пароль администратора.</p>
+      
+      <form onsubmit="submitAdminPassword(event); return false;">
+        <div class="auth-input-wrapper">
+          <input type="password" id="admin-pass-input" class="auth-input" placeholder="Введите пароль..." autocomplete="current-password" autofocus />
+          <button type="button" class="auth-toggle-pass" onclick="togglePassVisibility()" title="Показать/скрыть пароль">👁️</button>
+        </div>
+        <button type="submit" class="auth-submit">ВОЙТИ В ПАНЕЛЬ УПРАВЛЕНИЯ</button>
+        <div id="admin-auth-error" class="auth-error"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="admin-main-wrapper" style="display: none; min-height: 100vh; flex-direction: column;">
 
   <!-- Header -->
   <header>
@@ -449,6 +613,7 @@
       <a href="./#ru" class="btn-nav">🎲 Апгрейдер</a>
       <a href="./#profile" class="btn-nav">👤 Профиль</a>
       <button type="button" class="btn-nav btn-nav-primary" onclick="saveAllSettings()">💾 Сохранить всё</button>
+      <button type="button" class="btn-nav btn-red" onclick="adminLogout()" title="Выйти из админ-панели">🔒 Выйти</button>
     </div>
   </header>
 
@@ -695,16 +860,124 @@
             📋 Скопировать SQL код для таблиц
           </button>
         </div>
+      <!-- TOOL 7: Безопасность и пароль панели управления -->
+      <div class="admin-card" style="grid-column: 1 / -1; border: 1px solid rgba(253, 217, 17, 0.3); background: rgba(23, 24, 29, 0.9);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div class="card-title" style="margin-bottom: 0;">🔒 Безопасность и пароль панели управления</div>
+          <span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: rgba(253, 217, 17, 0.15); color: var(--yellow); font-weight: 700; border: 1px solid rgba(253, 217, 17, 0.3);">
+            Пароль по умолчанию: <code>envyrage!</code>
+          </span>
+        </div>
+        <div class="card-desc">
+          Вход в панель управления защищен мастер-паролем. Вы можете сменить пароль или сбросить его обратно на <code>envyrage!</code>.
+        </div>
+
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <input type="text" id="change-admin-pass-input" class="input-field" placeholder="Введите новый пароль админки..." style="flex: 1; min-width: 240px;">
+          <button type="button" class="btn-action btn-yellow" onclick="changeAdminPassword()">Сохранить новый пароль</button>
+          <button type="button" class="btn-action" onclick="resetAdminPassword()" style="background: rgba(255,255,255,0.08);">Сбросить на envyrage!</button>
+          <button type="button" class="btn-action btn-red" onclick="adminLogout()">🚪 Выйти из админки</button>
+        </div>
       </div>
 
     </div>
 
   </main>
+  </div> <!-- /#admin-main-wrapper -->
 
   <!-- Toast -->
   <div id="admin-toast">✓ Настройки успешно сохранены</div>
 
   <script>
+    const ADMIN_PASS_KEY = 'upgrader_admin_pass';
+    const ADMIN_AUTH_KEY = 'upgrader_admin_auth';
+    const DEFAULT_ADMIN_PASS = 'envyrage!';
+
+    function getAdminPassword() {
+      return localStorage.getItem(ADMIN_PASS_KEY) || DEFAULT_ADMIN_PASS;
+    }
+
+    function checkAdminAuth() {
+      const isAuth = sessionStorage.getItem(ADMIN_AUTH_KEY) === 'authenticated';
+      const overlay = document.getElementById('admin-auth-overlay');
+      const mainWrapper = document.getElementById('admin-main-wrapper');
+      if (isAuth) {
+        if (overlay) overlay.style.display = 'none';
+        if (mainWrapper) mainWrapper.style.display = 'flex';
+        return true;
+      } else {
+        if (overlay) overlay.style.display = 'flex';
+        if (mainWrapper) mainWrapper.style.display = 'none';
+        const input = document.getElementById('admin-pass-input');
+        if (input) {
+          input.value = '';
+          setTimeout(() => input.focus(), 100);
+        }
+        return false;
+      }
+    }
+
+    function submitAdminPassword(e) {
+      if (e) e.preventDefault();
+      const input = document.getElementById('admin-pass-input');
+      const errorEl = document.getElementById('admin-auth-error');
+      const pass = (input ? input.value : '').trim();
+      const realPass = getAdminPassword();
+
+      if (pass === realPass) {
+        sessionStorage.setItem(ADMIN_AUTH_KEY, 'authenticated');
+        if (errorEl) errorEl.textContent = '';
+        checkAdminAuth();
+        populateDropdown();
+        loadActiveAccount();
+        loadSupabaseSettings();
+        SupabaseAdmin.syncFromDB();
+        showToast('✓ Доступ в админ-панель разрешен!');
+      } else {
+        if (errorEl) errorEl.textContent = 'Неверный пароль администратора!';
+        if (input) {
+          input.style.borderColor = 'var(--red)';
+          input.classList.add('shake');
+          setTimeout(() => {
+            input.classList.remove('shake');
+            input.style.borderColor = '';
+          }, 600);
+          input.select();
+        }
+      }
+    }
+
+    function togglePassVisibility() {
+      const input = document.getElementById('admin-pass-input');
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function adminLogout() {
+      sessionStorage.removeItem(ADMIN_AUTH_KEY);
+      checkAdminAuth();
+      showToast('Вы вышли из админ-панели');
+    }
+
+    function changeAdminPassword() {
+      const input = document.getElementById('change-admin-pass-input');
+      const newPass = (input ? input.value : '').trim();
+      if (!newPass || newPass.length < 3) {
+        showToast('Пароль должен содержать минимум 3 символа', false);
+        return;
+      }
+      localStorage.setItem(ADMIN_PASS_KEY, newPass);
+      input.value = '';
+      showToast('✓ Новый пароль админ-панели сохранен!');
+    }
+
+    function resetAdminPassword() {
+      localStorage.removeItem(ADMIN_PASS_KEY);
+      const input = document.getElementById('change-admin-pass-input');
+      if (input) input.value = '';
+      showToast('✓ Пароль сброшен на значение по умолчанию (envyrage!)');
+    }
+
     const STORAGE_KEY = 'upgrader_accounts_v4';
     const ACTIVE_KEY = 'upgrader_active_user_v4';
 
@@ -1452,6 +1725,13 @@ ON CONFLICT (key) DO NOTHING;`;
       if (sbUrl) {
         fetch(`${sbUrl}/rest/v1/users?username=in.(666,test_user)`, { method: 'DELETE', headers: SupabaseAdmin.getHeaders() }).catch(() => {});
         fetch(`${sbUrl}/rest/v1/users?id=in.(10001,usr_1790965969344_z52ky)`, { method: 'DELETE', headers: SupabaseAdmin.getHeaders() }).catch(() => {});
+      }
+
+      const passDisp = document.getElementById('current-pass-display');
+      if (passDisp) passDisp.textContent = getAdminPassword();
+
+      if (!checkAdminAuth()) {
+        return;
       }
 
       populateDropdown();

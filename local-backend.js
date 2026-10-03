@@ -25,6 +25,25 @@
     }
   } catch(e) {}
 
+  // Safety patch: prevent Angular or CDN prepending paths to data:image URLs
+  try {
+    const origSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+    if (origSrcDesc && origSrcDesc.set) {
+      Object.defineProperty(HTMLImageElement.prototype, 'src', {
+        set: function(val) {
+          if (typeof val === 'string' && val.includes('data:image/')) {
+            val = val.substring(val.indexOf('data:image/'));
+          }
+          return origSrcDesc.set.call(this, val);
+        },
+        get: function() {
+          return origSrcDesc.get.call(this);
+        },
+        configurable: true
+      });
+    }
+  } catch(e) {}
+
   function isLegacyAccount(acc, key) {
     const k = String(key || '').toLowerCase().trim();
     const u = String((acc && acc.username) || '').toLowerCase().trim();
@@ -1041,6 +1060,23 @@
       } catch (e) {}
     }
 
+    static generateNextUserId(accounts) {
+      let maxId = 1735000;
+      const accs = accounts || this.getAccounts();
+      if (accs) {
+        for (const k in accs) {
+          const rawId = parseInt(accs[k]?.id, 10);
+          if (!isNaN(rawId) && rawId >= maxId) {
+            maxId = Math.max(maxId, rawId);
+          }
+        }
+      }
+      if (maxId === 1735000) {
+        return 1735000 + Math.floor(Math.random() * 50) + 1;
+      }
+      return maxId + Math.floor(Math.random() * 5) + 1;
+    }
+
     static register(username, password, nickname) {
       const accounts = this.getAccounts();
       const u = username.trim().toLowerCase();
@@ -1049,7 +1085,7 @@
       if (!password || password.length < 3) throw new Error('Пароль должен быть не менее 3 символов');
 
       const newAcc = {
-        id: Math.floor(Math.random() * 80000) + 20000,
+        id: this.generateNextUserId(accounts),
         username: u,
         password: password,
         nickname: nickname && nickname.trim() ? nickname.trim() : u,
@@ -1087,15 +1123,37 @@
       if (!password || password.length < 3) throw new Error('Пароль должен быть не менее 3 символов');
 
       // Check cloud DB
+      let maxCloudId = 1735000;
       if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
         const cloudUser = await SupabaseDB.fetchUser(u);
         if (cloudUser) {
           throw new Error('Пользователь с таким логином уже существует в базе данных');
         }
+        try {
+          const res = await fetch(`${SupabaseDB.getUrl()}/rest/v1/users?select=id&order=id.desc&limit=20`, {
+            headers: SupabaseDB.getHeaders()
+          });
+          if (res.ok) {
+            const list = await res.json();
+            if (Array.isArray(list)) {
+              for (const row of list) {
+                const n = parseInt(row.id, 10);
+                if (!isNaN(n) && n >= maxCloudId) {
+                  maxCloudId = Math.max(maxCloudId, n);
+                }
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      let generatedId = this.generateNextUserId(accounts);
+      if (maxCloudId >= generatedId) {
+        generatedId = maxCloudId + Math.floor(Math.random() * 5) + 1;
       }
 
       const newAcc = {
-        id: Math.floor(Math.random() * 80000) + 20000,
+        id: generatedId,
         username: u,
         password: password,
         nickname: nickname && nickname.trim() ? nickname.trim() : u,
@@ -1558,7 +1616,7 @@
     return {
       id: String(Date.now() + '_' + Math.floor(Math.random() * 10000)),
       user: {
-        id: String(Math.floor(Math.random() * 800000) + 100000),
+        id: String(Math.floor(Math.random() * 50000) + 1735000),
         nickname: player,
         image: avatar
       },
@@ -3161,19 +3219,69 @@
     uploadBtn.onclick = () => fileInput.click();
     fileInput.onchange = () => {
       const file = fileInput.files && fileInput.files[0];
-      if (file) {
-        if (file.size > 2 * 1024 * 1024) {
-          showToast('Размер файла не должен превышать 2 МБ', 'error');
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          const dataUrl = ev.target.result;
-          avatarInput.value = dataUrl;
-          previewImg.src = dataUrl;
-        };
-        reader.readAsDataURL(file);
+      if (!file) return;
+
+      const minSizeBytes = 5 * 1024; // 5 KB
+      const maxSizeBytes = 5 * 1024 * 1024; // 5 MB
+
+      if (file.size < minSizeBytes) {
+        showToast('Файл слишком маленький (минимум 5 КБ)', 'error');
+        fileInput.value = '';
+        return;
       }
+      if (file.size > maxSizeBytes) {
+        showToast('Размер файла не должен превышать 5 МБ', 'error');
+        fileInput.value = '';
+        return;
+      }
+      if (!file.type || !file.type.startsWith('image/')) {
+        showToast('Пожалуйста, выберите файл изображения (JPG, PNG, WEBP)', 'error');
+        fileInput.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const rawDataUrl = ev.target.result;
+        const img = new Image();
+        img.onload = () => {
+          if (img.naturalWidth < 64 || img.naturalHeight < 64) {
+            showToast('Разрешение слишком маленькое (минимум 64x64 px)', 'error');
+            fileInput.value = '';
+            return;
+          }
+          if (img.naturalWidth > 4096 || img.naturalHeight > 4096) {
+            showToast('Разрешение слишком большое (максимум 4096x4096 px)', 'error');
+            fileInput.value = '';
+            return;
+          }
+
+          // Off-screen canvas 256x256 cover crop
+          const canvas = document.createElement('canvas');
+          canvas.width = 256;
+          canvas.height = 256;
+          const ctx = canvas.getContext('2d');
+          
+          const minSide = Math.min(img.naturalWidth, img.naturalHeight);
+          const sx = (img.naturalWidth - minSide) / 2;
+          const sy = (img.naturalHeight - minSide) / 2;
+          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, 256, 256);
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+
+          avatarInput.value = optimizedDataUrl;
+          previewImg.src = optimizedDataUrl;
+          showToast('Аватарка загружена и оптимизирована (256x256 px)!', 'success');
+        };
+        img.onerror = () => {
+          showToast('Не удалось открыть изображение', 'error');
+          fileInput.value = '';
+        };
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => {
+        showToast('Ошибка при чтении файла', 'error');
+      };
+      reader.readAsDataURL(file);
     };
 
     avatarInput.oninput = () => {
@@ -3217,10 +3325,18 @@
       overlay.remove();
       showToast('Профиль успешно обновлен в базе данных!', 'success');
 
-      // Update in DOM and reload state
+      // Update in DOM immediately
+      const domAvatars = document.querySelectorAll('up-avatar-with-placeholder img, up-user-info img, up-profile-preview img, .profile-avatar');
+      domAvatars.forEach(el => { el.src = newAvatar; });
+
+      // Update header username/nickname
+      const nickEls = document.querySelectorAll('up-user-info [class*="nickname"], up-user-info [class*="truncate"], up-profile-info [class*="nickname"]');
+      nickEls.forEach(el => { el.textContent = newNick; });
+
+      // Reload state after short delay
       setTimeout(() => {
         window.location.reload();
-      }, 200);
+      }, 250);
     };
   }
 
@@ -4332,7 +4448,24 @@
 
       // 5. Ensure push notifications switch is visible and synced
       syncPushSwitchState();
+
+      // 6. Ensure user avatar is correctly synced in DOM
+      syncDomAvatars();
     });
+
+    function syncDomAvatars() {
+      const activeUser = LocalDB.getActiveUser();
+      if (!activeUser || !activeUser.avatar) return;
+      const customAvatar = activeUser.avatar;
+      if (customAvatar && !customAvatar.includes('default-avatar-small')) {
+        const avatarImgs = document.querySelectorAll('up-avatar-with-placeholder img, up-user-info img, up-profile-preview img');
+        avatarImgs.forEach(img => {
+          if (img.src !== customAvatar && (!img.src || img.src.includes('default-avatar') || img.src.includes('avatar-placeholder'))) {
+            img.src = customAvatar;
+          }
+        });
+      }
+    }
 
     function syncPushSwitchState() {
       const pushSwitch = document.querySelector('up-push-switch');
@@ -4374,6 +4507,7 @@
       syncEmailLinkingCard();
       syncWithdrawingCards();
       syncPushSwitchState();
+      syncDomAvatars();
     }, 1000);
   }
 
