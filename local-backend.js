@@ -68,6 +68,20 @@
     }
   } catch(e) {}
 
+  // Hash Route Admin Listener (#/admin)
+  function checkHashAdmin() {
+    if (typeof window !== 'undefined' && window.location && window.location.hash) {
+      if (window.location.hash.includes('admin')) {
+        const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+        window.location.href = isGH ? '/envyrage/admin/index.html' : '/admin.html';
+      }
+    }
+  }
+  try {
+    checkHashAdmin();
+    window.addEventListener('hashchange', checkHashAdmin);
+  } catch(e) {}
+
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
   // Preserves authentic user accounts (test_user with 50,000 balance, full inventory, won items, history and email, plus account 666)
   // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
