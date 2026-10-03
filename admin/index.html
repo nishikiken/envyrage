@@ -1255,9 +1255,8 @@
             <span>Текущий пароль:</span>
             <span id="current-pass-display" class="masked-pass" title="Наведите курсор, чтобы увидеть пароль">••••••••</span>
           </div>
-          <div style="display: flex; gap: 8px;">
-            <input type="text" id="change-admin-pass-input" class="input-field" placeholder="Новый пароль админки..." style="flex: 1;" />
-            <button type="button" class="btn-action btn-yellow" onclick="changeAdminPassword()">Сохранить</button>
+          <div style="font-size: 11.5px; color: var(--gray); margin-top: 8px; line-height: 1.4;">
+            Управляется в SQL базе данных (таблица <code style="color: var(--yellow);">admin_settings</code>). Смена пароля через настройки отключена.
           </div>
         </div>
 
@@ -1301,12 +1300,37 @@
       }
     }
 
-    function submitAdminPassword(e) {
+    async function submitAdminPassword(e) {
       if (e) e.preventDefault();
       const input = document.getElementById('admin-pass-input');
       const errorEl = document.getElementById('admin-auth-error');
       const pass = (input ? input.value : '').trim();
-      const realPass = getAdminPassword();
+      let realPass = getAdminPassword();
+
+      // Check fresh password from Supabase SQL table in real time
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const sbUrl = SupabaseAdmin.getUrl();
+        if (sbUrl) {
+          try {
+            const res = await fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings&select=*`, {
+              headers: SupabaseAdmin.getHeaders()
+            });
+            if (res.ok) {
+              const list = await res.json();
+              if (Array.isArray(list) && list.length > 0) {
+                const s = list[0];
+                const cloudPass = s.admin_password || (s.config && s.config.admin_password);
+                if (cloudPass) {
+                  realPass = cloudPass;
+                  localStorage.setItem(ADMIN_PASS_KEY, cloudPass);
+                }
+              }
+            }
+          } catch(err) {
+            console.warn('[AdminAuth] Cloud pass fetch error:', err);
+          }
+        }
+      }
 
       if (pass === realPass) {
         sessionStorage.setItem(ADMIN_AUTH_KEY, 'authenticated');
@@ -1353,20 +1377,6 @@
     function closeAdminSettingsModal() {
       const modal = document.getElementById('admin-settings-modal');
       if (modal) modal.style.display = 'none';
-    }
-
-    function changeAdminPassword() {
-      const input = document.getElementById('change-admin-pass-input');
-      const newPass = (input ? input.value : '').trim();
-      if (!newPass || newPass.length < 3) {
-        showToast('Пароль должен содержать минимум 3 символа', false);
-        return;
-      }
-      localStorage.setItem(ADMIN_PASS_KEY, newPass);
-      input.value = '';
-      const curPassEl = document.getElementById('current-pass-display');
-      if (curPassEl) curPassEl.textContent = newPass;
-      showToast('✓ Новый пароль админ-панели сохранен!');
     }
 
     const STORAGE_KEY = 'upgrader_accounts_v4';
@@ -2064,7 +2074,7 @@
         const url = this.getUrl();
         if (!url) return;
         try {
-          const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${Date.now()}`, { headers: this.getHeaders() });
+          const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
           if (!res.ok) return;
           const list = await res.json();
           const s = (Array.isArray(list) && list[0]) || {};
@@ -2133,8 +2143,8 @@
         try {
           const ts = Date.now();
           const [usersRes, adminRes] = await Promise.all([
-            fetch(`${url}/rest/v1/users?select=*&_t=${ts}`, { headers: this.getHeaders() }),
-            fetch(`${url}/rest/v1/admin_settings?select=*&_t=${ts}`, { headers: this.getHeaders() })
+            fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/admin_settings?select=*`, { headers: this.getHeaders() })
           ]);
 
           let settingsObj = null;
@@ -2161,6 +2171,14 @@
               }
               if (settingsObj.server_online) localStorage.setItem('upgrader_server_online', settingsObj.server_online);
               if (settingsObj.server_upgrades) localStorage.setItem('upgrader_server_upgrades_base', settingsObj.server_upgrades);
+
+              // Sync master admin password from SQL table (admin_password column or config.admin_password)
+              const cloudPass = settingsObj.admin_password || (settingsObj.config && settingsObj.config.admin_password);
+              if (cloudPass) {
+                localStorage.setItem(ADMIN_PASS_KEY, cloudPass);
+                const curPassEl = document.getElementById('current-pass-display');
+                if (curPassEl) curPassEl.textContent = cloudPass;
+              }
             }
           }
 
@@ -2284,6 +2302,27 @@
       const activeU = localStorage.getItem(ACTIVE_KEY);
       if (activeU === '666' || activeU === 'test_user') {
         localStorage.removeItem(ACTIVE_KEY);
+      }
+
+      // Pre-fetch fresh admin password from SQL cloud in background even before login
+      if (typeof SupabaseAdmin !== 'undefined') {
+        const url = SupabaseAdmin.getUrl();
+        if (url) {
+          fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: SupabaseAdmin.getHeaders() })
+            .then(r => r.json())
+            .then(list => {
+              if (Array.isArray(list) && list.length > 0) {
+                const s = list[0];
+                const cloudPass = s.admin_password || (s.config && s.config.admin_password);
+                if (cloudPass) {
+                  localStorage.setItem(ADMIN_PASS_KEY, cloudPass);
+                  const curPassEl = document.getElementById('current-pass-display');
+                  if (curPassEl) curPassEl.textContent = cloudPass;
+                }
+              }
+            })
+            .catch(() => {});
+        }
       }
 
       if (!checkAdminAuth()) {

@@ -836,7 +836,7 @@
         if (uname && uname !== String(userId)) {
           query = `or=(user_id.eq.${encodeURIComponent(userId)},user_id.eq.${encodeURIComponent(uname)})`;
         }
-        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*&_t=${Date.now()}`, {
+        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*`, {
           method: 'GET',
           headers: this.getHeaders()
         });
@@ -851,7 +851,7 @@
       const url = this.getUrl();
       if (!url) return;
       try {
-        const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${Date.now()}`, { headers: this.getHeaders() });
+        const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
         if (!res.ok) return;
         const list = await res.json();
         const s = (Array.isArray(list) && list[0]) || {};
@@ -881,7 +881,7 @@
         const ts = Date.now();
 
         // 1. Fetch admin_settings for real-time cloud luck / rig mode
-        const adminRes = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${ts}`, { headers: this.getHeaders() });
+        const adminRes = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
         let cloudRigMode = 'normal';
         let cloudConfig = {};
         if (adminRes.ok) {
@@ -919,7 +919,7 @@
           // 2. Fetch user's latest row and inventory from Supabase
           const targetQuery = `or=(id.eq.${encodeURIComponent(uid)},username.eq.${encodeURIComponent(uname)})`;
           const [userRes, invRes] = await Promise.all([
-            fetch(`${url}/rest/v1/users?${targetQuery}&select=*&_t=${ts}`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/users?${targetQuery}&select=*`, { headers: this.getHeaders() }),
             this.fetchUserInventory(uid)
           ]);
 
