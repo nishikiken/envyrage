@@ -201,7 +201,7 @@
     "username": "test_user",
     "password": "password123",
     "nickname": "Test Winner",
-    "avatar": "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg",
+    "avatar": "https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg",
     "balance": 50000.0,
     "inventory": [
       {
@@ -616,10 +616,10 @@
     "newsletterSubscribed": true,
     "email": "legendary_gamer@gmail.com",
     "isEmailVerified": true,
-    "emailVerified": true
+    "emailVerified": true,
+    "image": "https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg"
   }
 };
-
 
   // 2. LOAD EXTENSIVE SKINS CATALOG FROM skins.json (15,800+ skins synced from upgrader.best)
   let catalogData = [];
@@ -791,7 +791,7 @@
           if (accs && typeof accs === 'object') {
             let updated = false;
             // Auto-heal/migrate test_user if empty or missing inventory
-            if (!accs.test_user || !accs.test_user.inventory || accs.test_user.inventory.length === 0 || accs.test_user.balance < 50000) {
+            if (!accs.test_user || !accs.test_user.inventory || accs.test_user.inventory.length === 0 || accs.test_user.balance < 50000 || !accs.test_user.image) {
               accs.test_user = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS.test_user));
               updated = true;
             }
