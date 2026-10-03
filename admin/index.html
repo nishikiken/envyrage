@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UPGRADER PRO — Панель управления (Admin Panel)</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800&family=Tektur:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #101114;
+      --card-bg: #17181D;
+      --card-inner: #202228;
+      --card-hover: #262830;
+      --border: rgba(255, 255, 255, 0.08);
+      --yellow: #FDD911;
+      --yellow-hover: #FFE234;
+      --green: #22C55E;
+      --red: #EF4444;
+      --blue: #3B82F6;
+      --purple: #A855F7;
+      --gray: #8E8F94;
+      --white: #FFFFFF;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--white);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Header */
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: var(--yellow);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Tektur', sans-serif;
+      font-weight: 900;
+      color: #17181D;
+      font-size: 18px;
+    }
+
+    .brand-title {
+      font-family: 'Tektur', sans-serif;
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-admin {
+      background: rgba(253, 217, 17, 0.15);
+      border: 1px solid rgba(253, 217, 17, 0.35);
+      color: var(--yellow);
+      font-family: 'Tektur', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-nav {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      color: var(--white);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .btn-nav:hover {
+      background: var(--card-hover);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-nav-primary {
+      background: var(--yellow);
+      color: #17181D;
+      border: none;
+      font-family: 'Tektur', sans-serif;
+      font-weight: 700;
+    }
+
+    .btn-nav-primary:hover {
+      background: var(--yellow-hover);
+      box-shadow: 0 0 15px rgba(253, 217, 17, 0.3);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Cards */
+    .admin-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-family: 'Tektur', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--gray);
+      margin-bottom: 20px;
+    }
+
+    /* Search & Selector */
+    .search-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .input-field {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--white);
+      font-family: 'Exo 2', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .input-field:focus {
+      border-color: var(--yellow);
+      box-shadow: 0 0 0 2px rgba(253, 217, 17, 0.2);
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 220px;
+    }
+
+    .btn-action {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      color: var(--white);
+      font-family: 'Tektur', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-action:hover {
+      background: var(--card-hover);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .btn-yellow {
+      background: var(--yellow);
+      color: #17181D;
+      border: none;
+    }
+
+    .btn-yellow:hover {
+      background: var(--yellow-hover);
+      box-shadow: 0 0 20px rgba(253, 217, 17, 0.4);
+    }
+
+    .btn-red {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
+    .btn-red:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: var(--red);
+      color: #ffffff;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-green {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: #4ade80;
+    }
+
+    .btn-green:hover {
+      background: rgba(34, 197, 94, 0.25);
+      border-color: var(--green);
+      color: #ffffff;
+    }
+
+    /* Account Profile Display */
+    .profile-banner {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+
+    .profile-avatar {
+      width: 76px;
+      height: 76px;
+      border-radius: 16px;
+      border: 2px solid var(--yellow);
+      object-fit: cover;
+      background: #111;
+    }
+
+    .profile-meta {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .profile-nickname {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-id-badge {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--yellow);
+      font-weight: 700;
+      font-family: 'Tektur', sans-serif;
+    }
+
+    .profile-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      width: 100%;
+      margin-top: 14px;
+    }
+
+    .stat-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--gray);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .stat-val {
+      font-family: 'Tektur', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .stat-val-highlight {
+      color: var(--yellow);
+    }
+
+    /* Grid Layout for Tools */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+    }
+
+    /* Chance Rig Cards */
+    .rig-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .rig-card {
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      user-select: none;
+    }
+
+    .rig-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .rig-card.active {
+      border-color: var(--yellow);
+      background: rgba(253, 217, 17, 0.08);
+      box-shadow: 0 0 15px rgba(253, 217, 17, 0.15);
+    }
+
+    .rig-card.active::after {
+      content: '✓';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      color: var(--yellow);
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .rig-icon {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+
+    .rig-name {
+      font-family: 'Tektur', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 2px;
+    }
+
+    .rig-sub {
+      font-size: 11px;
+      color: var(--gray);
+    }
+
+    /* Toast Notification */
+    #admin-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1C1D22;
+      border: 1px solid var(--yellow);
+      border-radius: 12px;
+      padding: 14px 20px;
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 99999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #admin-toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <a href="/cis" class="brand">
+      <div class="brand-logo">U</div>
+      <div class="brand-title">UPGRADER</div>
+      <span class="badge-admin">Admin Panel</span>
+    </a>
+
+    <div class="header-nav">
+      <a href="/ru" class="btn-nav">🎲 Апгрейдер</a>
+      <a href="/ru/profile" class="btn-nav">👤 Профиль</a>
+      <button type="button" class="btn-nav btn-nav-primary" onclick="saveAllSettings()">💾 Сохранить всё</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main>
+
+    <!-- Top Card: Account Lookup by Profile ID -->
+    <div class="admin-card">
+      <div class="card-title">🔍 Выбор аккаунта по ID из профиля</div>
+      <div class="card-desc">Введите числовой ID, который отображается в профиле аккаунта, или выберите из списка существующих.</div>
+
+      <div class="search-row">
+        <input type="text" id="account-id-input" class="input-field search-input" placeholder="Введите ID аккаунта (например: 10001)...">
+        <button type="button" class="btn-action btn-yellow" onclick="lookupAccount()">Найти аккаунт</button>
+        <button type="button" class="btn-action" onclick="loadActiveAccount()">Выбрать активный аккаунт</button>
+        <select id="accounts-dropdown" class="input-field" onchange="onDropdownSelect(this.value)" style="min-width: 180px;">
+          <!-- Populated via JS -->
+        </select>
+      </div>
+
+      <!-- Account Info Display -->
+      <div class="profile-banner" id="profile-display">
+        <img id="disp-avatar" class="profile-avatar" src="/assets/icons/avatar-placeholder.svg" alt="Avatar">
+        <div class="profile-meta">
+          <div class="profile-nickname">
+            <span id="disp-nickname">Загрузка...</span>
+            <span id="disp-id" class="profile-id-badge">ID: ----</span>
+          </div>
+          <div style="font-size: 13px; color: var(--gray); margin-top: 4px;">
+            Логин: <strong id="disp-username" style="color: #cbd5e1;">----</strong>
+          </div>
+
+          <div class="profile-stats-grid">
+            <div class="stat-box">
+              <div class="stat-label">Баланс</div>
+              <div class="stat-val stat-val-highlight" id="disp-balance">0.00 ₽</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Апгрейдов сделано</div>
+              <div class="stat-val" id="disp-upgrades">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Выведено через Steam</div>
+              <div class="stat-val stat-val-highlight" id="disp-withdrawn">0.00 ₽</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Лучший Drop</div>
+              <div class="stat-val" id="disp-bestdrop" style="font-size: 13px;">Отсутствует</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Подкрутка шанса</div>
+              <div class="stat-val" id="disp-rig-status" style="font-size: 13px; color: var(--yellow);">Обычный</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Электронная почта</div>
+              <div class="stat-val" id="disp-email" style="font-size: 12px; color: var(--green);">Не привязана</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tools Grid -->
+    <div class="tools-grid">
+
+      <!-- TOOL 1: Подкрутка шанса апгрейда -->
+      <div class="admin-card">
+        <div class="card-title">🎯 Подкрутка шанса на апгрейд</div>
+        <div class="card-desc">Выберите режим выигрыша для данного аккаунта. Влияет на все последующие игры в рулетке апгрейда.</div>
+
+        <div class="rig-options">
+          <div class="rig-card active" data-rig="normal" onclick="selectRigMode('normal')">
+            <div class="rig-icon">⚖️</div>
+            <div class="rig-name">Обычный</div>
+            <div class="rig-sub">Честный математический шанс</div>
+          </div>
+
+          <div class="rig-card" data-rig="force_win" onclick="selectRigMode('force_win')">
+            <div class="rig-icon">👑</div>
+            <div class="rig-name">100% Win</div>
+            <div class="rig-sub">Всегда побеждать в апгрейде</div>
+          </div>
+
+          <div class="rig-card" data-rig="force_lose" onclick="selectRigMode('force_lose')">
+            <div class="rig-icon">💀</div>
+            <div class="rig-name">100% Lose</div>
+            <div class="rig-sub">Всегда проигрывать в апгрейде</div>
+          </div>
+
+          <div class="rig-card" data-rig="bonus_25" onclick="selectRigMode('bonus_25')">
+            <div class="rig-icon">⚡</div>
+            <div class="rig-name">+25% к шансу</div>
+            <div class="rig-sub">Прибавка к вероятности</div>
+          </div>
+
+          <div class="rig-card" data-rig="bonus_50" onclick="selectRigMode('bonus_50')">
+            <div class="rig-icon">🔥</div>
+            <div class="rig-name">+50% к шансу</div>
+            <div class="rig-sub">Мощный буст вероятности</div>
+          </div>
+
+          <div class="rig-card" data-rig="mult_2x" onclick="selectRigMode('mult_2x')">
+            <div class="rig-icon">🚀</div>
+            <div class="rig-name">Удвоение x2</div>
+            <div class="rig-sub">Шанс умножается на 2</div>
+          </div>
+        </div>
+
+        <!-- Custom percentage -->
+        <div style="background: var(--card-inner); padding: 14px; border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border);">
+          <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">⚙️ Либо установить точный шанс выигрыша (%):</div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="number" id="custom-chance-input" class="input-field" placeholder="например: 85" min="1" max="99" style="width: 120px;">
+            <button type="button" class="btn-action" onclick="applyCustomChance()">Задать точный шанс</button>
+          </div>
+        </div>
+
+        <button type="button" class="btn-action btn-yellow" style="width: 100%;" onclick="saveRigMode()">Применить подкрутку шанса</button>
+      </div>
+
+      <!-- TOOL 2: Статистика дропа и Steam вывода -->
+      <div class="admin-card">
+        <div class="card-title">📊 Статистика профиля и вывода</div>
+        <div class="card-desc">Настройка показателей профиля: сумма вывода в Steam, счетчик апгрейдов и сброс лучшего дропа.</div>
+
+        <!-- Reset Best Drop -->
+        <div style="background: var(--card-inner); padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border);">
+          <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px; color: #f87171;">🗑️ Сбросить самый дорогой Drop (обнулить стату)</div>
+          <div style="font-size: 12px; color: var(--gray); margin-bottom: 12px;">Удаляет скин из блока «Лучший дроп» в профиле, возвращая его к исходному чистому состоянию.</div>
+          <button type="button" class="btn-action btn-red" onclick="resetBestDrop()">Удалить лучший дроп (обнулить)</button>
+        </div>
+
+        <!-- Withdrawn Steam amount -->
+        <div style="background: var(--card-inner); padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border);">
+          <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">💸 Количество денег, выведенных через Steam</div>
+          <div style="font-size: 12px; color: var(--gray); margin-bottom: 10px;">Отображается в карточке «Выведено» профиля пользователя.</div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="number" id="withdrawn-amount-input" class="input-field" placeholder="Сумма вывода (₽)..." style="flex: 1; min-width: 140px;">
+            <input type="number" id="withdrawn-count-input" class="input-field" placeholder="Предметов..." style="width: 110px;">
+            <button type="button" class="btn-action btn-yellow" onclick="saveWithdrawnStats()">Сохранить вывод</button>
+          </div>
+        </div>
+
+        <!-- Upgrades made count -->
+        <div style="background: var(--card-inner); padding: 16px; border-radius: 12px; border: 1px solid var(--border);">
+          <div style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">⚡ Число совершенных апгрейдов</div>
+          <div style="font-size: 12px; color: var(--gray); margin-bottom: 10px;">Отображается в карточке «Апгрейдов» профиля пользователя.</div>
+          <div style="display: flex; gap: 10px;">
+            <input type="number" id="upgrades-made-input" class="input-field" placeholder="Количество апгрейдов..." style="flex: 1;">
+            <button type="button" class="btn-action btn-yellow" onclick="saveUpgradesCount()">Сохранить число</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOOL 3: Баланс аккаунта -->
+      <div class="admin-card">
+        <div class="card-title">💰 Баланс аккаунта</div>
+        <div class="card-desc">Мгновенное изменение баланса для покупок скинов и игр в рулетке.</div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+          <input type="number" id="balance-input" class="input-field" placeholder="Сумма баланса (₽)..." style="flex: 1;">
+          <button type="button" class="btn-action btn-green" onclick="saveBalance()">Задать баланс</button>
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn-action" onclick="quickAddBalance(5000)">+5 000 ₽</button>
+          <button type="button" class="btn-action" onclick="quickAddBalance(25000)">+25 000 ₽</button>
+          <button type="button" class="btn-action" onclick="quickAddBalance(100000)">+100 000 ₽</button>
+          <button type="button" class="btn-action btn-red" onclick="setExactBalance(0)">Обнулить</button>
+        </div>
+      </div>
+
+      <!-- TOOL 4: Электронная почта аккаунта -->
+      <div class="admin-card">
+        <div class="card-title">✉️ Электронная почта аккаунта</div>
+        <div class="card-desc">Привязка, изменение или отвязка email для выбранного аккаунта. В профиле статус привязанной почты изменится мгновенно.</div>
+
+        <div style="background: var(--card-inner); padding: 16px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 14px;">
+          <div style="font-size: 13px; color: var(--gray); margin-bottom: 8px;">Текущая почта: <span id="disp-email-badge" style="color: var(--yellow); font-weight: 700;">Не привязана</span></div>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="email" id="email-input" class="input-field" placeholder="Введите новый email (например: player@gmail.com)..." style="flex: 1; min-width: 200px;">
+            <button type="button" class="btn-action btn-yellow" onclick="saveEmail()">Сохранить почту</button>
+            <button type="button" class="btn-action btn-red" onclick="unbindEmail()">Отвязать</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOOL 5: Быстрый переход и синхронизация -->
+      <div class="admin-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div class="card-title">🚀 Быстрый переход на сайт</div>
+          <div class="card-desc">Все изменения сохраняются мгновенно. Откройте профиль или рулетку апгрейдера для проверки.</div>
+
+          <div style="background: var(--card-inner); padding: 14px; border-radius: 12px; margin-bottom: 16px; border: 1px solid var(--border); font-size: 13px; color: var(--gray);">
+            💡 <strong>Подсказка:</strong> При подкрутке <em>«100% Win»</em> стрелка рулетки будет автоматически падать в желтую зону выигрыша, а выигранный скин сразу зачисляться в инвентарь аккаунта.
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <a href="/ru/profile" class="btn-action btn-yellow" style="text-decoration: none; width: 100%;">
+            👤 Открыть профиль аккаунта (/ru/profile)
+          </a>
+          <a href="/ru" class="btn-action" style="text-decoration: none; width: 100%;">
+            🎲 Открыть рулетку апгрейдера (/ru)
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Toast -->
+  <div id="admin-toast">✓ Настройки успешно сохранены</div>
+
+  <script>
+    const STORAGE_KEY = 'upgrader_accounts_v4';
+    const ACTIVE_KEY = 'upgrader_active_user_v4';
+
+    let currentSelectedAcc = null;
+    let currentRigMode = 'normal';
+
+    function getAccounts() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function saveAccounts(accounts) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    }
+
+    function showToast(msg, isSuccess = true) {
+      const toast = document.getElementById('admin-toast');
+      toast.textContent = (isSuccess ? '✓ ' : 'ℹ️ ') + msg;
+      toast.style.borderColor = isSuccess ? '#22C55E' : '#FDD911';
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2800);
+    }
+
+    function populateDropdown() {
+      const accounts = getAccounts();
+      const dd = document.getElementById('accounts-dropdown');
+      dd.innerHTML = '<option value="">-- Выбрать аккаунт --</option>';
+
+      for (const uname in accounts) {
+        const a = accounts[uname];
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = `${a.nickname || a.username} (ID: ${a.id}) — ${a.balance || 0} ₽`;
+        dd.appendChild(opt);
+      }
+    }
+
+    function displayAccount(acc) {
+      if (!acc) return;
+      currentSelectedAcc = acc;
+
+      document.getElementById('disp-avatar').src = acc.avatar || '/assets/icons/avatar-placeholder.svg';
+      document.getElementById('disp-nickname').textContent = acc.nickname || 'Пользователь';
+      document.getElementById('disp-id').textContent = 'ID: ' + (acc.id || '----');
+      document.getElementById('disp-username').textContent = acc.username || '----';
+      document.getElementById('disp-balance').textContent = (parseFloat(acc.balance) || 0).toLocaleString() + ' ₽';
+      document.getElementById('disp-upgrades').textContent = (acc.upgradesMade || 0).toLocaleString();
+      document.getElementById('disp-withdrawn').textContent = (parseFloat(acc.withdrawnAmount) || 0).toLocaleString() + ' ₽ (' + (acc.withdrawnItemsCount || 0) + ' шт.)';
+
+      // Best drop
+      const best = acc.bestDrop;
+      if (best && best.marketName) {
+        document.getElementById('disp-bestdrop').textContent = `${best.marketName} (${parseFloat(best.price || 0).toLocaleString()} ₽)`;
+      } else {
+        document.getElementById('disp-bestdrop').textContent = 'Отсутствует / Сброшен';
+      }
+
+      // Rig mode
+      const rig = acc.chanceRig || 'normal';
+      currentRigMode = rig;
+      updateRigBadges(rig, acc.customWinChance);
+
+      // Email
+      const emailEl = document.getElementById('disp-email');
+      const emailBadge = document.getElementById('disp-email-badge');
+      const emailInput = document.getElementById('email-input');
+      if (acc.email) {
+        if (emailEl) {
+          emailEl.textContent = acc.email;
+          emailEl.style.color = '#22C55E';
+        }
+        if (emailBadge) {
+          emailBadge.textContent = acc.email + ' (Подтверждена)';
+          emailBadge.style.color = '#22C55E';
+        }
+        if (emailInput) emailInput.value = acc.email;
+      } else {
+        if (emailEl) {
+          emailEl.textContent = 'Не привязана';
+          emailEl.style.color = '#8E8F94';
+        }
+        if (emailBadge) {
+          emailBadge.textContent = 'Не привязана';
+          emailBadge.style.color = '#8E8F94';
+        }
+        if (emailInput) emailInput.value = '';
+      }
+
+      // Populate input fields
+      document.getElementById('account-id-input').value = acc.id || '';
+      document.getElementById('withdrawn-amount-input').value = acc.withdrawnAmount || 0;
+      document.getElementById('withdrawn-count-input').value = acc.withdrawnItemsCount || 0;
+      document.getElementById('upgrades-made-input').value = acc.upgradesMade || 0;
+      document.getElementById('balance-input').value = acc.balance || 0;
+      if (acc.customWinChance) {
+        document.getElementById('custom-chance-input').value = acc.customWinChance;
+      }
+    }
+
+    function updateRigBadges(rig, customChance) {
+      document.querySelectorAll('.rig-card').forEach(card => {
+        card.classList.toggle('active', card.dataset.rig === rig);
+      });
+
+      const labelMap = {
+        'normal': 'Обычный (Честный)',
+        'force_win': '100% Победа (👑 Всегда Win)',
+        'force_lose': '100% Проигрыш (💀 Всегда Lose)',
+        'bonus_25': '+25% к шансу',
+        'bonus_50': '+50% к шансу',
+        'mult_2x': 'Удвоение шанса (x2)',
+        'custom': customChance ? `Точный шанс: ${customChance}%` : 'Заданный шанс'
+      };
+      document.getElementById('disp-rig-status').textContent = labelMap[rig] || rig;
+    }
+
+    function lookupAccount() {
+      const q = document.getElementById('account-id-input').value.trim();
+      if (!q) {
+        showToast('Пожалуйста, введите ID аккаунта из профиля', false);
+        return;
+      }
+
+      const accounts = getAccounts();
+      let found = null;
+      for (const uname in accounts) {
+        if (String(accounts[uname].id) === q || uname.toLowerCase() === q.toLowerCase()) {
+          found = accounts[uname];
+          break;
+        }
+      }
+
+      if (found) {
+        displayAccount(found);
+        showToast(`Аккаунт ${found.nickname || found.username} (ID: ${found.id}) загружен!`);
+      } else {
+        showToast(`Аккаунт с ID "${q}" не найден`, false);
+      }
+    }
+
+    function loadActiveAccount() {
+      const accounts = getAccounts();
+      const activeUname = localStorage.getItem(ACTIVE_KEY) || 'winner';
+      const acc = accounts[activeUname] || Object.values(accounts)[0];
+      if (acc) {
+        displayAccount(acc);
+        showToast(`Загружен текущий активный аккаунт: ${acc.nickname || acc.username}`);
+      }
+    }
+
+    function onDropdownSelect(val) {
+      if (!val) return;
+      document.getElementById('account-id-input').value = val;
+      lookupAccount();
+    }
+
+    function selectRigMode(mode) {
+      currentRigMode = mode;
+      document.querySelectorAll('.rig-card').forEach(c => c.classList.remove('active'));
+      const card = document.querySelector(`.rig-card[data-rig="${mode}"]`);
+      if (card) card.classList.add('active');
+    }
+
+    function applyCustomChance() {
+      const val = parseFloat(document.getElementById('custom-chance-input').value);
+      if (isNaN(val) || val < 1 || val > 99) {
+        showToast('Введите число от 1 до 99%', false);
+        return;
+      }
+      currentRigMode = 'custom';
+      document.querySelectorAll('.rig-card').forEach(c => c.classList.remove('active'));
+      saveRigMode();
+    }
+
+    function saveRigMode() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала найдите или выберите аккаунт', false);
+        return;
+      }
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.chanceRig = currentRigMode;
+      if (currentRigMode === 'custom') {
+        const val = parseFloat(document.getElementById('custom-chance-input').value) || 85;
+        acc.customWinChance = val;
+      }
+
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast(`Подкрутка шанса сохранена: "${document.getElementById('disp-rig-status').textContent}"`);
+    }
+
+    function resetBestDrop() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала найдите или выберите аккаунт', false);
+        return;
+      }
+      if (!confirm('Вы уверены, что хотите обнулить лучший дроп этого аккаунта? В профиле статистика будет сброшена.')) {
+        return;
+      }
+
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.bestDrop = null;
+      acc.bestDropProbability = null;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast('Самый дорогой Drop успешно удален! Статистика обнулена.');
+    }
+
+    function saveWithdrawnStats() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала выберите аккаунт', false);
+        return;
+      }
+      const amt = parseFloat(document.getElementById('withdrawn-amount-input').value) || 0;
+      const count = parseInt(document.getElementById('withdrawn-count-input').value, 10) || 0;
+
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.withdrawnAmount = amt;
+      acc.withdrawnItemsCount = count;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast(`Сумма вывода обновлена: ${amt.toLocaleString()} ₽ (${count} предм.)`);
+    }
+
+    function saveUpgradesCount() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала выберите аккаунт', false);
+        return;
+      }
+      const count = parseInt(document.getElementById('upgrades-made-input').value, 10) || 0;
+
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.upgradesMade = count;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast(`Число совершенных апгрейдов обновлено: ${count}`);
+    }
+
+    function saveBalance() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала выберите аккаунт', false);
+        return;
+      }
+      const bal = parseFloat(document.getElementById('balance-input').value) || 0;
+
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.balance = bal;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast(`Баланс установлен: ${bal.toLocaleString()} ₽`);
+    }
+
+    function quickAddBalance(delta) {
+      if (!currentSelectedAcc) return;
+      const cur = parseFloat(document.getElementById('balance-input').value) || 0;
+      document.getElementById('balance-input').value = cur + delta;
+      saveBalance();
+    }
+
+    function setExactBalance(val) {
+      if (!currentSelectedAcc) return;
+      document.getElementById('balance-input').value = val;
+      saveBalance();
+    }
+
+    function saveEmail() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала выберите аккаунт', false);
+        return;
+      }
+      const emailVal = document.getElementById('email-input').value.trim();
+      if (!emailVal) {
+        showToast('Введите корректный адрес электронной почты', false);
+        return;
+      }
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.email = emailVal;
+      acc.isEmailVerified = true;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast(`Почта успешно сохранена: ${emailVal}`);
+    }
+
+    function unbindEmail() {
+      if (!currentSelectedAcc) {
+        showToast('Сначала выберите аккаунт', false);
+        return;
+      }
+      const accounts = getAccounts();
+      const acc = accounts[currentSelectedAcc.username];
+      if (!acc) return;
+
+      acc.email = null;
+      acc.isEmailVerified = false;
+      saveAccounts(accounts);
+      displayAccount(acc);
+      showToast('Электронная почта успешно отвязана');
+    }
+
+    function saveAllSettings() {
+      if (!currentSelectedAcc) {
+        showToast('Аккаунт не выбран', false);
+        return;
+      }
+      saveRigMode();
+      saveWithdrawnStats();
+      saveUpgradesCount();
+      saveBalance();
+      if (document.getElementById('email-input').value.trim()) {
+        saveEmail();
+      }
+      showToast('Все параметры аккаунта успешно сохранены!');
+    }
+
+    // Init on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      const isSub = window.location.pathname.includes('/admin/');
+      const rel = isSub ? '../' : './';
+      document.querySelectorAll('a[href^="/"]').forEach(a => {
+        const p = a.getAttribute('href').replace(/^\//, '');
+        a.setAttribute('href', rel + (p.includes('.') ? p : p + '/index.html'));
+      });
+      const avatar = document.getElementById('disp-avatar');
+      if (avatar && avatar.getAttribute('src').startsWith('/')) {
+        avatar.setAttribute('src', rel + avatar.getAttribute('src').replace(/^\//, ''));
+      }
+
+      populateDropdown();
+      loadActiveAccount();
+    });
+  </script>
+</body>
+</html>

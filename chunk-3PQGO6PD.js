@@ -1,0 +1,1 @@
+import{Ec as n,_ as i,ta as t}from"./chunk-5KF4SL6H.js";var o=class e{isOpen=n(()=>this._isOpen());_isOpen=t(!1);open(){this._isOpen.set(!0)}close(){this._isOpen.set(!1)}static \u0275fac=function(s){return new(s||e)};static \u0275prov=i({token:e,factory:e.\u0275fac,providedIn:"root"})};export{o as a};
