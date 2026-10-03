@@ -25,8 +25,578 @@
     }
   } catch(e) {}
 
-  // 1. LOAD EXTENSIVE SKINS CATALOG FROM skins.json (15,800+ skins synced from upgrader.best)
+  // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
+  // Preserves authentic user accounts (test_user with 50,000 balance, full inventory, won items, history and email, plus account 666)
+  // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
+  const DEFAULT_SEED_ACCOUNTS = {
+  "666": {
+    "id": "usr_1790965969344_z52ky",
+    "username": "666",
+    "password": "666",
+    "nickname": "666",
+    "avatar": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afVSKP-EAm6extF6ueZhW2exwkl2tmTXwt39eCiUPQR2DMN4TOVetUK8xoLgM-K341eM2otDnC6okGoXufBz_TAB/360fx360f",
+    "balance": 6000,
+    "inventory": [
+      {
+        "id": "inv_reg_1790965969344_0",
+        "status": "available",
+        "price": 5.87,
+        "item": {
+          "id": "225",
+          "appId": 730,
+          "marketName": "Glock-18 | Ocean Topo (Field-Tested)",
+          "price": "5.870",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL2kpnj9h1T9veRfKt9L8-eC2OZ1OM46eMxFnG3xhh24jzQyI76eHKQPFNzWJYkE7MIu0O_xNG1N-3k5FHWipUFk3tU1JV7Fg/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 11,
+            "n": [
+              "Glock-18",
+              "Ocean Topo",
+              "Field-Tested"
+            ],
+            "r": 14,
+            "s": false,
+            "t": 16,
+            "ch": "5e98d9",
+            "st": false
+          }
+        },
+        "extra": {
+          "e": 3,
+          "g": 11,
+          "n": [
+            "Glock-18",
+            "Ocean Topo",
+            "Field-Tested"
+          ],
+          "r": 14,
+          "s": false,
+          "t": 16,
+          "ch": "5e98d9",
+          "st": false
+        }
+      },
+      {
+        "id": "inv_reg_1790965969344_1",
+        "status": "available",
+        "price": 7.54,
+        "item": {
+          "id": "620",
+          "appId": 730,
+          "marketName": "M4A4 | Naval Shred Camo (Minimal Wear)",
+          "price": "7.540",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwipC6s2sZLFoH_3HDzOvzedxuPUnFnCxzElysG_Wydz9c3-VaARzXpEhEeVethDtx4LvPujktgbYiogTyDK-0H1inonrSw/360fx360f",
+          "extra": {
+            "e": 4,
+            "g": 14,
+            "n": [
+              "M4A4",
+              "Naval Shred Camo",
+              "Minimal Wear"
+            ],
+            "r": 14,
+            "s": false,
+            "t": 16,
+            "ch": "5e98d9",
+            "st": false
+          }
+        },
+        "extra": {
+          "e": 4,
+          "g": 14,
+          "n": [
+            "M4A4",
+            "Naval Shred Camo",
+            "Minimal Wear"
+          ],
+          "r": 14,
+          "s": false,
+          "t": 16,
+          "ch": "5e98d9",
+          "st": false
+        }
+      },
+      {
+        "id": "inv_reg_1790965969344_2",
+        "status": "available",
+        "price": 12.57,
+        "item": {
+          "id": "166",
+          "appId": 730,
+          "marketName": "AK-47 | Olive Polycam (Well-Worn)",
+          "price": "12.570",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wipP0OKhZL1SI_GeAViRyrohj-xsSyCmmFMi6j7Vydf8dH7GbVIlCZEjR-EJ5hPrwYDhYe7r4gWIj45GnCyq3StK8G81tEXjZ_VA/360fx360f",
+          "extra": {
+            "e": 5,
+            "g": 1,
+            "n": [
+              "AK-47",
+              "Olive Polycam",
+              "Well-Worn"
+            ],
+            "r": 14,
+            "s": false,
+            "t": 16,
+            "ch": "5e98d9",
+            "st": false
+          }
+        },
+        "extra": {
+          "e": 5,
+          "g": 1,
+          "n": [
+            "AK-47",
+            "Olive Polycam",
+            "Well-Worn"
+          ],
+          "r": 14,
+          "s": false,
+          "t": 16,
+          "ch": "5e98d9",
+          "st": false
+        }
+      }
+    ],
+    "history": [],
+    "createdAt": "2026-10-02T18:32:49.344Z"
+  },
+  "test_user": {
+    "id": 10001,
+    "username": "test_user",
+    "password": "password123",
+    "nickname": "Test Winner",
+    "avatar": "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg",
+    "balance": 50000.0,
+    "inventory": [
+      {
+        "id": "inv_starter_1",
+        "appId": 730,
+        "marketName": "Glock-18 | High Beam (Field-Tested)",
+        "price": "236.000",
+        "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL2kpnj9h1a7s24bbZ5KfecMWWc1OtJvOhuRz39zU5yt2vQntn9dC3Dbw8iDJQhF-IJ5xDqkdSxMr6251aMiI5BynqtiTQJsHhqpMNExQ",
+        "rarity": "industrial_grade",
+        "rarityColor": "#5e98d9",
+        "extra": {
+          "e": 3,
+          "g": 4,
+          "n": [
+            "Glock-18",
+            "High Beam",
+            "Field-Tested"
+          ],
+          "r": 14,
+          "s": false,
+          "t": 16,
+          "ch": "5e98d9",
+          "st": false
+        },
+        "originalSkinId": "29849"
+      },
+      {
+        "id": "inv_starter_2",
+        "appId": 730,
+        "marketName": "AK-47 | Slate (Field-Tested)",
+        "price": "384.650",
+        "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiVI0POlPPNSMOKcCGKD0ud5vuBlcCS2kRQyvnOGw4r_d3OWZ1MnCpBwR-Rc5hbumtCzP-Kw7wSIiYsRnHr2i35MvS1s_a9cBkIkkRA2/360fx360f",
+        "extra": {
+          "e": 3,
+          "g": 1,
+          "n": [
+            "AK-47",
+            "Slate",
+            "Field-Tested"
+          ],
+          "r": 16,
+          "s": false,
+          "t": 16,
+          "ch": "8847ff",
+          "st": false
+        },
+        "originalSkinId": "2279"
+      },
+      {
+        "id": "inv_starter_3",
+        "appId": 730,
+        "marketName": "AWP | Atheris (Field-Tested)",
+        "price": "398.060",
+        "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk7uW-V7JkMPWBMWqVxedjva85Girklhl2sWuAmYusICqWbQJxCcclRe4C4Ba5ldOyYeri7gKLg95E02yg2f7FnVOo/360fx360f",
+        "extra": {
+          "e": 3,
+          "g": 3,
+          "n": [
+            "AWP",
+            "Atheris",
+            "Field-Tested"
+          ],
+          "r": 16,
+          "s": false,
+          "t": 16,
+          "ch": "8847ff",
+          "st": false
+        },
+        "originalSkinId": "2332"
+      },
+      {
+        "id": "inv_starter_4",
+        "appId": 730,
+        "marketName": "AK-47 | Redline (Field-Tested)",
+        "price": "2815.720",
+        "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f",
+        "extra": {
+          "e": 3,
+          "g": 1,
+          "n": [
+            "AK-47",
+            "Redline",
+            "Field-Tested"
+          ],
+          "r": 12,
+          "s": false,
+          "t": 16,
+          "ch": "d32ce6",
+          "st": false
+        },
+        "originalSkinId": "2970"
+      },
+      {
+        "id": "inv_starter_5",
+        "appId": 730,
+        "marketName": "★ Navaja Knife | Safari Mesh (Field-Tested)",
+        "price": "3583.340",
+        "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1c9uK9cZtnIfOYBWmZx-tJo_FWQiygnSIzsjO6l4r9KD7KcAAlWJYjQrVctBG-wYfkMLjm7wzYit1AyX7-jXxB7i1r5-xQU6N0_KHJz1aWWGA81RM/360fx360f",
+        "extra": {
+          "e": 3,
+          "g": null,
+          "n": [
+            "★ Navaja Knife",
+            "Safari Mesh",
+            "Field-Tested"
+          ],
+          "r": 11,
+          "s": false,
+          "t": 9,
+          "ch": "ffae39",
+          "st": false
+        },
+        "originalSkinId": "3223"
+      },
+      {
+        "id": "inv_starter_6",
+        "appId": 730,
+        "marketName": "★ Gut Knife | Freehand (Field-Tested)",
+        "price": "5157.130",
+        "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1c-uaRaalSLfGBBWKU_vtmj-xsSyCmmFNy4G7Wm9ipcS-XZwMmC5d1E-QLuhmxxNGyYeLhsQ3bjY1Eyn6ti3xI8G81tAvtCmg7/360fx360f",
+        "extra": {
+          "e": 3,
+          "g": null,
+          "n": [
+            "★ Gut Knife",
+            "Freehand",
+            "Field-Tested"
+          ],
+          "r": 11,
+          "s": false,
+          "t": 9,
+          "ch": "ffae39",
+          "st": false
+        },
+        "originalSkinId": "3436"
+      }
+    ],
+    "upgradesMade": 2,
+    "withdrawnAmount": 0.0,
+    "withdrawnItemsCount": 0,
+    "bestDrop": {
+      "id": "inv_starter_4",
+      "appId": 730,
+      "marketName": "AK-47 | Redline (Field-Tested)",
+      "price": "2815.720",
+      "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f",
+      "extra": {
+        "e": 3,
+        "g": 1,
+        "n": [
+          "AK-47",
+          "Redline",
+          "Field-Tested"
+        ],
+        "r": 12,
+        "s": false,
+        "t": 16,
+        "ch": "d32ce6",
+        "st": false
+      },
+      "originalSkinId": "2970"
+    },
+    "bestDropProbability": 0.1413,
+    "inventoryHistory": [
+      {
+        "id": "hist_init_3",
+        "action": "won",
+        "price": 2815.72,
+        "item": {
+          "id": "inv_starter_4",
+          "appId": 730,
+          "marketName": "AK-47 | Redline (Field-Tested)",
+          "price": "2815.720",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 1,
+            "n": [
+              "AK-47",
+              "Redline",
+              "Field-Tested"
+            ],
+            "r": 12,
+            "s": false,
+            "t": 16,
+            "ch": "d32ce6",
+            "st": false
+          },
+          "originalSkinId": "2970"
+        },
+        "createdAt": "2026-10-03T06:43:16.513Z"
+      },
+      {
+        "id": "hist_init_2",
+        "action": "won",
+        "price": 398.06,
+        "item": {
+          "id": "inv_starter_3",
+          "appId": 730,
+          "marketName": "AWP | Atheris (Field-Tested)",
+          "price": "398.060",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk7uW-V7JkMPWBMWqVxedjva85Girklhl2sWuAmYusICqWbQJxCcclRe4C4Ba5ldOyYeri7gKLg95E02yg2f7FnVOo/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 3,
+            "n": [
+              "AWP",
+              "Atheris",
+              "Field-Tested"
+            ],
+            "r": 16,
+            "s": false,
+            "t": 16,
+            "ch": "8847ff",
+            "st": false
+          },
+          "originalSkinId": "2332"
+        },
+        "createdAt": "2026-10-03T03:43:16.513Z"
+      },
+      {
+        "id": "hist_init_1",
+        "action": "bought",
+        "price": 236,
+        "item": {
+          "id": "inv_starter_1",
+          "appId": 730,
+          "marketName": "Glock-18 | High Beam (Field-Tested)",
+          "price": "236.000",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL2kpnj9h1a7s24bbZ5KfecMWWc1OtJvOhuRz39zU5yt2vQntn9dC3Dbw8iDJQhF-IJ5xDqkdSxMr6251aMiI5BynqtiTQJsHhqpMNExQ",
+          "rarity": "industrial_grade",
+          "rarityColor": "#5e98d9",
+          "extra": {
+            "e": 3,
+            "g": 4,
+            "n": [
+              "Glock-18",
+              "High Beam",
+              "Field-Tested"
+            ],
+            "r": 14,
+            "s": false,
+            "t": 16,
+            "ch": "5e98d9",
+            "st": false
+          },
+          "originalSkinId": "29849"
+        },
+        "createdAt": "2026-10-02T22:43:16.513Z"
+      }
+    ],
+    "gamesHistory": [
+      {
+        "id": "8492011",
+        "status": "won",
+        "betItems": [
+          {
+            "id": "inv_starter_3",
+            "appId": 730,
+            "marketName": "AWP | Atheris (Field-Tested)",
+            "price": "398.060",
+            "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk7uW-V7JkMPWBMWqVxedjva85Girklhl2sWuAmYusICqWbQJxCcclRe4C4Ba5ldOyYeri7gKLg95E02yg2f7FnVOo/360fx360f",
+            "extra": {
+              "e": 3,
+              "g": 3,
+              "n": [
+                "AWP",
+                "Atheris",
+                "Field-Tested"
+              ],
+              "r": 16,
+              "s": false,
+              "t": 16,
+              "ch": "8847ff",
+              "st": false
+            },
+            "originalSkinId": "2332"
+          }
+        ],
+        "targetItem": {
+          "id": "inv_starter_4",
+          "appId": 730,
+          "marketName": "AK-47 | Redline (Field-Tested)",
+          "price": "2815.720",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 1,
+            "n": [
+              "AK-47",
+              "Redline",
+              "Field-Tested"
+            ],
+            "r": 12,
+            "s": false,
+            "t": 16,
+            "ch": "d32ce6",
+            "st": false
+          },
+          "originalSkinId": "2970"
+        },
+        "addedBalance": 0,
+        "probability": 0.1413,
+        "betAmount": 398.06,
+        "wonItem": {
+          "id": "inv_starter_4",
+          "appId": 730,
+          "marketName": "AK-47 | Redline (Field-Tested)",
+          "price": "2815.720",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 1,
+            "n": [
+              "AK-47",
+              "Redline",
+              "Field-Tested"
+            ],
+            "r": 12,
+            "s": false,
+            "t": 16,
+            "ch": "d32ce6",
+            "st": false
+          },
+          "originalSkinId": "2970"
+        },
+        "createdAt": "2026-10-03T06:43:16.513Z"
+      },
+      {
+        "id": "8491854",
+        "status": "won",
+        "betItems": [
+          {
+            "id": "inv_starter_1",
+            "appId": 730,
+            "marketName": "Glock-18 | High Beam (Field-Tested)",
+            "price": "236.000",
+            "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL2kpnj9h1a7s24bbZ5KfecMWWc1OtJvOhuRz39zU5yt2vQntn9dC3Dbw8iDJQhF-IJ5xDqkdSxMr6251aMiI5BynqtiTQJsHhqpMNExQ",
+            "rarity": "industrial_grade",
+            "rarityColor": "#5e98d9",
+            "extra": {
+              "e": 3,
+              "g": 4,
+              "n": [
+                "Glock-18",
+                "High Beam",
+                "Field-Tested"
+              ],
+              "r": 14,
+              "s": false,
+              "t": 16,
+              "ch": "5e98d9",
+              "st": false
+            },
+            "originalSkinId": "29849"
+          }
+        ],
+        "targetItem": {
+          "id": "inv_starter_3",
+          "appId": 730,
+          "marketName": "AWP | Atheris (Field-Tested)",
+          "price": "398.060",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk7uW-V7JkMPWBMWqVxedjva85Girklhl2sWuAmYusICqWbQJxCcclRe4C4Ba5ldOyYeri7gKLg95E02yg2f7FnVOo/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 3,
+            "n": [
+              "AWP",
+              "Atheris",
+              "Field-Tested"
+            ],
+            "r": 16,
+            "s": false,
+            "t": 16,
+            "ch": "8847ff",
+            "st": false
+          },
+          "originalSkinId": "2332"
+        },
+        "addedBalance": 0,
+        "probability": 0.5925,
+        "betAmount": 236,
+        "wonItem": {
+          "id": "inv_starter_3",
+          "appId": 730,
+          "marketName": "AWP | Atheris (Field-Tested)",
+          "price": "398.060",
+          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk7uW-V7JkMPWBMWqVxedjva85Girklhl2sWuAmYusICqWbQJxCcclRe4C4Ba5ldOyYeri7gKLg95E02yg2f7FnVOo/360fx360f",
+          "extra": {
+            "e": 3,
+            "g": 3,
+            "n": [
+              "AWP",
+              "Atheris",
+              "Field-Tested"
+            ],
+            "r": 16,
+            "s": false,
+            "t": 16,
+            "ch": "8847ff",
+            "st": false
+          },
+          "originalSkinId": "2332"
+        },
+        "createdAt": "2026-10-03T03:43:16.513Z"
+      }
+    ],
+    "createdAt": "2026-10-03T08:43:16.513Z",
+    "isTosRead": true,
+    "isTosAccepted": true,
+    "tosAccepted": true,
+    "newsletterSubscribed": true,
+    "email": "legendary_gamer@gmail.com",
+    "isEmailVerified": true,
+    "emailVerified": true
+  }
+};
+
+
+  // 2. LOAD EXTENSIVE SKINS CATALOG FROM skins.json (15,800+ skins synced from upgrader.best)
   let catalogData = [];
+  function populateCatalog(data) {
+    if (!data || !Array.isArray(data) || data.length === 0) return;
+    catalogData = data;
+    if (window.UPGRADER_CONFIG) {
+      window.UPGRADER_CONFIG.catalog = catalogData;
+    }
+    console.log('[UPGRADER] Loaded', catalogData.length, 'skins into catalog.');
+  }
+
   try {
     const isSubdir = window.location.pathname.includes('/cis') || window.location.pathname.includes('/en') || window.location.pathname.includes('/ru') || window.location.pathname.includes('/admin');
     const candidates = [
@@ -40,32 +610,22 @@
         xhr.open('GET', url, false);
         xhr.send();
         if (xhr.status === 200 && xhr.responseText) {
-          catalogData = JSON.parse(xhr.responseText);
-          console.log('[UPGRADER] Loaded', catalogData.length, 'skins from', url);
+          populateCatalog(JSON.parse(xhr.responseText));
           break;
         }
       } catch(err) {}
     }
-  } catch(e) {
-    console.warn('[UPGRADER] Could not load skins.json synchronously:', e);
-  }
+  } catch(e) {}
 
-  // Selected starter skins covering different price tiers
-  const STARTER_NAMES = [
-    'Glock-18 | High Beam (Field-Tested)',
-    'AK-47 | Slate (Field-Tested)',
-    'AWP | Atheris (Field-Tested)',
-    'AK-47 | Redline (Field-Tested)',
-    '★ Navaja Knife | Safari Mesh (Field-Tested)',
-    '★ Gut Knife | Freehand (Field-Tested)'
-  ];
-  const starterSkinsList = [];
-  STARTER_NAMES.forEach(name => {
-    const s = catalogData.find(x => x.marketName === name);
-    if (s) starterSkinsList.push(s);
-  });
-  if (starterSkinsList.length === 0) {
-    starterSkinsList.push(...catalogData.slice(0, 6));
+  if (catalogData.length === 0) {
+    const isSubdir = window.location.pathname.includes('/cis') || window.location.pathname.includes('/en') || window.location.pathname.includes('/ru') || window.location.pathname.includes('/admin');
+    const relSkinsUrl = isSubdir ? '../skins.json' : './skins.json';
+    fetch(relSkinsUrl)
+      .then(res => res.json())
+      .then(data => populateCatalog(data))
+      .catch(() => {
+        fetch('./skins.json').then(r => r.json()).then(d => populateCatalog(d)).catch(() => {});
+      });
   }
 
   const getAssetPath = (p) => {
@@ -74,27 +634,17 @@
     return isSub ? '../' + clean : './' + clean;
   };
 
-  // 2. CONFIGURATION
+  // 3. CONFIGURATION
   window.UPGRADER_CONFIG = {
-    testAccount: {
-      username: 'test_user',
-      password: 'password123',
-      nickname: 'Test Winner',
-      avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
-      initialBalance: 50000.00,
-      isTosRead: true,
-      isTosAccepted: true,
-      tosAccepted: true,
-      newsletterSubscribed: true
-    },
-    starterSkins: starterSkinsList,
+    testAccount: DEFAULT_SEED_ACCOUNTS.test_user,
+    starterSkins: DEFAULT_SEED_ACCOUNTS.test_user.inventory,
     catalog: catalogData
   };
 
   const STORAGE_ACCOUNTS_KEY = 'upgrader_accounts_v4';
   const STORAGE_ACTIVE_KEY = 'upgrader_active_user_v4';
 
-  // 3. GLOBAL STATS (Site-wide upgrades counter & online counter)
+  // 4. GLOBAL STATS (Site-wide upgrades counter & online counter)
   const GlobalStats = {
     UPGRADES_KEY: 'upgrader_global_upgrades_v5',
     displayedCount: 0,
@@ -182,11 +732,11 @@
       if (diff > 80) {
         step = Math.min(diff, Math.ceil(diff / 15));
       } else {
-        step = Math.min(diff, Math.floor(Math.random() * 3) + 1); // 1, 2, or 3
+        step = Math.min(diff, Math.floor(Math.random() * 3) + 1);
       }
       GlobalStats.displayedCount += step;
     } else {
-      const step = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+      const step = Math.floor(Math.random() * 3) + 1;
       GlobalStats.displayedCount += step;
       GlobalStats.targetCount = GlobalStats.displayedCount;
     }
@@ -196,96 +746,42 @@
     WsMock.broadcastGameCount(GlobalStats.displayedCount);
   }, 25);
 
-  // 4. LOCAL DATABASE (Accounts, Inventories, History & Stats)
+  // 5. LOCAL DATABASE (Accounts, Inventories, History & Stats)
   class LocalDB {
     static getAccounts() {
       try {
         const raw = localStorage.getItem(STORAGE_ACCOUNTS_KEY);
-        if (raw) return JSON.parse(raw);
+        if (raw) {
+          const accs = JSON.parse(raw);
+          if (accs && typeof accs === 'object') {
+            let updated = false;
+            // Auto-heal/migrate test_user if empty or missing inventory
+            if (!accs.test_user || !accs.test_user.inventory || accs.test_user.inventory.length === 0 || accs.test_user.balance < 50000) {
+              accs.test_user = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS.test_user));
+              updated = true;
+            }
+            if (!accs['666']) {
+              accs['666'] = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS['666']));
+              updated = true;
+            }
+            if (updated) {
+              this.saveAccounts(accs);
+            }
+            return accs;
+          }
+        }
       } catch (e) {}
 
-      // Initial Seed with pre-configured Test Account
-      const testAcc = window.UPGRADER_CONFIG.testAccount;
-      const starterItems = window.UPGRADER_CONFIG.starterSkins.map((s, idx) => ({
-        ...s,
-        id: 'inv_starter_' + (idx + 1),
-        originalSkinId: s.id
-      }));
-
-      const glock = starterItems.find(x => x.marketName.includes('High Beam')) || starterItems[0];
-      const atheris = starterItems.find(x => x.marketName.includes('Atheris')) || starterItems[1];
-      const redline = starterItems.find(x => x.marketName.includes('Redline')) || starterItems[2];
-
-      const initialAccounts = {
-        [testAcc.username]: {
-          id: 10001,
-          username: testAcc.username,
-          password: testAcc.password,
-          nickname: testAcc.nickname,
-          avatar: testAcc.avatar,
-          balance: testAcc.initialBalance,
-          inventory: starterItems,
-          upgradesMade: 2,
-          withdrawnAmount: 0.0,
-          withdrawnItemsCount: 0,
-          bestDrop: redline,
-          bestDropProbability: 0.1413,
-          inventoryHistory: [
-            {
-              id: 'hist_init_3',
-              action: 'won',
-              price: parseFloat(redline.price) || 2815.72,
-              item: redline,
-              createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
-            },
-            {
-              id: 'hist_init_2',
-              action: 'won',
-              price: parseFloat(atheris.price) || 398.06,
-              item: atheris,
-              createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
-            },
-            {
-              id: 'hist_init_1',
-              action: 'bought',
-              price: parseFloat(glock.price) || 236.00,
-              item: glock,
-              createdAt: new Date(Date.now() - 3600000 * 10).toISOString()
-            }
-          ],
-          gamesHistory: [
-            {
-              id: '8492011',
-              status: 'won',
-              betItems: [atheris],
-              targetItem: redline,
-              addedBalance: 0,
-              probability: 0.1413,
-              betAmount: parseFloat(atheris.price) || 398.06,
-              wonItem: redline,
-              createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
-            },
-            {
-              id: '8491854',
-              status: 'won',
-              betItems: [glock],
-              targetItem: atheris,
-              addedBalance: 0,
-              probability: 0.5925,
-              betAmount: parseFloat(glock.price) || 236.00,
-              wonItem: atheris,
-              createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
-            }
-          ],
-          createdAt: new Date().toISOString(),
-          isTosRead: true,
-          isTosAccepted: true,
-          tosAccepted: true,
-          newsletterSubscribed: true
-        }
-      };
+      const initialAccounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
       this.saveAccounts(initialAccounts);
       return initialAccounts;
+    }
+
+    static restoreDefaultAccounts() {
+      const accounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
+      this.saveAccounts(accounts);
+      this.setActiveUser('test_user');
+      return accounts;
     }
 
     static saveAccounts(accounts) {
