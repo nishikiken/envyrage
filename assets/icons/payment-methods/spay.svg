@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 44" fill="none">
+  <!-- Green Pill Background -->
+  <rect x="2" y="4" width="116" height="36" rx="18" fill="#12C85C"/>
+  <!-- Checkmark Icon inside circular badge -->
+  <circle cx="22" cy="22" r="10" stroke="#FFFFFF" stroke-width="2.2" fill="none"/>
+  <path d="M17.5 22L20.5 25L26.5 19" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Pay Text -->
+  <text x="40" y="28" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="800" font-size="19" letter-spacing="0.5">Pay</text>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 44" fill="none">
+  <!-- MIR green M -->
+  <path d="M12 32V14H18.5L25 24L31.5 14H38V32H31.5V21.5L25 31L18.5 21.5V32H12Z" fill="#00A859"/>
+  <!-- MIR cyan И and Р -->
+  <path d="M43 32V14H50V23.5L59 14H66V32H59V22.5L50 32H43Z" fill="#00A3E0"/>
+  <path d="M71 32V14H86C91.5 14 96 17.5 96 22.5C96 27.5 91.5 31 86 31H78V32H71ZM78 25H85C87.5 25 89 24 89 22.5C89 21 87.5 20 85 20H78V25Z" fill="#00A3E0"/>
+</svg>

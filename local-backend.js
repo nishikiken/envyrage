@@ -343,11 +343,11 @@
                   nickname: u.nickname || uname,
                   avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
                   balance: Number(u.balance || 0),
-                  inventory: userInv.length > 0 ? userInv : window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
+                  inventory: userInv.length > 0 ? userInv : (uname === 'test_user' ? window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
                     ...s,
                     id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
                     originalSkinId: s.id
-                  })),
+                  })) : []),
                   upgradesMade: 0,
                   withdrawnAmount: 0.0,
                   withdrawnItemsCount: 0,
@@ -505,11 +505,11 @@
           nickname: row.nickname || u,
           avatar: row.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
           balance: Number(row.balance || 0),
-          inventory: userInv.length > 0 ? userInv : window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
+          inventory: userInv.length > 0 ? userInv : (u === 'test_user' ? window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
             ...s,
             id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
             originalSkinId: s.id
-          })),
+          })) : []),
           upgradesMade: 0,
           withdrawnAmount: 0.0,
           withdrawnItemsCount: 0,
@@ -1398,6 +1398,13 @@
       } catch (e) {}
     }
 
+    static saveUser(user) {
+      if (!user || !user.username) return;
+      const accounts = this.getAccounts();
+      accounts[user.username] = user;
+      this.saveAccounts(accounts);
+    }
+
     static getActiveUser() {
       const accounts = this.getAccounts();
       try {
@@ -1507,19 +1514,14 @@
       if (accounts[u]) throw new Error('Пользователь с таким логином уже существует');
       if (!password || password.length < 3) throw new Error('Пароль должен быть не менее 3 символов');
 
-      const starterSkins = window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
-        ...s,
-        id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
-        originalSkinId: s.id
-      }));
       const newAcc = {
         id: Math.floor(Math.random() * 80000) + 20000,
         username: u,
         password: password,
         nickname: nickname && nickname.trim() ? nickname.trim() : u,
         avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
-        balance: 15000.00,
-        inventory: starterSkins,
+        balance: 0.00,
+        inventory: [],
         upgradesMade: 0,
         withdrawnAmount: 0.0,
         withdrawnItemsCount: 0,
@@ -1558,19 +1560,14 @@
         }
       }
 
-      const starterSkins = window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
-        ...s,
-        id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
-        originalSkinId: s.id
-      }));
       const newAcc = {
         id: Math.floor(Math.random() * 80000) + 20000,
         username: u,
         password: password,
         nickname: nickname && nickname.trim() ? nickname.trim() : u,
         avatar: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
-        balance: 15000.00,
-        inventory: starterSkins,
+        balance: 0.00,
+        inventory: [],
         upgradesMade: 0,
         withdrawnAmount: 0.0,
         withdrawnItemsCount: 0,
@@ -2185,6 +2182,209 @@
   // 7. MOCK REST API HANDLER
   function handleMockApi(method, path, body, params) {
     const activeUser = LocalDB.getActiveUser();
+    console.log('[handleMockApi]', method, path, body);
+
+    // 0. Payments API (Original Angular up-payment-modal-new)
+    if (path.includes('/payments/categories')) {
+      const origin = window.location.origin + (window.location.pathname.startsWith('/envyrage') ? '/envyrage' : '');
+      return {
+        status: 200,
+        data: [
+          {
+            id: 'cards',
+            name: 'Cards',
+            children: [
+              {
+                id: 'rub',
+                name: 'RUB',
+                methods: [
+                  {
+                    id: 'sbp_a',
+                    name: 'СБП QRCODE A',
+                    image: `${origin}/assets/icons/payment-methods/sbp_a.svg`,
+                    minAmount: '50',
+                    maxAmount: '100000',
+                    currency: 'RUB',
+                    userFeeEnabled: false
+                  },
+                  {
+                    id: 'sbp_i',
+                    name: 'СБП QRCODE I',
+                    image: `${origin}/assets/icons/payment-methods/sbp_i.svg`,
+                    minAmount: '50',
+                    maxAmount: '100000',
+                    currency: 'RUB',
+                    userFeeEnabled: false
+                  },
+                  {
+                    id: 'spay',
+                    name: 'S Pay',
+                    image: `${origin}/assets/icons/payment-methods/spay.svg`,
+                    minAmount: '50',
+                    maxAmount: '100000',
+                    currency: 'RUB',
+                    userFeeEnabled: false
+                  },
+                  {
+                    id: 'sber',
+                    name: 'СБЕР КАРТЫ',
+                    image: `${origin}/assets/icons/payment-methods/sber.svg`,
+                    minAmount: '50',
+                    maxAmount: '100000',
+                    currency: 'RUB',
+                    userFeeEnabled: false
+                  },
+                  {
+                    id: 'mir',
+                    name: 'МИР',
+                    image: `${origin}/assets/icons/payment-methods/mir.svg`,
+                    minAmount: '50',
+                    maxAmount: '100000',
+                    currency: 'RUB',
+                    giftcard: true,
+                    userFeeEnabled: false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: 'crypto',
+            name: 'Crypto',
+            methods: [
+              {
+                id: 'usdt',
+                name: 'USDT TRC-20',
+                image: `${origin}/assets/icons/payment-modal-new/crypto.svg`,
+                minAmount: '10',
+                maxAmount: '10000',
+                currency: 'USDT',
+                userFeeEnabled: false
+              },
+              {
+                id: 'btc',
+                name: 'Bitcoin',
+                image: `${origin}/assets/icons/payment-modal-new/crypto.svg`,
+                minAmount: '20',
+                maxAmount: '10000',
+                currency: 'BTC',
+                userFeeEnabled: false
+              }
+            ]
+          },
+          {
+            id: 'skins',
+            name: 'Skins',
+            methods: [
+              {
+                id: '100',
+                name: 'CS2 Skins',
+                skinsGame: 'cs2',
+                image: `${origin}/assets/icons/payment-modal-new/skins.svg`,
+                minAmount: '10',
+                maxAmount: '100000',
+                currency: 'RUB',
+                depositFlow: 'onsite'
+              }
+            ]
+          }
+        ]
+      };
+    }
+
+    if (path.includes('/create-invoice')) {
+      const num = parseFloat(body.amount) || 500;
+      let user = LocalDB.getActiveUser();
+      if (user) {
+        user.balance = Math.round((Number(user.balance || 0) + num) * 100) / 100;
+        LocalDB.saveUser(user);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(user.username, { balance: user.balance }).catch(e => console.warn(e));
+        }
+        WsMock.broadcastBalance(user.balance);
+        if (window.MockSocketInstance && typeof window.MockSocketInstance.send === 'function') {
+          window.MockSocketInstance.send(JSON.stringify({
+            type: 'users.update_balance',
+            data: { balance: user.balance }
+          }));
+        }
+        showToast('Баланс успешно пополнен на ' + num.toLocaleString() + ' ₽', 'success');
+      }
+      return {
+        status: 200,
+        data: {
+          id: 'pay_' + Date.now(),
+          status: 'completed',
+          amount: num
+        }
+      };
+    }
+
+    if (path.includes('/promo/deposit')) {
+      return {
+        status: 200,
+        data: { promocode: null }
+      };
+    }
+
+    if (path.includes('/promo/activate')) {
+      return {
+        status: 200,
+        data: {
+          deposit_bonus: {
+            percent: '15',
+            maxAmount: '5000'
+          }
+        }
+      };
+    }
+
+    if (path.includes('/payments/instant-deposit')) {
+      return {
+        status: 200,
+        data: { eligible: false }
+      };
+    }
+
+    if (path.includes('/gift-cards/redeem')) {
+      return {
+        status: 200,
+        data: { success: true }
+      };
+    }
+
+    if (path.includes('/currencies/crypto_rates')) {
+      return {
+        status: 200,
+        data: {
+          base: 'RUB',
+          rates: {
+            RUB: 1,
+            USDT: 0.011,
+            USDTTRC: 0.011,
+            TON: 0.002,
+            BTC: 0.00000015,
+            ETH: 0.0000035
+          }
+        }
+      };
+    }
+
+    if (path.includes('/currencies/rates') || path.includes('/payments/currencies/rates')) {
+      return {
+        status: 200,
+        data: {
+          base: 'RUB',
+          rates: {
+            RUB: 1,
+            USD: 0.011,
+            EUR: 0.01,
+            UAH: 0.45,
+            KZT: 5.2
+          }
+        }
+      };
+    }
 
     // /statistics/games-count (Global upgrades counter!)
     if (path.includes('/statistics/games-count')) {
@@ -3346,7 +3546,7 @@
       errorBox.style.display = 'none';
       if (isRegisterMode) {
         title.textContent = 'Регистрация';
-        desc.textContent = 'Создайте аккаунт и получите стартовый баланс 15,000 ₽ и скины';
+        desc.textContent = 'Создайте аккаунт для игры в апгрейдер';
         nickGroup.style.display = 'flex';
         submitBtn.textContent = 'Создать аккаунт';
         toggleText.textContent = 'Уже есть аккаунт?';
@@ -3532,8 +3732,34 @@
     }
   }
 
-  // 12. AUTHENTIC PAYMENT GATEWAY SIMULATION (Deposit Modal - Exact UI Match)
+  // 12. AUTHENTIC PAYMENT GATEWAY (Original Angular up-payment-modal-new)
+  function openNativePaymentModal() {
+    // 1. Try finding Angular component on <up-payment-modal-new>
+    try {
+      const modalEls = document.querySelectorAll('up-payment-modal-new');
+      for (const el of modalEls) {
+        if (typeof ng !== 'undefined' && ng.getComponent) {
+          const comp = ng.getComponent(el);
+          if (comp && typeof comp.show === 'function') {
+            comp.show('header');
+            return true;
+          }
+        }
+      }
+    } catch(e) {}
+
+    // 2. Try triggering click on Angular header top-up button or profile button
+    const angularBtn = document.querySelector('up-top-up-dropdown button, up-top-up-low-balance button, [data-testid="profile-top-up"], [data-testid="advertising-main-topup"], [data-testid*="topup"], [data-testid*="top-up"]');
+    if (angularBtn) {
+      angularBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      return true;
+    }
+    return false;
+  }
+
   function renderDepositModal() {
+    if (openNativePaymentModal()) return;
+
     const existing = document.getElementById('upgrader-deposit-modal');
     if (existing) existing.remove();
 
@@ -3981,23 +4207,13 @@
         return;
       }
 
-      // Catch clicks on Deposit/Top-up button across ALL pages and languages (header, profile, upgrader page, popups)
-      const isTopUpBtn = target.closest('[data-testid*="topup"]') ||
-                         target.closest('[data-testid*="top-up"]') ||
-                         target.closest('[data-testid*="deposit"]') ||
-                         target.closest('up-top-up-dropdown') ||
-                         target.closest('up-top-up-low-balance') ||
-                         target.closest('#btnDeposit') ||
-                         (target.closest('button') && (
-                           target.closest('button').innerText.toLowerCase().includes('top up') ||
-                           target.closest('button').innerText.toLowerCase().includes('topup') ||
-                           target.closest('button').innerText.toLowerCase().includes('пополн') ||
-                           target.closest('button').innerText.toLowerCase().includes('deposit')
-                         ));
-      if (isTopUpBtn) {
+      // Allow native Angular payment modal to open on top-up buttons.
+      // If an external custom deposit button (like #btnDeposit) is clicked, open native modal:
+      const customDepositBtn = target.closest('#btnDeposit');
+      if (customDepositBtn) {
         e.preventDefault();
         e.stopPropagation();
-        renderDepositModal();
+        openNativePaymentModal();
         return;
       }
 

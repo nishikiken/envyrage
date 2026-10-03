@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 44" fill="none">
+  <!-- Sber green circle with checkmark -->
+  <circle cx="22" cy="22" r="16" stroke="#21A038" stroke-width="3" fill="none"/>
+  <path d="M14 22L19.5 27.5L29.5 17" stroke="#21A038" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Text СБЕР -->
+  <text x="46" y="20" fill="#21A038" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="900" font-size="16" letter-spacing="0.5">СБЕР</text>
+  <!-- Text КАРТЫ -->
+  <text x="46" y="35" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="800" font-size="13" letter-spacing="0.5">КАРТЫ</text>
+</svg>
