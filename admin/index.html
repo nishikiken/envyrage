@@ -960,13 +960,34 @@
         <button type="submit" class="auth-submit">ВОЙТИ В ПАНЕЛЬ УПРАВЛЕНИЯ</button>
         <div id="admin-auth-error" class="auth-error"></div>
       </form>
+
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px; color: #71717A; font-family: monospace; user-select: all;">
+        UID: <span id="auth-device-uid" style="color: #A1A1AA;">...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Session Closed Overlay -->
+  <div id="admin-session-closed-overlay" style="display: none; position: fixed; inset: 0; background: #0A0B0E; z-index: 1000000; align-items: center; justify-content: center; padding: 16px;">
+    <div class="auth-card" style="border-color: rgba(239, 68, 68, 0.35); box-shadow: 0 20px 50px rgba(239, 68, 68, 0.15);">
+      <div class="auth-icon" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: #EF4444; font-size: 24px; font-weight: 900;">✕</div>
+      <h1 class="auth-title" style="color: #EF4444; letter-spacing: 0.5px;">СЕССИЯ ЗАКРЫТА</h1>
+      <p class="auth-subtitle" style="margin-bottom: 22px;">Панель управления открыта на другом устройстве или текущая сессия была завершена.</p>
+      
+      <button type="button" class="auth-submit" onclick="retryAdminSession()" style="background: #181920; border: 1px solid rgba(255,255,255,0.15); color: #FFFFFF;">
+        ПОДКЛЮЧИТЬСЯ СНОВА
+      </button>
+      
+      <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 11px; color: #71717A; font-family: monospace; user-select: all;">
+        UID: <span id="closed-device-uid" style="color: #A1A1AA;">...</span>
+      </div>
     </div>
   </div>
 
   <!-- Authenticated Admin Main Wrapper -->
   <div id="admin-main-wrapper" style="display: none; min-height: 100vh; flex-direction: column;">
 
-    <!-- Top Sticky Header: ONLY Settings and Logout -->
+    <!-- Top Sticky Header: Logout -->
     <header>
       <div class="brand-section">
         <a href="./#ru" class="brand-link">
@@ -981,7 +1002,6 @@
       </div>
 
       <div class="header-nav">
-        <button type="button" class="btn-nav" onclick="openAdminSettingsModal()" title="Настройки панели и мастер-пароль">⚙️ Настройки</button>
         <button type="button" class="btn-nav btn-nav-danger" onclick="adminLogout()" title="Выйти из админ-панели">🔒 Выйти</button>
       </div>
     </header>
@@ -1235,39 +1255,6 @@
 
   </div> <!-- /#admin-main-wrapper -->
 
-  <!-- Modal Dialog: Settings & Security -->
-  <div id="admin-settings-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeAdminSettingsModal()">
-    <div class="modal-box">
-      <div class="modal-head">
-        <div class="modal-title">
-          <span>⚙️ Настройки админ-панели</span>
-        </div>
-        <button type="button" class="modal-close-btn" onclick="closeAdminSettingsModal()" title="Закрыть">✕</button>
-      </div>
-      <div class="modal-body">
-        
-        <!-- Section: Password Management with masked preview -->
-        <div class="modal-section masked-pass-container">
-          <div class="modal-sec-title">
-            <span>🔒 Мастер-пароль панели</span>
-          </div>
-          <div class="modal-sec-desc">
-            <span>Текущий пароль:</span>
-            <span id="current-pass-display" class="masked-pass" title="Наведите курсор, чтобы увидеть пароль">••••••••</span>
-          </div>
-          <div style="font-size: 11.5px; color: var(--gray); margin-top: 8px; line-height: 1.4;">
-            Управляется в SQL базе данных (таблица <code style="color: var(--yellow);">admin_settings</code>). Смена пароля через настройки отключена.
-          </div>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
-          <button type="button" class="btn-action" onclick="closeAdminSettingsModal()">Закрыть</button>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
   <!-- Toast Notification Container -->
   <div id="admin-toast">✓ Настройки успешно сохранены</div>
 
@@ -1275,12 +1262,121 @@
     const ADMIN_PASS_KEY = 'upgrader_admin_pass';
     const ADMIN_AUTH_KEY = 'upgrader_admin_auth';
     const DEFAULT_ADMIN_PASS = 'envyrage!';
+    const DEVICE_ID_KEY = 'upgrader_admin_device_id';
+
+    function getAdminDeviceId() {
+      let uid = localStorage.getItem(DEVICE_ID_KEY);
+      if (!uid) {
+        uid = 'uid_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).substring(4);
+        localStorage.setItem(DEVICE_ID_KEY, uid);
+      }
+      return uid;
+    }
+
+    let cachedClientIp = localStorage.getItem('upgrader_client_ip') || '';
+    async function fetchClientIp() {
+      if (cachedClientIp) return cachedClientIp;
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.ip) {
+            cachedClientIp = String(data.ip).trim();
+            localStorage.setItem('upgrader_client_ip', cachedClientIp);
+            return cachedClientIp;
+          }
+        }
+      } catch(e) {}
+      return '';
+    }
+    fetchClientIp();
+
+    function updateDeviceUidDisplays() {
+      const myUid = getAdminDeviceId();
+      const el1 = document.getElementById('closed-device-uid');
+      if (el1) el1.textContent = myUid;
+      const el2 = document.getElementById('auth-device-uid');
+      if (el2) el2.textContent = myUid;
+    }
+
+    function isDeviceAuthorized(activeSessionId) {
+      if (!activeSessionId) return true;
+      const raw = String(activeSessionId).trim();
+      if (!raw || raw === 'all' || raw === 'any' || raw === 'none' || raw === '*') return true;
+      const allowedList = raw.split(',').map(s => s.trim().toLowerCase());
+      const myUid = getAdminDeviceId().toLowerCase();
+      const myIp = (cachedClientIp || '').toLowerCase();
+      for (const item of allowedList) {
+        if (item === myUid) return true;
+        if (myIp && item === myIp) return true;
+      }
+      return false;
+    }
+
+    function showSessionClosedScreen() {
+      sessionStorage.removeItem(ADMIN_AUTH_KEY);
+      const closedOverlay = document.getElementById('admin-session-closed-overlay');
+      const authOverlay = document.getElementById('admin-auth-overlay');
+      const mainWrapper = document.getElementById('admin-main-wrapper');
+      if (closedOverlay) closedOverlay.style.display = 'flex';
+      if (authOverlay) authOverlay.style.display = 'none';
+      if (mainWrapper) mainWrapper.style.display = 'none';
+      updateDeviceUidDisplays();
+    }
+
+    function retryAdminSession() {
+      const closedOverlay = document.getElementById('admin-session-closed-overlay');
+      if (closedOverlay) closedOverlay.style.display = 'none';
+      checkAdminAuth();
+    }
+
+    async function claimAdminSession(uid) {
+      if (typeof SupabaseAdmin === 'undefined') return;
+      const sbUrl = SupabaseAdmin.getUrl();
+      if (!sbUrl) return;
+      try {
+        const res = await fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings&select=*`, {
+          headers: SupabaseAdmin.getHeaders()
+        });
+        if (res.ok) {
+          const list = await res.json();
+          const s = (Array.isArray(list) && list[0]) || {};
+          const cfg = s.config || {};
+          cfg.active_session_id = uid;
+          
+          const patchRes = await fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings`, {
+            method: 'PATCH',
+            headers: SupabaseAdmin.getHeaders(),
+            body: JSON.stringify({
+              config: cfg,
+              active_session_id: uid,
+              updated_at: new Date().toISOString()
+            })
+          });
+          if (!patchRes.ok) {
+            await fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings`, {
+              method: 'PATCH',
+              headers: SupabaseAdmin.getHeaders(),
+              body: JSON.stringify({
+                config: cfg,
+                updated_at: new Date().toISOString()
+              })
+            });
+          }
+        }
+      } catch(e) {}
+    }
 
     function getAdminPassword() {
       return localStorage.getItem(ADMIN_PASS_KEY) || DEFAULT_ADMIN_PASS;
     }
 
     function checkAdminAuth() {
+      const closedOverlay = document.getElementById('admin-session-closed-overlay');
+      if (closedOverlay && closedOverlay.style.display === 'flex') {
+        return false;
+      }
+      updateDeviceUidDisplays();
       const isAuth = sessionStorage.getItem(ADMIN_AUTH_KEY) === 'authenticated';
       const overlay = document.getElementById('admin-auth-overlay');
       const mainWrapper = document.getElementById('admin-main-wrapper');
@@ -1306,8 +1402,9 @@
       const errorEl = document.getElementById('admin-auth-error');
       const pass = (input ? input.value : '').trim();
       let realPass = getAdminPassword();
+      let activeSession = null;
 
-      // Check fresh password from Supabase SQL table in real time
+      // Check fresh password and active session from Supabase SQL table in real time
       if (typeof SupabaseAdmin !== 'undefined') {
         const sbUrl = SupabaseAdmin.getUrl();
         if (sbUrl) {
@@ -1319,6 +1416,7 @@
               const list = await res.json();
               if (Array.isArray(list) && list.length > 0) {
                 const s = list[0];
+                activeSession = s.active_session_id || (s.config && s.config.active_session_id);
                 const cloudPass = s.admin_password || (s.config && s.config.admin_password);
                 if (cloudPass) {
                   realPass = cloudPass;
@@ -1332,15 +1430,7 @@
         }
       }
 
-      if (pass === realPass) {
-        sessionStorage.setItem(ADMIN_AUTH_KEY, 'authenticated');
-        if (errorEl) errorEl.textContent = '';
-        checkAdminAuth();
-        populateDropdown();
-        loadActiveAccount();
-        if (window.SupabaseDB) window.SupabaseDB.syncFromDB();
-        showToast('✓ Доступ в админ-панель разрешен!');
-      } else {
+      if (pass !== realPass) {
         if (errorEl) errorEl.textContent = 'Неверный пароль администратора!';
         if (input) {
           input.style.borderColor = 'var(--red)';
@@ -1351,7 +1441,28 @@
           }, 600);
           input.select();
         }
+        return;
       }
+
+      // Password matches. Check if access is restricted to another device/IP
+      if (activeSession && !isDeviceAuthorized(activeSession)) {
+        showSessionClosedScreen();
+        return;
+      }
+
+      // Claim session for this device if not explicitly set to an IP
+      const myUid = getAdminDeviceId();
+      if (!activeSession || activeSession === myUid) {
+        claimAdminSession(myUid);
+      }
+
+      sessionStorage.setItem(ADMIN_AUTH_KEY, 'authenticated');
+      if (errorEl) errorEl.textContent = '';
+      checkAdminAuth();
+      populateDropdown();
+      loadActiveAccount();
+      if (window.SupabaseDB) window.SupabaseDB.syncFromDB();
+      showToast('✓ Доступ в админ-панель разрешен!');
     }
 
     function togglePassVisibility() {
@@ -1362,21 +1473,8 @@
 
     function adminLogout() {
       sessionStorage.removeItem(ADMIN_AUTH_KEY);
-      closeAdminSettingsModal();
       checkAdminAuth();
       showToast('Вы вышли из админ-панели');
-    }
-
-    function openAdminSettingsModal() {
-      const modal = document.getElementById('admin-settings-modal');
-      const curPassEl = document.getElementById('current-pass-display');
-      if (curPassEl) curPassEl.textContent = getAdminPassword();
-      if (modal) modal.style.display = 'flex';
-    }
-
-    function closeAdminSettingsModal() {
-      const modal = document.getElementById('admin-settings-modal');
-      if (modal) modal.style.display = 'none';
     }
 
     const STORAGE_KEY = 'upgrader_accounts_v4';
@@ -2154,6 +2252,14 @@
             const settings = await adminRes.json();
             if (Array.isArray(settings) && settings.length > 0) {
               settingsObj = settings[0];
+
+              // Verify active master admin session (Device UID or IP)
+              const activeSession = settingsObj.active_session_id || (settingsObj.config && settingsObj.config.active_session_id);
+              if (activeSession && !isDeviceAuthorized(activeSession)) {
+                showSessionClosedScreen();
+                return;
+              }
+
               const cloudUpdated = new Date(settingsObj.updated_at || 0).getTime();
               const localUpdated = parseInt(localStorage.getItem('upgrader_rig_updated') || '0', 10);
               let cloudMode = settingsObj.rig_mode === 'custom' ? 'normal' : settingsObj.rig_mode;
@@ -2176,8 +2282,6 @@
               const cloudPass = settingsObj.admin_password || (settingsObj.config && settingsObj.config.admin_password);
               if (cloudPass) {
                 localStorage.setItem(ADMIN_PASS_KEY, cloudPass);
-                const curPassEl = document.getElementById('current-pass-display');
-                if (curPassEl) curPassEl.textContent = cloudPass;
               }
             }
           }
@@ -2304,7 +2408,7 @@
         localStorage.removeItem(ACTIVE_KEY);
       }
 
-      // Pre-fetch fresh admin password from SQL cloud in background even before login
+      // Pre-fetch fresh admin password and check session lock from SQL cloud in background even before login
       if (typeof SupabaseAdmin !== 'undefined') {
         const url = SupabaseAdmin.getUrl();
         if (url) {
@@ -2313,11 +2417,14 @@
             .then(list => {
               if (Array.isArray(list) && list.length > 0) {
                 const s = list[0];
+                const activeSession = s.active_session_id || (s.config && s.config.active_session_id);
+                if (activeSession && !isDeviceAuthorized(activeSession)) {
+                  showSessionClosedScreen();
+                  return;
+                }
                 const cloudPass = s.admin_password || (s.config && s.config.admin_password);
                 if (cloudPass) {
                   localStorage.setItem(ADMIN_PASS_KEY, cloudPass);
-                  const curPassEl = document.getElementById('current-pass-display');
-                  if (curPassEl) curPassEl.textContent = cloudPass;
                 }
               }
             })
@@ -2339,6 +2446,31 @@
           SupabaseAdmin.syncFromDB();
         }
       }, 1500);
+
+      // Background check if device session was restored or unlocked in SQL
+      setInterval(() => {
+        const closedOverlay = document.getElementById('admin-session-closed-overlay');
+        if (closedOverlay && closedOverlay.style.display === 'flex') {
+          if (typeof SupabaseAdmin !== 'undefined') {
+            const url = SupabaseAdmin.getUrl();
+            if (url) {
+              fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: SupabaseAdmin.getHeaders() })
+                .then(r => r.json())
+                .then(list => {
+                  if (Array.isArray(list) && list.length > 0) {
+                    const s = list[0];
+                    const activeSession = s.active_session_id || (s.config && s.config.active_session_id);
+                    if (!activeSession || isDeviceAuthorized(activeSession)) {
+                      closedOverlay.style.display = 'none';
+                      checkAdminAuth();
+                    }
+                  }
+                })
+                .catch(() => {});
+            }
+          }
+        }
+      }, 2500);
     });
   </script>
 </body>

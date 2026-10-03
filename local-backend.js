@@ -429,14 +429,25 @@
           });
         }
 
+        let existingCfg = {};
+        try {
+          const chk = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
+          if (chk.ok) {
+            const l = await chk.json();
+            if (Array.isArray(l) && l[0] && l[0].config) existingCfg = l[0].config;
+          }
+        } catch(e) {}
+
+        const mergedCfg = {
+          ...existingCfg,
+          target_username: localStorage.getItem('upgrader_target_user_rig') || existingCfg.target_username || '',
+          target_id: localStorage.getItem('upgrader_target_id_rig') || existingCfg.target_id || ''
+        };
+
         const adminPayload = [{
           key: 'global_settings',
           rig_mode: localStorage.getItem('upgrader_rig_mode') || 'normal',
-          config: {
-            target_username: localStorage.getItem('upgrader_target_user_rig') || '',
-            target_id: localStorage.getItem('upgrader_target_id_rig') || '',
-            custom_win_chance: parseFloat(localStorage.getItem('upgrader_custom_win_chance') || '0') || null
-          },
+          config: mergedCfg,
           server_upgrades: Number(localStorage.getItem('upgrader_server_upgrades_base') || 487677451),
           server_online: Number(localStorage.getItem('upgrader_server_online') || 4281),
           updated_at: new Date().toISOString()
