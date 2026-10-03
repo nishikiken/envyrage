@@ -265,6 +265,77 @@
   }
   window.updateDomBalance = updateDomBalance;
 
+  function updateDomNickname(nickname) {
+    if (!nickname) return;
+    document.querySelectorAll('up-user-info span').forEach(el => {
+      if (el.className && el.className.includes('truncate')) {
+        el.textContent = nickname;
+      }
+    });
+    document.querySelectorAll('[data-testid="header-profile-name"], .header-profile-name, up-header [class*="name"]').forEach(el => {
+      el.textContent = nickname;
+    });
+  }
+  window.updateDomNickname = updateDomNickname;
+
+  function updateDomId(userId) {
+    if (!userId) return;
+    const strId = ' ID ' + userId + ' ';
+    document.querySelectorAll('up-user-info span, up-user-info div, [data-testid="user-info-id"]').forEach(el => {
+      if (el.textContent && (el.textContent.trim().startsWith('ID ') || el.textContent.trim().startsWith('ID:') || el.textContent.trim() === 'ID')) {
+        el.textContent = strId;
+      }
+    });
+  }
+  window.updateDomId = updateDomId;
+
+  function updateDomUpgrades(count) {
+    const num = parseInt(count, 10);
+    if (isNaN(num)) return;
+    const formatted = num.toLocaleString('ru-RU');
+    document.querySelectorAll('up-user-stats div').forEach(card => {
+      const txt = card.innerText || '';
+      if (txt.includes('Апгрейдов') || txt.includes('Upgrades')) {
+        const valEl = card.querySelector('.text-gradient-yellow-main, [class*="text-gradient"], span.font-tektur');
+        if (valEl) valEl.textContent = formatted;
+      }
+    });
+  }
+  window.updateDomUpgrades = updateDomUpgrades;
+
+  function updateDomWithdrawn(amount, count) {
+    const numAmt = parseFloat(amount);
+    const numCnt = parseInt(count, 10);
+    document.querySelectorAll('up-user-stats div').forEach(card => {
+      const txt = card.innerText || '';
+      if (txt.includes('Выведено') || txt.includes('Withdrawn')) {
+        if (!isNaN(numAmt)) {
+          const formatted = numAmt.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const amtEl = card.querySelector('.text-gradient-yellow-main, [class*="text-gradient"], span.font-tektur');
+          if (amtEl) amtEl.textContent = formatted;
+        }
+        if (!isNaN(numCnt)) {
+          card.querySelectorAll('span').forEach(sp => {
+            if (sp.textContent && (sp.textContent.includes('шт') || sp.textContent.includes('item'))) {
+              sp.textContent = `${numCnt} шт.`;
+            }
+          });
+        }
+      }
+    });
+  }
+  window.updateDomWithdrawn = updateDomWithdrawn;
+
+  function updateDomBestDrop(bestDrop) {
+    const container = document.querySelector('up-best-drop, [data-testid="profile-best-drop"]');
+    if (!container) return;
+    if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
+      const sub = container.querySelector('.text-gray, span.text-xs');
+      if (sub) sub.textContent = 'Отобразится после первой игры';
+    }
+  }
+  window.updateDomBestDrop = updateDomBestDrop;
+
   // WEBSOCKET MOCK ENGINE (Declared before SupabaseDB to prevent TDZ ReferenceError)
   const WsMock = {
     clients: new Set(),
@@ -956,18 +1027,32 @@
               userLuck = cloudUser.luck || cloudUser.chance_rig;
             }
 
-            // Sync avatar from cloud if updated on another device or admin panel
+            const uStats = (cloudConfig && cloudConfig.user_stats) ? (cloudConfig.user_stats[uname] || cloudConfig.user_stats[uid] || {}) : {};
+            let userChanged = false;
+            let statsChanged = false;
+
+            // 1. Sync Nickname from cloud
+            const cloudNick = cloudUser.nickname || cloudUser.username;
+            if (cloudNick && cloudNick !== activeUser.nickname) {
+              activeUser.nickname = cloudNick;
+              userChanged = true;
+              updateDomNickname(cloudNick);
+            }
+
+            // 2. Sync ID from cloud
+            const cloudId = String(cloudUser.id || '');
+            if (cloudId && cloudId !== String(activeUser.id)) {
+              activeUser.id = cloudId;
+              userChanged = true;
+              updateDomId(cloudId);
+            }
+
+            // 3. Sync Avatar from cloud
             const cloudAvatar = cloudUser.avatar || cloudUser.image || '';
             if (cloudAvatar && cloudAvatar !== activeUser.avatar) {
               activeUser.avatar = cloudAvatar;
               activeUser.image = cloudAvatar;
-              const accounts = LocalDB.getAccounts();
-              if (accounts[activeUser.username]) {
-                accounts[activeUser.username].avatar = cloudAvatar;
-                accounts[activeUser.username].image = cloudAvatar;
-              }
-              LocalDB.saveAccounts(accounts);
-              LocalDB.setActiveUser(activeUser.username);
+              userChanged = true;
               
               // Update DOM avatars safely
               const domAvatars = document.querySelectorAll('up-avatar-with-placeholder img, up-avatar img, .profile-avatar, up-profile-preview img');
@@ -979,16 +1064,112 @@
               });
             }
 
-            // Sync balance from cloud if updated on another device or admin panel
-            const cloudBalance = Number(cloudUser.balance);
-            if (!isNaN(cloudBalance) && Math.abs(cloudBalance - activeUser.balance) > 0.001) {
-              activeUser.balance = cloudBalance;
+            // 4. Sync Balance from cloud
+            const cloudBal = cloudUser.balance !== undefined ? Number(cloudUser.balance) : (uStats.balance !== undefined ? Number(uStats.balance) : undefined);
+            if (cloudBal !== undefined && !isNaN(cloudBal) && Math.abs(cloudBal - activeUser.balance) > 0.001) {
+              activeUser.balance = cloudBal;
+              userChanged = true;
+              WsMock.broadcastBalance(cloudBal);
+              updateDomBalance(cloudBal);
+            }
+
+            // 5. Sync Upgrades count from cloud
+            const cloudUpgrades = cloudUser.upgrades_made !== undefined ? Number(cloudUser.upgrades_made) : (uStats.upgrades_made !== undefined ? Number(uStats.upgrades_made) : undefined);
+            if (cloudUpgrades !== undefined && !isNaN(cloudUpgrades) && cloudUpgrades !== (activeUser.upgradesMade || 0)) {
+              activeUser.upgradesMade = cloudUpgrades;
+              statsChanged = true;
+              updateDomUpgrades(cloudUpgrades);
+            }
+
+            // 6. Sync Withdrawn amount & items count from cloud
+            const cloudWithdrawnAmt = cloudUser.withdrawn_amount !== undefined ? Number(cloudUser.withdrawn_amount) : (uStats.withdrawn_amount !== undefined ? Number(uStats.withdrawn_amount) : undefined);
+            if (cloudWithdrawnAmt !== undefined && !isNaN(cloudWithdrawnAmt) && Math.abs(cloudWithdrawnAmt - (activeUser.withdrawnAmount || 0)) > 0.001) {
+              activeUser.withdrawnAmount = cloudWithdrawnAmt;
+              statsChanged = true;
+            }
+
+            const cloudWithdrawnCount = cloudUser.withdrawn_count !== undefined ? Number(cloudUser.withdrawn_count) : (uStats.withdrawn_items_count !== undefined ? Number(uStats.withdrawn_items_count) : (uStats.withdrawn_count !== undefined ? Number(uStats.withdrawn_count) : undefined));
+            if (cloudWithdrawnCount !== undefined && !isNaN(cloudWithdrawnCount) && cloudWithdrawnCount !== (activeUser.withdrawnItemsCount || 0)) {
+              activeUser.withdrawnItemsCount = cloudWithdrawnCount;
+              statsChanged = true;
+            }
+
+            if (statsChanged) {
+              updateDomWithdrawn(activeUser.withdrawnAmount, activeUser.withdrawnItemsCount);
+            }
+
+            // 7. Sync Best Drop from cloud
+            let cloudBestDrop = undefined;
+            if (cloudUser.best_drop !== undefined) cloudBestDrop = cloudUser.best_drop;
+            else if (uStats.best_drop !== undefined) cloudBestDrop = uStats.best_drop;
+            if (cloudBestDrop !== undefined) {
+              const prevDropStr = JSON.stringify(activeUser.bestDrop || null);
+              const nextDropStr = JSON.stringify(cloudBestDrop || null);
+              if (prevDropStr !== nextDropStr) {
+                activeUser.bestDrop = cloudBestDrop;
+                statsChanged = true;
+                updateDomBestDrop(cloudBestDrop);
+              }
+            }
+
+            if (userChanged || statsChanged) {
               const accounts = LocalDB.getAccounts();
-              if (accounts[activeUser.username]) accounts[activeUser.username].balance = cloudBalance;
+              if (accounts[activeUser.username]) {
+                accounts[activeUser.username].balance = activeUser.balance;
+                accounts[activeUser.username].nickname = activeUser.nickname;
+                accounts[activeUser.username].id = activeUser.id;
+                accounts[activeUser.username].avatar = activeUser.avatar;
+                accounts[activeUser.username].image = activeUser.avatar;
+                accounts[activeUser.username].upgradesMade = activeUser.upgradesMade;
+                accounts[activeUser.username].withdrawnAmount = activeUser.withdrawnAmount;
+                accounts[activeUser.username].withdrawnItemsCount = activeUser.withdrawnItemsCount;
+                accounts[activeUser.username].bestDrop = activeUser.bestDrop;
+              }
               LocalDB.saveAccounts(accounts);
               LocalDB.setActiveUser(activeUser.username);
-              WsMock.broadcastBalance(cloudBalance);
-              updateDomBalance(cloudBalance);
+
+              // Update Angular UserService & UserState
+              try {
+                if (window.__upgraderUserService && typeof window.__upgraderUserService.setUser === 'function') {
+                  window.__upgraderUserService.setUser(activeUser, true);
+                }
+                if (window.__upgraderUserState) {
+                  if (window.__upgraderUserState.currentUser && typeof window.__upgraderUserState.currentUser.set === 'function') {
+                    window.__upgraderUserState.currentUser.set({ ...activeUser });
+                  }
+                  if (window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+                    window.__upgraderUserState.userStats.set({
+                      upgradesMade: activeUser.upgradesMade || 0,
+                      withdrawnAmount: activeUser.withdrawnAmount || 0,
+                      withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
+                      bestDrop: activeUser.bestDrop || null,
+                      bestDropProbability: activeUser.bestDropProbability || null
+                    });
+                  }
+                }
+              } catch(e) {}
+
+              // Zero-latency BroadcastChannel
+              try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                  new BroadcastChannel('upgrader_channel').postMessage({
+                    type: 'USER_STATS_SYNCED',
+                    stats: {
+                      balance: activeUser.balance,
+                      nickname: activeUser.nickname,
+                      id: activeUser.id,
+                      upgradesMade: activeUser.upgradesMade,
+                      withdrawnAmount: activeUser.withdrawnAmount,
+                      withdrawnItemsCount: activeUser.withdrawnItemsCount,
+                      bestDrop: activeUser.bestDrop
+                    },
+                    username: activeUser.username,
+                    t: Date.now()
+                  });
+                }
+              } catch(e) {}
+
+              window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
             }
           }
 
@@ -1015,7 +1196,7 @@
             } catch(e) {}
           }
 
-          // 3. Live Inventory Sync: detect added items and removed items across devices
+          // 8. Live Inventory Sync: detect added items and removed items across devices
           if (Array.isArray(invRes)) {
             const localInv = activeUser.inventory || [];
             const localIds = new Set(localInv.map(x => String(x.id)));
@@ -1062,7 +1243,29 @@
                 WsMock.broadcastDeletedItems(deletedIds);
               }
 
+              // Notify Angular ItemsService so that profile table immediately refreshes
+              try {
+                if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+                  window.__upgraderItemsService.notifyInventoryUpdate(true);
+                }
+              } catch(e) {}
+
+              // Zero-latency BroadcastChannel
+              try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                  new BroadcastChannel('upgrader_channel').postMessage({
+                    type: 'USER_STATS_SYNCED',
+                    stats: {
+                      inventory: activeUser.inventory
+                    },
+                    username: activeUser.username,
+                    t: Date.now()
+                  });
+                }
+              } catch(e) {}
+
               window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+              window.dispatchEvent(new CustomEvent('upgrader:inventory-updated', { detail: activeUser.inventory }));
             }
           }
         }
@@ -2055,6 +2258,102 @@
             LocalDB.setActiveUser(activeUser.username);
             WsMock.broadcastBalance(bal);
             updateDomBalance(bal);
+          }
+        }
+        if (event.data && event.data.type === 'USER_STATS_SYNCED') {
+          const activeUser = LocalDB.getActiveUser();
+          if (activeUser && (!event.data.username || event.data.username === activeUser.username)) {
+            const stats = event.data.stats || {};
+            let userChanged = false;
+            let statsChanged = false;
+
+            if (stats.balance !== undefined && !isNaN(Number(stats.balance)) && Math.abs(Number(stats.balance) - activeUser.balance) > 0.001) {
+              activeUser.balance = Number(stats.balance);
+              userChanged = true;
+              WsMock.broadcastBalance(activeUser.balance);
+              updateDomBalance(activeUser.balance);
+            }
+            if (stats.nickname !== undefined && String(stats.nickname) !== String(activeUser.nickname)) {
+              activeUser.nickname = String(stats.nickname);
+              userChanged = true;
+              updateDomNickname(activeUser.nickname);
+            }
+            if (stats.id !== undefined && String(stats.id) !== String(activeUser.id)) {
+              activeUser.id = String(stats.id);
+              userChanged = true;
+              updateDomId(activeUser.id);
+            }
+            if (stats.upgradesMade !== undefined && Number(stats.upgradesMade) !== (activeUser.upgradesMade || 0)) {
+              activeUser.upgradesMade = Number(stats.upgradesMade);
+              statsChanged = true;
+              updateDomUpgrades(activeUser.upgradesMade);
+            }
+            if (stats.withdrawnAmount !== undefined && Math.abs(Number(stats.withdrawnAmount) - (activeUser.withdrawnAmount || 0)) > 0.001) {
+              activeUser.withdrawnAmount = Number(stats.withdrawnAmount);
+              statsChanged = true;
+            }
+            if (stats.withdrawnItemsCount !== undefined && Number(stats.withdrawnItemsCount) !== (activeUser.withdrawnItemsCount || 0)) {
+              activeUser.withdrawnItemsCount = Number(stats.withdrawnItemsCount);
+              statsChanged = true;
+            }
+            if (statsChanged) {
+              updateDomWithdrawn(activeUser.withdrawnAmount, activeUser.withdrawnItemsCount);
+            }
+            if (stats.bestDrop !== undefined) {
+              const prevDropStr = JSON.stringify(activeUser.bestDrop || null);
+              const nextDropStr = JSON.stringify(stats.bestDrop || null);
+              if (prevDropStr !== nextDropStr) {
+                activeUser.bestDrop = stats.bestDrop;
+                statsChanged = true;
+                updateDomBestDrop(stats.bestDrop);
+              }
+            }
+            if (Array.isArray(stats.inventory)) {
+              activeUser.inventory = stats.inventory;
+              userChanged = true;
+              try {
+                if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+                  window.__upgraderItemsService.notifyInventoryUpdate(true);
+                }
+              } catch(e) {}
+            }
+
+            if (userChanged || statsChanged) {
+              const accounts = LocalDB.getAccounts();
+              if (accounts[activeUser.username]) {
+                accounts[activeUser.username].balance = activeUser.balance;
+                accounts[activeUser.username].nickname = activeUser.nickname;
+                accounts[activeUser.username].id = activeUser.id;
+                accounts[activeUser.username].upgradesMade = activeUser.upgradesMade;
+                accounts[activeUser.username].withdrawnAmount = activeUser.withdrawnAmount;
+                accounts[activeUser.username].withdrawnItemsCount = activeUser.withdrawnItemsCount;
+                accounts[activeUser.username].bestDrop = activeUser.bestDrop;
+                if (stats.inventory) accounts[activeUser.username].inventory = activeUser.inventory;
+              }
+              LocalDB.saveAccounts(accounts);
+              LocalDB.setActiveUser(activeUser.username);
+
+              try {
+                if (window.__upgraderUserService && typeof window.__upgraderUserService.setUser === 'function') {
+                  window.__upgraderUserService.setUser(activeUser, true);
+                }
+                if (window.__upgraderUserState) {
+                  if (window.__upgraderUserState.currentUser && typeof window.__upgraderUserState.currentUser.set === 'function') {
+                    window.__upgraderUserState.currentUser.set({ ...activeUser });
+                  }
+                  if (window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+                    window.__upgraderUserState.userStats.set({
+                      upgradesMade: activeUser.upgradesMade || 0,
+                      withdrawnAmount: activeUser.withdrawnAmount || 0,
+                      withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
+                      bestDrop: activeUser.bestDrop || null,
+                      bestDropProbability: activeUser.bestDropProbability || null
+                    });
+                  }
+                }
+              } catch(e) {}
+              window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+            }
           }
         }
       };
