@@ -25,11 +25,11 @@
     }
   } catch(e) {}
 
-  // Cleanup any legacy test_user session or starter data from visitor's localStorage
+  // Cleanup any legacy test_user or 666 session or starter data from visitor's localStorage
   try {
     const rawActive = localStorage.getItem('upgrader_active_user_v4');
     const rawUser = localStorage.getItem('user');
-    if (rawActive === 'test_user' || (rawUser && rawUser.includes('test_user'))) {
+    if (rawActive === 'test_user' || rawActive === '666' || (rawUser && (rawUser.includes('test_user') || rawUser.includes('"username":"666"')))) {
       localStorage.removeItem('upgrader_active_user_v4');
       localStorage.removeItem('user');
       localStorage.removeItem('auth_token');
@@ -655,140 +655,7 @@
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
   // Preserves authentic user accounts (test_user with 50,000 balance, full inventory, won items, history and email, plus account 666)
   // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
-  const DEFAULT_SEED_ACCOUNTS = {
-  "666": {
-    "id": "usr_1790965969344_z52ky",
-    "username": "666",
-    "password": "666",
-    "nickname": "666",
-    "avatar": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afVSKP-EAm6extF6ueZhW2exwkl2tmTXwt39eCiUPQR2DMN4TOVetUK8xoLgM-K341eM2otDnC6okGoXufBz_TAB/360fx360f",
-    "balance": 6000,
-    "inventory": [
-      {
-        "id": "inv_reg_1790965969344_0",
-        "status": "available",
-        "price": 5.87,
-        "item": {
-          "id": "225",
-          "appId": 730,
-          "marketName": "Glock-18 | Ocean Topo (Field-Tested)",
-          "price": "5.870",
-          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL2kpnj9h1T9veRfKt9L8-eC2OZ1OM46eMxFnG3xhh24jzQyI76eHKQPFNzWJYkE7MIu0O_xNG1N-3k5FHWipUFk3tU1JV7Fg/360fx360f",
-          "extra": {
-            "e": 3,
-            "g": 11,
-            "n": [
-              "Glock-18",
-              "Ocean Topo",
-              "Field-Tested"
-            ],
-            "r": 14,
-            "s": false,
-            "t": 16,
-            "ch": "5e98d9",
-            "st": false
-          }
-        },
-        "extra": {
-          "e": 3,
-          "g": 11,
-          "n": [
-            "Glock-18",
-            "Ocean Topo",
-            "Field-Tested"
-          ],
-          "r": 14,
-          "s": false,
-          "t": 16,
-          "ch": "5e98d9",
-          "st": false
-        }
-      },
-      {
-        "id": "inv_reg_1790965969344_1",
-        "status": "available",
-        "price": 7.54,
-        "item": {
-          "id": "620",
-          "appId": 730,
-          "marketName": "M4A4 | Naval Shred Camo (Minimal Wear)",
-          "price": "7.540",
-          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwipC6s2sZLFoH_3HDzOvzedxuPUnFnCxzElysG_Wydz9c3-VaARzXpEhEeVethDtx4LvPujktgbYiogTyDK-0H1inonrSw/360fx360f",
-          "extra": {
-            "e": 4,
-            "g": 14,
-            "n": [
-              "M4A4",
-              "Naval Shred Camo",
-              "Minimal Wear"
-            ],
-            "r": 14,
-            "s": false,
-            "t": 16,
-            "ch": "5e98d9",
-            "st": false
-          }
-        },
-        "extra": {
-          "e": 4,
-          "g": 14,
-          "n": [
-            "M4A4",
-            "Naval Shred Camo",
-            "Minimal Wear"
-          ],
-          "r": 14,
-          "s": false,
-          "t": 16,
-          "ch": "5e98d9",
-          "st": false
-        }
-      },
-      {
-        "id": "inv_reg_1790965969344_2",
-        "status": "available",
-        "price": 12.57,
-        "item": {
-          "id": "166",
-          "appId": 730,
-          "marketName": "AK-47 | Olive Polycam (Well-Worn)",
-          "price": "12.570",
-          "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wipP0OKhZL1SI_GeAViRyrohj-xsSyCmmFMi6j7Vydf8dH7GbVIlCZEjR-EJ5hPrwYDhYe7r4gWIj45GnCyq3StK8G81tEXjZ_VA/360fx360f",
-          "extra": {
-            "e": 5,
-            "g": 1,
-            "n": [
-              "AK-47",
-              "Olive Polycam",
-              "Well-Worn"
-            ],
-            "r": 14,
-            "s": false,
-            "t": 16,
-            "ch": "5e98d9",
-            "st": false
-          }
-        },
-        "extra": {
-          "e": 5,
-          "g": 1,
-          "n": [
-            "AK-47",
-            "Olive Polycam",
-            "Well-Worn"
-          ],
-          "r": 14,
-          "s": false,
-          "t": 16,
-          "ch": "5e98d9",
-          "st": false
-        }
-      }
-    ],
-    "history": [],
-    "createdAt": "2026-10-02T18:32:49.344Z"
-  }
-};
+  const DEFAULT_SEED_ACCOUNTS = {};
 
   // 2. LOAD EXTENSIVE SKINS CATALOG FROM skins.json (15,800+ skins synced from upgrader.best)
   let catalogData = [];
@@ -958,8 +825,16 @@
         if (raw) {
           const accs = JSON.parse(raw);
           if (accs && typeof accs === 'object') {
+            let updated = false;
             if (accs['test_user']) {
               delete accs['test_user'];
+              updated = true;
+            }
+            if (accs['666']) {
+              delete accs['666'];
+              updated = true;
+            }
+            if (updated) {
               this.saveAccountsLocally(accs);
             }
             return accs;
@@ -967,15 +842,13 @@
         }
       } catch (e) {}
 
-      const initialAccounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
-      delete initialAccounts['test_user'];
+      const initialAccounts = {};
       this.saveAccountsLocally(initialAccounts);
       return initialAccounts;
     }
 
     static restoreDefaultAccounts() {
-      const accounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
-      delete accounts['test_user'];
+      const accounts = {};
       this.saveAccountsLocally(accounts);
       this.clearActiveUser();
       return accounts;
@@ -1002,7 +875,7 @@
       const accounts = this.getAccounts();
       try {
         const activeU = localStorage.getItem(STORAGE_ACTIVE_KEY);
-        if (activeU && activeU !== 'test_user' && accounts[activeU]) {
+        if (activeU && activeU !== 'test_user' && activeU !== '666' && accounts[activeU]) {
           return accounts[activeU];
         }
       } catch (e) {}
@@ -1061,7 +934,7 @@
 
     static setActiveUser(username) {
       try {
-        if (!username || username === 'test_user') {
+        if (!username || username === 'test_user' || username === '666') {
           this.clearActiveUser();
           return;
         }
