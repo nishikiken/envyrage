@@ -1646,7 +1646,13 @@
 
     function copySupabaseSql() {
       const sql = `-- UPGRADER DATABASE SCHEMA FOR SUPABASE
-CREATE TABLE IF NOT EXISTS public.users (
+-- 1. CLEANUP ANY CONFLICTING PREVIOUS TABLES
+DROP TABLE IF EXISTS public.inventory CASCADE;
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP TABLE IF EXISTS public.admin_settings CASCADE;
+
+-- 2. CREATE USERS TABLE
+CREATE TABLE public.users (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     nickname TEXT,
@@ -1661,7 +1667,8 @@ CREATE TABLE IF NOT EXISTS public.users (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.inventory (
+-- 3. CREATE INVENTORY TABLE
+CREATE TABLE public.inventory (
     id TEXT PRIMARY KEY,
     user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
     market_name TEXT NOT NULL,
@@ -1673,7 +1680,8 @@ CREATE TABLE IF NOT EXISTS public.inventory (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS public.admin_settings (
+-- 4. CREATE ADMIN SETTINGS TABLE
+CREATE TABLE public.admin_settings (
     key TEXT PRIMARY KEY,
     rig_mode TEXT DEFAULT 'normal',
     server_upgrades BIGINT DEFAULT 487677451,
@@ -1682,20 +1690,42 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 5. ROW LEVEL SECURITY & POLICIES
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inventory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow public read users" ON public.users;
+DROP POLICY IF EXISTS "Allow public write users" ON public.users;
 CREATE POLICY "Allow public read users" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Allow public write users" ON public.users FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow public read inventory" ON public.inventory;
+DROP POLICY IF EXISTS "Allow public write inventory" ON public.inventory;
 CREATE POLICY "Allow public read inventory" ON public.inventory FOR SELECT USING (true);
 CREATE POLICY "Allow public write inventory" ON public.inventory FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Allow public read admin_settings" ON public.admin_settings;
+DROP POLICY IF EXISTS "Allow public write admin_settings" ON public.admin_settings;
 CREATE POLICY "Allow public read admin_settings" ON public.admin_settings FOR SELECT USING (true);
 CREATE POLICY "Allow public write admin_settings" ON public.admin_settings FOR ALL USING (true);
 
+-- 6. SEED TEST WINNER DATA
 INSERT INTO public.users (id, username, nickname, avatar, image, balance, email, is_email_verified)
-VALUES ('10001', 'test_user', 'Test Winner', 'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg', 'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg', 50000.00, 'legendary_gamer@gmail.com', true)
-ON CONFLICT (id) DO UPDATE SET balance = EXCLUDED.balance, nickname = EXCLUDED.nickname, email = EXCLUDED.email;
+VALUES (
+    '10001',
+    'test_user',
+    'Test Winner',
+    'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg',
+    'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg',
+    50000.00,
+    'legendary_gamer@gmail.com',
+    true
+)
+ON CONFLICT (id) DO UPDATE SET
+    balance = EXCLUDED.balance,
+    nickname = EXCLUDED.nickname,
+    email = EXCLUDED.email;
 
 INSERT INTO public.admin_settings (key, rig_mode, server_upgrades, server_online)
 VALUES ('global_settings', 'normal', 487677451, 4281)

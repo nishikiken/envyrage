@@ -49,7 +49,11 @@
       const base = isGH ? '/envyrage/' : '/';
 
       let lang = 'ru';
-      if (url.includes('/en') || url.includes('-en') || url.endsWith('/en') || url === 'en' || (window.location.hash && window.location.hash.endsWith('-en'))) {
+      if (url.includes('/en') || url.includes('-en') || url.endsWith('/en') || url === 'en') {
+        lang = 'en';
+      } else if (url.includes('/ru') || url.includes('-ru') || url.endsWith('/ru') || url === 'ru') {
+        lang = 'ru';
+      } else if (window.location.hash && window.location.hash.endsWith('-en')) {
         lang = 'en';
       }
 
@@ -61,6 +65,12 @@
       else if (url.includes('privacy')) screen = 'privacy-policy';
       else if (url.includes('cookie')) screen = 'cookie-policy';
       else if (url.includes('fair')) screen = 'provably-fair';
+
+      if (!screen && !url.includes('#') && (url === '/' || url === '' || url === base || url === '/envyrage' || url.startsWith('/?'))) {
+        if (window.location.hash && window.location.hash.length > 1) {
+          return base + window.location.hash;
+        }
+      }
 
       let hash = '';
       if (screen) {
