@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <title>UPGRADER</title>
   <script>
-    // GitHub Pages SPA router redirect
+    // GitHub Pages SPA router redirect: keeps /envyrage/ repository path intact
     var path = window.location.pathname;
+    var repoPrefix = path.startsWith('/envyrage') ? '/envyrage' : '';
     if (path.includes('/admin')) {
-      window.location.replace("../admin/index.html");
+      window.location.replace((repoPrefix || '/envyrage') + '/admin/index.html');
     } else if (path.includes('/en')) {
-      window.location.replace("../en/index.html");
+      window.location.replace((repoPrefix || '/envyrage') + '/en/index.html');
     } else {
-      window.location.replace("../cis/index.html");
+      window.location.replace((repoPrefix || '/envyrage') + '/cis/index.html');
     }
   </script>
   <meta http-equiv="refresh" content="0; url=./cis/index.html">

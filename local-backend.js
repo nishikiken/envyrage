@@ -25,6 +25,41 @@
     }
   } catch(e) {}
 
+  // Fix GitHub Pages Subdirectory Routing & Links (/envyrage/...)
+  // Automatically intercepts history.pushState / replaceState so Angular Router never drops /envyrage/
+  try {
+    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+    if (isGH) {
+      const origPush = history.pushState;
+      const origReplace = history.replaceState;
+      const fixUrl = function(url) {
+        if (!url) return url;
+        if (typeof url === 'string') {
+          if (url.startsWith('/') && !url.startsWith('/envyrage')) {
+            return '/envyrage' + url;
+          }
+        }
+        return url;
+      };
+      history.pushState = function(state, title, url) {
+        return origPush.call(this, state, title, fixUrl(url));
+      };
+      history.replaceState = function(state, title, url) {
+        return origReplace.call(this, state, title, fixUrl(url));
+      };
+
+      document.addEventListener('click', function(e) {
+        const a = e.target.closest('a');
+        if (a && a.getAttribute('href')) {
+          const href = a.getAttribute('href');
+          if (href.startsWith('/') && !href.startsWith('/envyrage') && !href.startsWith('//')) {
+            a.setAttribute('href', '/envyrage' + href);
+          }
+        }
+      }, true);
+    }
+  } catch(e) {}
+
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
   // Preserves authentic user accounts (test_user with 50,000 balance, full inventory, won items, history and email, plus account 666)
   // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
@@ -3221,7 +3256,7 @@
   // 13. HOOK INTO SITE BUTTONS
   function setupDomHooks() {
     if (typeof window !== 'undefined' && window.location && window.location.pathname.endsWith('/admin')) {
-      window.location.href = '/admin.html';
+      const isSub = window.location.pathname.startsWith('/envyrage'); window.location.href = isSub ? '/envyrage/admin/index.html' : '/admin.html';
       return;
     }
 
