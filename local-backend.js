@@ -2288,63 +2288,11 @@
     }
   };
 
-  function syncBestDropInDOM() {
-    if (!currentBestDrop || !currentBestDrop.item) return;
-    const dropRoot = document.querySelector('up-drop [data-testid="live-drop"]');
-    if (!dropRoot) return;
-
-    let bestDropContainer = document.getElementById('upgrader-custom-best-drop-wrapper');
-    if (!bestDropContainer) {
-      bestDropContainer = document.createElement('div');
-      bestDropContainer.id = 'upgrader-custom-best-drop-wrapper';
-      bestDropContainer.className = 'relative bg-block w-full flex-col overflow-hidden !rounded-r-lg !py-1.5 z-[2]';
-      const eggBanner = dropRoot.querySelector('up-egg-event-banner');
-      if (eggBanner && eggBanner.nextSibling) {
-        dropRoot.insertBefore(bestDropContainer, eggBanner.nextSibling);
-      } else {
-        dropRoot.prepend(bestDropContainer);
-      }
-    }
-
-    const item = currentBestDrop.item;
-    const user = currentBestDrop.user || {};
-    const wonAmount = (parseFloat(currentBestDrop.wonAmount || item.price || 0)).toFixed(2);
-    const shortName = (item.extra && item.extra.n && item.extra.n[1]) || item.marketName.split('|')[1] || item.marketName;
-    const subName = (item.extra && item.extra.n && item.extra.n[0]) || item.marketName.split('|')[0] || '';
-    const avatarUrl = user.image || 'https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp';
-    const nickname = user.nickname || 'User';
-    const itemImg = item.imageNew || item.image;
-
-    bestDropContainer.innerHTML = `
-      <div class="z-[1]">
-        <up-best-drop-item _nghost-ng-c3234582991="">
-          <button data-testid="best-drop-item" class="group bg-card relative flex h-[5rem] w-[11.75rem] items-end overflow-hidden rounded-lg p-2 !cursor-default" style="border: 1px solid rgba(251, 213, 6, 0.35); box-shadow: 0 0 12px rgba(251, 213, 6, 0.15);">
-            <div class="pointer-events-none relative z-[2] flex h-full w-full flex-col items-start justify-start space-x-0.5 select-none">
-              <div class="absolute bottom-0 left-0 flex flex-col items-start justify-start space-x-0.5 text-left transition-all duration-700 group-hover:translate-y-[-100%] group-hover:opacity-0">
-                <span class="font-tektur text-xxs max-w-[5.5rem] truncate font-bold uppercase" style="color: #fff;">${shortName.trim()}</span>
-                <span class="font-exo text-xxxs max-w-[6.2rem] truncate font-semibold" style="color: rgba(255, 255, 255, 0.55);">${subName.trim()}</span>
-              </div>
-              <div class="absolute bottom-0 left-0 flex translate-y-[50%] flex-col items-start justify-start space-y-1 opacity-0 transition-all duration-700 group-hover:translate-y-0 group-hover:opacity-100">
-                <up-avatar-with-placeholder class="h-6 w-6">
-                  <img class="h-6 object-cover rounded-full w-6 opacity-100" src="${avatarUrl}" alt="Аватар пользователя">
-                </up-avatar-with-placeholder>
-                <span class="font-tektur text-xxs max-w-[11rem] truncate font-bold text-white uppercase">${nickname}</span>
-              </div>
-            </div>
-            <div class="absolute top-2 right-2 z-[3] flex translate-y-[-50%] items-center justify-center space-x-0.5 opacity-0 transition-all duration-700 group-hover:translate-y-0 group-hover:opacity-100">
-              <span class="text-[0.625rem] leading-none font-semibold text-white">${wonAmount}</span>
-              <img alt="" class="h-2.5 w-2.5" src="https://s3.upgrader.best/cdn/fa/icons/coins.svg">
-            </div>
-            <img alt="drop-item" class="absolute top-1/2 right-0 z-[2] h-full max-h-[5.6875rem] w-full max-w-[5.8125rem] -translate-y-1/2 object-contain transition-transform duration-300 group-hover:scale-105" src="${itemImg}">
-            <div class="absolute top-0 left-0 h-full w-0.5" style="background: rgb(251, 213, 6);"></div>
-            <div class="absolute top-0 left-0 h-full w-full pointer-events-none" style="background: linear-gradient(270deg, rgba(35, 35, 37, 0.2) 25.06%, rgba(251, 213, 6, 0.25) 100%);"></div>
-            <img alt="" class="absolute top-1/2 -right-1.5 h-[6.6875rem] w-[4.125rem] -translate-y-1/2 opacity-0 transition-opacity duration-700 group-hover:opacity-100" src="https://s3.upgrader.best/cdn/fa/images/upgrader-arrow-up.svg">
-          </button>
-        </up-best-drop-item>
-      </div>
-    `;
+  function removeDuplicateBestDrop() {
+    const customWrapper = document.getElementById('upgrader-custom-best-drop-wrapper');
+    if (customWrapper) customWrapper.remove();
   }
-  setInterval(syncBestDropInDOM, 1000);
+  setInterval(removeDuplicateBestDrop, 1000);
 
   function generateRandomDrop() {
     const catalog = window.UPGRADER_CONFIG && window.UPGRADER_CONFIG.catalog;
@@ -2489,7 +2437,7 @@
           event: 'live_drops.best_hour_updated',
           data: { bestLiveDrop: currentBestDrop }
         });
-        syncBestDropInDOM();
+        removeDuplicateBestDrop();
       }
     } catch(e) {}
   }
@@ -2519,17 +2467,19 @@
       });
     }
 
-    // Realistic, non-uniform pacing matching upgrader.best
+    // Realistic, brisk pacing matching upgrader.best high-speed stream
     let nextInterval;
-    const roll = Math.random();
-    if (dropStreamQueue.length > 4) {
-      nextInterval = Math.floor(Math.random() * 500) + 700; // 700ms - 1200ms
-    } else if (roll < 0.22) {
-      nextInterval = Math.floor(Math.random() * 500) + 900; // 900ms - 1400ms
-    } else if (roll < 0.82) {
-      nextInterval = Math.floor(Math.random() * 1200) + 1600; // 1600ms - 2800ms
+    if (dropStreamQueue.length > 2) {
+      nextInterval = Math.floor(Math.random() * 120) + 120; // 120ms - 240ms
     } else {
-      nextInterval = Math.floor(Math.random() * 1400) + 3000; // 3000ms - 4400ms
+      const roll = Math.random();
+      if (roll < 0.65) {
+        nextInterval = Math.floor(Math.random() * 180) + 160; // 160ms - 340ms
+      } else if (roll < 0.90) {
+        nextInterval = Math.floor(Math.random() * 200) + 300; // 300ms - 500ms
+      } else {
+        nextInterval = Math.floor(Math.random() * 250) + 450; // 450ms - 700ms
+      }
     }
     setTimeout(emitNextLiveDrop, nextInterval);
   }
@@ -3820,6 +3770,17 @@
         pointer-events: auto !important;
         overflow: visible !important;
       }
+
+      /* Hide all scrollbars in live drop feed */
+      up-drop, up-drop * {
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+      }
+      up-drop::-webkit-scrollbar, up-drop *::-webkit-scrollbar {
+        display: none !important;
+        width: 0 !important;
+        height: 0 !important;
+      }
     `;
     document.head.appendChild(style);
   })();
@@ -3985,14 +3946,22 @@
   // 10.1 SITE LANGUAGE HELPER
   function isSiteEnglish() {
     try {
-      const loc = (localStorage.getItem('user_last_locale') || localStorage.getItem('locale') || localStorage.getItem('language') || '').toLowerCase();
-      if (loc.startsWith('en')) return true;
-      if (loc.startsWith('ru') || loc.startsWith('cis')) return false;
-      if (window.location.pathname.startsWith('/en')) return true;
-      if (window.location.pathname.startsWith('/ru') || window.location.pathname.startsWith('/cis')) return false;
-      const docLang = (document.documentElement.lang || '').toLowerCase();
-      if (docLang.startsWith('en')) return true;
-      if (docLang.startsWith('ru')) return false;
+      const href = (window.location && window.location.href) || "";
+      if (href.includes("/en") || href.includes("-en")) return true;
+      if (href.includes("/ru") || href.includes("-ru") || href.includes("/cis") || href.includes("-cis")) return false;
+
+      const cookie = document.cookie || "";
+      if (cookie.includes("up-language=en")) return true;
+      if (cookie.includes("up-language=ru") || cookie.includes("up-language=cis")) return false;
+
+      const loc = (localStorage.getItem("user_last_locale") || localStorage.getItem("locale") || localStorage.getItem("language") || "").toLowerCase();
+      if (loc.startsWith("en")) return true;
+      if (loc.startsWith("ru") || loc.startsWith("cis")) return false;
+
+      const docLang = (document.documentElement.lang || "").toLowerCase();
+      if (docLang.startsWith("en")) return true;
+      if (docLang.startsWith("ru") || docLang.startsWith("cis")) return false;
+
       if (document.body && /Sign in|Inventory|Upgrade/i.test(document.body.innerText) && !/Войти|Инвентарь|Прокачать/i.test(document.body.innerText)) {
         return true;
       }
@@ -4000,7 +3969,7 @@
     return false;
   }
 
-  // 10.2 PROFILE SETTINGS MODAL (Authentic upgrader.best Settings design matching media_1791046449805.png)
+  // 10.2 PROFILE SETTINGS MODAL (Authentic upgrader 1:1 design matching chunk-2VR5RVON.js)
   function renderProfileEditModal() {
     const existing = document.getElementById('upgrader-profile-edit-modal');
     if (existing) existing.remove();
@@ -4013,116 +3982,115 @@
 
     const isEn = isSiteEnglish();
     let selectedPrivacy = activeUser.privacy || 'private';
-    let pendingAvatar = activeUser.avatar;
+    let pendingAvatar = activeUser.avatar || 'https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp';
+    const displayUserId = activeUser.id || (1735000 + (Math.abs(activeUser.username.split('').reduce((a,b)=>{a=((a<<5)-a)+b.charCodeAt(0);return a&a},0)) % 265000));
 
     const overlay = document.createElement('div');
     overlay.id = 'upgrader-profile-edit-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Exo 2,sans-serif;';
 
     overlay.innerHTML = `
-      <style>
-        .up-modal-switch-slider {
-          position: absolute; cursor: pointer; inset: 0; background: #2A2B32; transition: .2s; border-radius: 24px;
-        }
-        .up-modal-switch-slider:before {
-          position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .2s; border-radius: 50%;
-        }
-        input:checked + .up-modal-switch-slider {
-          background: #FBD506;
-        }
-        input:checked + .up-modal-switch-slider:before {
-          transform: translateX(20px);
-          background: #121316;
-        }
-        .up-privacy-row {
-          display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; cursor: pointer; user-select: none;
-        }
-        .up-radio-circle {
-          width: 16px; height: 16px; border-radius: 50%; border: 2px solid #3A3B43; background: transparent; flex-shrink: 0; margin-top: 2px; box-sizing: border-box; transition: all .15s ease;
-        }
-        .up-privacy-row.active .up-radio-circle {
-          border: 5px solid #FBD506; background: #17181C;
-        }
-      </style>
-
-      <div style="position:relative;width:100%;max-width:460px;background:#17181C;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.85);padding:24px 26px;color:#fff;box-sizing:border-box;">
+      <div class="relative overflow-hidden w-full max-w-[38.75rem] tablet:min-w-[38.75rem] h-[85dvh] max-h-[85dvh] tablet:h-auto tablet:max-h-full rounded-[1.5rem] bg-[#17181C] shadow-[0_10px_30px_0_rgba(0,0,0,0.35)] border-[1px] border-[#FFFFFF0D] flex flex-col items-center mx-3 sm:mx-0 text-white">
         
-        <!-- Header -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-          <h3 style="font-family:Tektur,sans-serif;font-size:20px;font-weight:700;margin:0;color:#fff;">${isEn ? 'Settings' : 'Настройки'}</h3>
-          <button type="button" id="up-profile-edit-close" style="background:none;border:none;color:#8E8F94;font-size:22px;cursor:pointer;line-height:1;padding:0;">✕</button>
-        </div>
-
-        <!-- Nickname -->
-        <div style="margin-bottom:18px;">
-          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:8px;">${isEn ? 'Nickname' : 'Никнейм'}</label>
-          <input type="text" id="edit-nickname-input" value="${activeUser.nickname}" style="width:100%;box-sizing:border-box;background:#17181C;border:1px solid #FBD506;box-shadow:0 0 0 1px #FBD506;color:#fff;padding:12px 14px;border-radius:10px;font-size:14px;outline:none;" />
-        </div>
-
-        <!-- Trade Link -->
-        <div style="margin-bottom:20px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label style="font-size:13px;font-weight:600;color:#fff;margin:0;">${isEn ? 'Trade link' : 'Трейд-ссылка'}</label>
-            <a href="https://steamcommunity.com/id/me/tradeoffers/privacy#trade_offer_access_url" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#8E8F94;text-decoration:none;">${isEn ? 'You can get the link' : 'Ссылку можно взять'} <span style="text-decoration:underline;color:#fff;">${isEn ? 'here' : 'здесь'}</span></a>
+        <!-- Inner scrollable container -->
+        <div class="invisible-scroll flex max-h-full w-full flex-col gap-[1.5rem] overflow-y-auto pb-[1rem] lg:pb-[1.5rem]" style="scrollbar-width:none;-ms-overflow-style:none;">
+          
+          <!-- Sticky Header -->
+          <div class="sticky top-0 z-10 flex w-full items-center justify-between bg-[#1E1F23] p-[1rem] lg:px-[1.5rem] rounded-t-[1.5rem]">
+            <span class="font-exo flex items-center gap-1.5 text-[1.125rem] leading-normal text-white lg:text-[1.25rem] font-bold">
+              ${isEn ? 'Settings' : 'Настройки'}
+            </span>
+            <button type="button" id="up-profile-edit-close" data-testid="settings-modal-close" class="p-[5px] bg-transparent border-0 cursor-pointer text-[#8E8F94] hover:text-white transition-colors">
+              <img alt="close-icon" class="h-[0.75rem] w-[0.75rem]" src="/assets/icons/close-gray.svg">
+            </button>
           </div>
-          <input type="text" id="edit-tradelink-input" value="${activeUser.steamTradeLink || activeUser.tradeLink || ''}" placeholder="https://steamcommunity.com/tradeoffer/new/?partner=..." style="width:100%;box-sizing:border-box;background:#17181C;border:1px solid #282930;color:#8E8F94;padding:12px 14px;border-radius:10px;font-size:13px;outline:none;" />
-        </div>
 
-        <!-- Steam Privacy -->
-        <div style="margin-bottom:20px;">
-          <label style="display:block;font-size:13px;font-weight:600;color:#fff;margin-bottom:12px;">${isEn ? 'Steam Privacy' : 'Приватность Steam'}</label>
-          <div id="privacy-radios-list">
-            <div class="up-privacy-row ${selectedPrivacy === 'private' ? 'active' : ''}" data-privacy="private">
-              <div class="up-radio-circle"></div>
-              <div style="display:flex;flex-direction:column;gap:2px;">
-                <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Private' : 'Приватный'}</span>
-                <span style="font-size:11px;color:#8E8F94;line-height:1.4;">${isEn ? 'Default value. Only you will see your Steam profile information, allows hiding your profile from parser bots and scammers.' : 'Значение по умолчанию. Только вы будете видеть свою информацию стим профиля, позволяет скрыть ваш профиль от парсер-ботов, и злоумышленников.'}</span>
+          <!-- Section 1: Nickname -->
+          <div class="mt-2 flex flex-col gap-2 px-[1rem] lg:px-[1.5rem]">
+            <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Nickname' : 'Никнейм'}</h3>
+            <input name="nickname" id="edit-nickname-input" data-testid="settings-modal-nickname-input" type="text" value="${activeUser.nickname}" class="flex items-center gap-1.5 rounded-[0.75rem] border border-[#FFFFFF26] bg-[#FFFFFF0D] p-3 text-white transition-all duration-200 placeholder:opacity-50 focus:border-[#FBD506] focus:opacity-100 focus:outline-none w-full box-border font-exo text-[0.875rem]" />
+          </div>
+
+          <!-- Section 2: Avatar Upload from Device & Fixed ID Badge -->
+          <div class="flex items-center justify-between gap-3 px-[1rem] lg:px-[1.5rem] p-3 bg-[#FFFFFF05] rounded-[0.75rem] border border-[#FFFFFF0D] mx-[1rem] lg:mx-[1.5rem]">
+            <div class="flex items-center gap-3 min-w-0">
+              <img id="edit-avatar-preview" src="${pendingAvatar}" class="w-10 h-10 rounded-full object-cover border border-[#FFFFFF1A] flex-shrink-0" />
+              <div class="flex flex-col min-w-0">
+                <span class="text-[0.875rem] font-medium text-white font-exo">${isEn ? 'Avatar' : 'Аватар профиля'}</span>
+                <span class="text-[0.75rem] text-white/50 font-exo">ID: ${displayUserId}</span>
               </div>
             </div>
-            <div class="up-privacy-row ${selectedPrivacy === 'friends' ? 'active' : ''}" data-privacy="friends">
-              <div class="up-radio-circle"></div>
-              <div style="display:flex;flex-direction:column;gap:2px;">
-                <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Friends Only' : 'Доступен только для друзей'}</span>
-                <span style="font-size:11px;color:#8E8F94;line-height:1.4;">${isEn ? 'All authorized users can see your profile information' : 'Все авторизованные пользователи могут видеть вашу информацию профиля'}</span>
+            <input type="file" id="edit-avatar-file-input" accept="image/*" style="display:none;" />
+            <button type="button" id="edit-avatar-upload-btn" class="flex items-center justify-center gap-2 rounded-[0.5rem] bg-[#232428] hover:bg-[#2C2E35] border border-[#FFFFFF1A] px-3.5 py-2 text-[0.8125rem] font-semibold text-white transition-colors duration-200 cursor-pointer whitespace-nowrap font-exo">${isEn ? 'Upload from device' : 'Загрузить с устройства'}</button>
+          </div>
+
+          <!-- Section 3: Trade Link -->
+          <div class="flex flex-col gap-2 px-[1rem] lg:px-[1.5rem]">
+            <div class="flex w-full items-center justify-between">
+              <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Trade link' : 'Трейд-ссылка'}</h3>
+              <p class="text-[0.75rem] font-normal text-white/50 m-0 font-exo">
+                ${isEn ? 'You can get the link' : 'Ссылку можно взять'} <a href="https://steamcommunity.com/id/me/tradeoffers/privacy#trade_offer_access_url" target="_blank" rel="noopener noreferrer" class="text-[0.75rem] font-normal text-white hover:underline">${isEn ? 'here' : 'здесь'}</a>
+              </p>
+            </div>
+            <input name="trade-url" id="edit-tradelink-input" data-testid="settings-modal-trade-url-input" type="text" placeholder="https://steamcommunity.com/tradeoffer/new/?partner=..." value="${activeUser.steamTradeLink || activeUser.tradeLink || ''}" class="flex items-center gap-1.5 truncate rounded-[0.75rem] border-[1px] border-[#FFFFFF26] bg-[#FFFFFF0D] p-3 text-white transition-all duration-200 placeholder:opacity-50 focus:border-[#FBD506] focus:opacity-100 focus:outline-none w-full box-border font-exo text-[0.875rem]" />
+          </div>
+
+          <!-- Section 4: Steam Profile Privacy -->
+          <div class="flex flex-col gap-2">
+            <h3 class="m-0 px-[1rem] text-[1rem] font-medium text-[#FFFFFFCC] lg:px-[1.5rem] font-exo">${isEn ? 'Steam Profile Privacy' : 'Приватность профиля Steam'}</h3>
+            <div class="flex flex-col" id="privacy-radios-list">
+              <label class="flex cursor-pointer items-start gap-3 p-0 px-[1rem] py-2 transition-all duration-200 hover:bg-[#FFFFFF05] lg:px-[1.5rem] up-privacy-row ${selectedPrivacy === 'private' ? 'active' : ''}" data-privacy="private">
+                <div class="relative mt-0.5 h-4 w-4 flex-shrink-0 rounded-full border border-[#FFFFFF1A] bg-[#171820] flex items-center justify-center">
+                  <div class="w-2.5 h-2.5 rounded-full bg-[#fcd506] transition-opacity ${selectedPrivacy === 'private' ? 'opacity-100' : 'opacity-0'}"></div>
+                </div>
+                <div class="flex flex-1 flex-col gap-0.5">
+                  <div class="text-[0.875rem] leading-[19px] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Private' : 'Приватный'}</div>
+                  <div class="text-[0.8125rem] leading-[140%] font-normal text-white opacity-50 font-exo">${isEn ? 'Only you can see your profile information' : 'Значение по умолчанию. Только вы видите информацию вашего профиля'}</div>
+                </div>
+              </label>
+
+              <label class="flex cursor-pointer items-start gap-3 p-0 px-[1rem] py-2 transition-all duration-200 hover:bg-[#FFFFFF05] lg:px-[1.5rem] up-privacy-row ${selectedPrivacy === 'authorized_only' || selectedPrivacy === 'friends' ? 'active' : ''}" data-privacy="authorized_only">
+                <div class="relative mt-0.5 h-4 w-4 flex-shrink-0 rounded-full border border-[#FFFFFF1A] bg-[#171820] flex items-center justify-center">
+                  <div class="w-2.5 h-2.5 rounded-full bg-[#fcd506] transition-opacity ${selectedPrivacy === 'authorized_only' || selectedPrivacy === 'friends' ? 'opacity-100' : 'opacity-0'}"></div>
+                </div>
+                <div class="flex flex-1 flex-col gap-0.5">
+                  <div class="text-[0.875rem] leading-[19px] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Authorized users' : 'Только для авторизованных пользователей'}</div>
+                  <div class="text-[0.8125rem] leading-[140%] font-normal text-white opacity-50 font-exo">${isEn ? 'All authorized users can see your profile information' : 'Все авторизованные пользователи могут просматривать ваш профиль'}</div>
+                </div>
+              </label>
+
+              <label class="flex cursor-pointer items-start gap-3 p-0 px-[1rem] py-2 transition-all duration-200 hover:bg-[#FFFFFF05] lg:px-[1.5rem] up-privacy-row ${selectedPrivacy === 'public' ? 'active' : ''}" data-privacy="public">
+                <div class="relative mt-0.5 h-4 w-4 flex-shrink-0 rounded-full border border-[#FFFFFF1A] bg-[#171820] flex items-center justify-center">
+                  <div class="w-2.5 h-2.5 rounded-full bg-[#fcd506] transition-opacity ${selectedPrivacy === 'public' ? 'opacity-100' : 'opacity-0'}"></div>
+                </div>
+                <div class="flex flex-1 flex-col gap-0.5">
+                  <div class="text-[0.875rem] leading-[19px] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Public' : 'Публичный'}</div>
+                  <div class="text-[0.8125rem] leading-[140%] font-normal text-white opacity-50 font-exo">${isEn ? 'All users will see your profile information' : 'Любой пользователь видит информацию вашего профиля'}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section 5: Streamer Mode -->
+          <div class="mb-[1rem] flex flex-col gap-2 px-[1rem] lg:px-[1.5rem]">
+            <div class="flex items-center justify-between">
+              <div class="flex flex-col gap-0.5 pr-3">
+                <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Streamer mode' : 'Режим стримера'}</h3>
+                <p class="m-0 text-[0.8125rem] leading-[140%] font-normal text-white opacity-50 font-exo">${isEn ? 'Hides personal information and balance for safety during streams' : 'Скрывает ваш никнейм и баланс на трансляциях'}</p>
               </div>
-            </div>
-            <div class="up-privacy-row ${selectedPrivacy === 'public' ? 'active' : ''}" data-privacy="public">
-              <div class="up-radio-circle"></div>
-              <div style="display:flex;flex-direction:column;gap:2px;">
-                <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Public' : 'Публичный'}</span>
-                <span style="font-size:11px;color:#8E8F94;line-height:1.4;">${isEn ? 'All users will see your profile information' : 'Все пользователи будут видеть вашу информацию профиля'}</span>
-              </div>
+              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input type="checkbox" id="streamer-mode-toggle" class="sr-only peer" ${activeUser.streamerMode ? 'checked' : ''} />
+                <div class="w-11 h-6 bg-[#2A2B32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#121316] peer-checked:after:bg-[#121316] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FDD814]"></div>
+              </label>
             </div>
           </div>
-        </div>
 
-        <!-- Streamer Mode -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-          <div style="display:flex;flex-direction:column;gap:2px;padding-right:12px;">
-            <span style="font-size:13px;font-weight:600;color:#fff;">${isEn ? 'Streamer mode' : 'Режим стримера'}</span>
-            <span style="font-size:11px;color:#8E8F94;">${isEn ? 'Hides personal information and balance for safety during streams' : 'Скрывает личную информацию и баланс для безопасности во время стрима'}</span>
+          <!-- Section 6: Sticky Save Button -->
+          <div class="sticky bottom-0 z-10 flex w-full items-center justify-center px-[1rem] pt-3 pb-[1.5rem] lg:px-[1.5rem] lg:pb-[2rem] bg-gradient-to-t from-[#17181C] via-[#17181C] to-transparent">
+            <button type="button" id="edit-profile-save-btn" data-testid="settings-modal-save" class="font-exo mx-auto flex h-10 items-center justify-center gap-2 rounded-[0.375rem] bg-[#FDD811] px-[1.5rem] py-[0.625rem] text-[1rem] leading-normal font-semibold text-[#202022] transition-colors duration-200 hover:bg-[#FFE44D] active:bg-[#FDD911] cursor-pointer border-0 shadow-[0_4px_20px_rgba(253,217,17,0.25)]">${isEn ? 'Save and close' : 'Сохранить и закрыть'}</button>
           </div>
-          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
-            <input type="checkbox" id="streamer-mode-toggle" style="opacity:0;width:0;height:0;" ${activeUser.streamerMode ? 'checked' : ''}>
-            <span class="up-modal-switch-slider"></span>
-          </label>
-        </div>
 
-        <!-- Device Avatar Upload (Compact & strictly NO EMOJI) -->
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#202126;border-radius:10px;margin-bottom:20px;border:1px solid rgba(255,255,255,0.06);gap:10px;">
-          <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-            <img id="edit-avatar-preview" src="${activeUser.avatar}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;" />
-            <div style="display:flex;flex-direction:column;min-width:0;">
-              <span style="font-size:12px;font-weight:600;color:#fff;">${isEn ? 'Profile avatar' : 'Аватар профиля'}</span>
-              <span style="font-size:10.5px;color:#8E8F94;">JPG, PNG, WEBP (5 KB - 5 MB)</span>
-            </div>
-          </div>
-          <input type="file" id="edit-avatar-file-input" accept="image/*" style="display:none;" />
-          <button type="button" id="edit-avatar-upload-btn" style="background:#2B2D33;border:none;color:#fff;border-radius:8px;padding:7px 12px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;">${isEn ? 'Upload avatar from device' : 'Загрузить аватарку с устройства'}</button>
         </div>
-
-        <!-- Save Button -->
-        <button type="button" id="edit-profile-save-btn" style="width:100%;background:#FBD506;color:#121316;font-family:Tektur,sans-serif;font-weight:700;font-size:15px;padding:13px;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 20px rgba(251,213,6,0.3);">${isEn ? 'Save and close' : 'Сохранить и закрыть'}</button>
       </div>
     `;
 
@@ -4135,8 +4103,14 @@
     const privacyOptions = overlay.querySelectorAll('.up-privacy-row');
     privacyOptions.forEach(opt => {
       opt.onclick = () => {
-        privacyOptions.forEach(o => o.classList.remove('active'));
+        privacyOptions.forEach(o => {
+          o.classList.remove('active');
+          const dot = o.querySelector('div > div');
+          if (dot) { dot.classList.remove('opacity-100'); dot.classList.add('opacity-0'); }
+        });
         opt.classList.add('active');
+        const dot = opt.querySelector('div > div');
+        if (dot) { dot.classList.remove('opacity-0'); dot.classList.add('opacity-100'); }
         selectedPrivacy = opt.getAttribute('data-privacy');
       };
     });
@@ -4264,7 +4238,7 @@
     };
   }
 
-  // 10.3 NOTIFICATION SETTINGS MODAL (Authentic design matching media_1791046455136.png)
+  // 10.3 NOTIFICATION SETTINGS MODAL (Authentic upgrader 1:1 design matching main-MO6SLN4L.js)
   function renderNotificationSettingsModal() {
     const existing = document.getElementById('upgrader-notifications-modal');
     if (existing) existing.remove();
@@ -4282,84 +4256,85 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Exo 2,sans-serif;';
 
     overlay.innerHTML = `
-      <style>
-        .up-notif-switch-slider {
-          position: absolute; cursor: pointer; inset: 0; background: #2A2B32; transition: .2s; border-radius: 24px;
-        }
-        .up-notif-switch-slider:before {
-          position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .2s; border-radius: 50%;
-        }
-        input:checked + .up-notif-switch-slider {
-          background: #FBD506;
-        }
-        input:checked + .up-notif-switch-slider:before {
-          transform: translateX(20px);
-          background: #121316;
-        }
-      </style>
-
-      <div style="position:relative;width:100%;max-width:480px;background:#17181C;border-radius:20px;box-shadow:0 25px 60px rgba(0,0,0,0.85);padding:24px 26px;color:#fff;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <h3 style="font-family:Tektur,sans-serif;font-size:18px;font-weight:700;margin:0;color:#fff;">${isEn ? 'Notification management' : 'Управление уведомлениями'}</h3>
-          <button type="button" id="up-notif-close" style="background:none;border:none;color:#8E8F94;font-size:22px;cursor:pointer;line-height:1;padding:0;">✕</button>
-        </div>
-        <p style="font-size:13px;color:#8E8F94;margin:0 0 24px;line-height:1.4;">${isEn ? 'Configure account linking and notifications to receive unique offers' : 'Настройте привязку аккаунтов и уведомлений для получения уникальных предложений'}</p>
-
-        <!-- Row 1: Email -->
-        <div id="notif-email-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;gap:12px;">
-          <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-            <div style="width:34px;height:34px;border-radius:8px;background:#2B2D33;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0;">@</div>
-            <span style="font-size:14px;font-weight:600;color:#fff;">${isEn ? 'Email' : 'Почта'}</span>
-          </div>
-          <div id="notif-email-display-container" style="display:flex;align-items:center;gap:14px;min-width:0;">
-            <span id="notif-email-val" style="font-size:13px;font-weight:600;color:${activeUser.email ? '#fff' : '#8E8F94'};max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${activeUser.email || (isEn ? 'Not linked' : 'Не привязана')}</span>
-            <button type="button" id="notif-email-action-btn" style="background:#2B2D33;border:none;color:#9E9EA4;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">${activeUser.email ? (isEn ? 'Replace' : 'Заменить') : (isEn ? 'Bind' : 'Привязать')}</button>
-          </div>
+      <div class="relative flex w-[calc(100vw-1.5rem)] max-w-none flex-col overflow-hidden rounded-[1.5rem] border border-[#FFFFFF0D] bg-[#17181C] shadow-[0_10px_30px_0_rgba(0,0,0,0.35)] tablet:w-full tablet:min-w-[38.75rem] tablet:max-w-[38.75rem] mx-3 sm:mx-0 text-white">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between bg-[#FFFFFF0D] shadow-[0_2px_20px_0_rgba(0,0,0,0.2)] px-6 py-4">
+          <span class="font-exo text-[1.125rem] leading-normal font-semibold text-white">
+            ${isEn ? 'Manage notifications' : 'Управление уведомлениями'}
+          </span>
+          <button type="button" id="up-notif-close" class="p-[5px] bg-transparent border-0 cursor-pointer text-[#8E8F94] hover:text-white transition-colors">
+            <img alt="close-icon" class="h-[0.75rem] w-[0.75rem]" src="/assets/icons/close-gray.svg">
+          </button>
         </div>
 
-        <!-- Inline Email Input (Hidden initially) -->
-        <div id="notif-email-edit-box" style="display:none;background:#18191E;border-radius:10px;padding:12px 14px;margin-bottom:20px;border:1px solid #FBD506;">
-          <label style="display:block;font-size:11px;font-weight:600;color:#8E8F94;margin-bottom:6px;text-transform:uppercase;">${isEn ? 'Enter email address' : 'Введите адрес электронной почты'}</label>
-          <div style="display:flex;gap:8px;">
-            <input type="email" id="notif-email-input" placeholder="example@mail.com" value="${activeUser.email || ''}" style="flex:1;background:#121316;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;outline:none;" />
-            <button type="button" id="notif-email-save-btn" style="background:#FBD506;color:#121316;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12px;cursor:pointer;">${isEn ? 'Save' : 'Сохранить'}</button>
-            <button type="button" id="notif-email-cancel-btn" style="background:#2B2D33;color:#8E8F94;border:none;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;">✕</button>
-          </div>
-          <div id="notif-email-error" style="color:#ef4444;font-size:11px;margin-top:6px;display:none;"></div>
-        </div>
+        <!-- Body -->
+        <div class="flex flex-col p-6">
+          <p class="font-exo pb-6 leading-[1.4] font-normal text-white opacity-50 text-[1rem] m-0">
+            ${isEn ? 'Set up account linking and notifications to receive unique offers' : 'Настройте привязку аккаунтов и уведомления, чтобы получать уникальные предложения'}
+          </p>
 
-        <!-- Row 2: Push Notifications -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:34px;height:34px;border-radius:8px;background:#2B2D33;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
+          <!-- Row 1: Email -->
+          <div data-testid="notifications-management-email-row" class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">
+            <div class="tablet:flex-row flex min-w-0 flex-1 flex-col items-start gap-1 tablet:items-center tablet:gap-3">
+              <div class="flex shrink-0 items-center justify-center rounded-[0.625rem] bg-[#FFFFFF1A] h-10 w-10">
+                <img src="/assets/icons/email.svg" class="h-[1.458rem] w-[1.458rem]" alt="email">
+              </div>
+              <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+                <span data-testid="notifications-management-email-label" class="font-exo text-[0.875rem] font-medium text-white opacity-50 lg:text-[1rem]">Email</span>
+                <span data-testid="notifications-management-email-value" id="notif-email-val" class="font-exo flex-1 text-[0.75rem] font-medium text-white lg:text-[0.875rem] truncate">${activeUser.email || (isEn ? 'Account not connected' : 'Аккаунт не привязан')}</span>
+              </div>
             </div>
-            <span style="font-size:14px;font-weight:600;color:#fff;">${isEn ? 'Push notifications' : 'Пуш-уведомления'}</span>
+            <button type="button" id="notif-email-action-btn" data-testid="notifications-management-email-link-button" class="flex tablet:h-10 h-8 rounded-[0.5rem] font-semibold transition-colors duration-200 items-center justify-center gap-2.5 px-4 text-[0.875rem] cursor-pointer border-0 font-exo ${activeUser.email ? 'bg-[#FFFFFF1A] text-white/50 hover:bg-[#FFFFFF0D] active:bg-[#FFFFFF03]' : 'bg-[#FDD814] text-[#1C1C20] hover:bg-[#FFE44D] active:bg-[#FDD911]'}">
+              ${activeUser.email ? (isEn ? 'Change' : 'Заменить') : (isEn ? 'Add' : 'Привязать')}
+            </button>
           </div>
-          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
-            <input type="checkbox" id="notif-push-toggle" style="opacity:0;width:0;height:0;" ${activeUser.pushNotifications ? 'checked' : ''}>
-            <span class="up-notif-switch-slider"></span>
-          </label>
-        </div>
 
-        <!-- Row 3: Special Email Newsletter (YELLOW ICON) -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div style="width:34px;height:34px;border-radius:8px;background:#FBD506;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="#121316">
-                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                <circle cx="7" cy="7" r="1.5" fill="#FBD506"></circle>
-              </svg>
+          <!-- Inline Email Input Box (shown on Change / Add click) -->
+          <div id="notif-email-edit-box" style="display:none;background:#202126;border-radius:10px;padding:14px;margin-bottom:16px;border:1px solid #FBD506;">
+            <label style="display:block;font-size:11px;font-weight:600;color:rgba(255,255,255,0.6);margin-bottom:8px;text-transform:uppercase;font-family:Exo 2,sans-serif;">${isEn ? 'Enter email address' : 'Введите адрес электронной почты'}</label>
+            <div style="display:flex;gap:8px;">
+              <input type="email" id="notif-email-input" placeholder="example@mail.com" value="${activeUser.email || ''}" style="flex:1;background:#17181C;border:1px solid rgba(255,255,255,0.15);color:#fff;padding:10px 12px;border-radius:8px;font-size:13px;outline:none;font-family:Exo 2,sans-serif;" />
+              <button type="button" id="notif-email-save-btn" style="background:#FDD814;color:#1C1C20;border:none;border-radius:8px;padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;font-family:Exo 2,sans-serif;">${isEn ? 'Save' : 'Сохранить'}</button>
+              <button type="button" id="notif-email-cancel-btn" style="background:#2B2D33;color:rgba(255,255,255,0.6);border:none;border-radius:8px;padding:10px 12px;font-size:13px;cursor:pointer;font-family:Exo 2,sans-serif;">✕</button>
             </div>
-            <span style="font-size:14px;font-weight:600;color:#fff;">${isEn ? 'Special Email newsletter' : 'Специальная Email рассылка'}</span>
+            <div id="notif-email-error" style="color:#ef4444;font-size:11px;margin-top:6px;display:none;font-family:Exo 2,sans-serif;"></div>
           </div>
-          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer;">
-            <input type="checkbox" id="notif-newsletter-toggle" style="opacity:0;width:0;height:0;" ${activeUser.newsletter !== false ? 'checked' : ''}>
-            <span class="up-notif-switch-slider"></span>
-          </label>
+
+          <!-- Divider -->
+          <div class="h-px w-full bg-[#FFFFFF0D]"></div>
+
+          <!-- Row 2: Push Notifications -->
+          <div class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
+              <div class="flex shrink-0 items-center justify-center rounded-[0.625rem] bg-[#FFFFFF1A] h-10 w-10">
+                <img src="/assets/icons/bell.svg" class="h-[1.458rem] w-[1.458rem]" alt="bell">
+              </div>
+              <span class="font-exo text-[0.875rem] font-medium text-white opacity-50 lg:text-[1rem]">${isEn ? 'Push Notification' : 'Push-уведомления'}</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input type="checkbox" id="notif-push-toggle" class="sr-only peer" ${activeUser.pushNotifications ? 'checked' : ''} />
+              <div class="w-11 h-6 bg-[#2A2B32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#121316] peer-checked:after:bg-[#121316] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FDD814]"></div>
+            </label>
+          </div>
+
+          <!-- Divider -->
+          <div class="h-px w-full bg-[#FFFFFF0D]"></div>
+
+          <!-- Row 3: Special email newsletter (Accent Yellow Tag Box!) -->
+          <div class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
+              <div class="flex shrink-0 items-center justify-center rounded-[0.625rem] bg-[#FDD814] h-10 w-10">
+                <img src="/assets/icons/tag.svg" class="h-[1.458rem] w-[1.458rem]" alt="tag" style="filter: brightness(0);">
+              </div>
+              <span class="font-exo text-[0.875rem] font-medium text-white opacity-50 lg:text-[1rem]">${isEn ? 'Special email newsletter' : 'Специальная email рассылка'}</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input type="checkbox" id="notif-newsletter-toggle" class="sr-only peer" ${activeUser.newsletter !== false ? 'checked' : ''} />
+              <div class="w-11 h-6 bg-[#2A2B32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#121316] peer-checked:after:bg-[#121316] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FDD814]"></div>
+            </label>
+          </div>
+
         </div>
       </div>
     `;
@@ -4406,10 +4381,12 @@
       }
 
       emailVal.textContent = val;
-      emailVal.style.color = '#fff';
-      emailActionBtn.textContent = isEn ? 'Replace' : 'Заменить';
+      emailVal.classList.remove('opacity-50');
+      emailActionBtn.textContent = isEn ? 'Change' : 'Заменить';
+      emailActionBtn.className = 'flex tablet:h-10 h-8 rounded-[0.5rem] font-semibold transition-colors duration-200 items-center justify-center gap-2.5 px-4 text-[0.875rem] cursor-pointer border-0 font-exo bg-[#FFFFFF1A] text-white/50 hover:bg-[#FFFFFF0D] active:bg-[#FFFFFF03]';
       emailEditBox.style.display = 'none';
       showToast(isEn ? 'Email successfully linked!' : 'Email успешно привязан!', 'success');
+      syncEmailLinkingCard();
     };
 
     // Toggles
@@ -5604,6 +5581,7 @@
 
   window.LocalDB = LocalDB;
   window.handleMockApi = handleMockApi;
+  window.isSiteEnglish = isSiteEnglish;
   window.renderProfileEditModal = renderProfileEditModal;
   window.renderNotificationSettingsModal = renderNotificationSettingsModal;
 
