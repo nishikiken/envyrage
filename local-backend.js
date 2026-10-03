@@ -296,8 +296,24 @@
             try { invItems = await invRes.json(); } catch(e) {}
           }
 
-          if (Array.isArray(users) && users.length > 0) {
+          if (Array.isArray(users)) {
             const accounts = LocalDB.getAccounts();
+            const dbUsernames = new Set(users.map(u => (u.username || '').toLowerCase().trim()));
+
+            // 1. Prune accounts deleted from Supabase
+            for (const localUname in accounts) {
+              if (!dbUsernames.has(localUname.toLowerCase().trim())) {
+                console.log('[SupabaseDB] User ' + localUname + ' was deleted from DB. Removing locally.');
+                delete accounts[localUname];
+              }
+            }
+            const activeUser = LocalDB.getActiveUser();
+            if (activeUser && !dbUsernames.has((activeUser.username || '').toLowerCase().trim())) {
+              const firstAvailable = Object.keys(accounts)[0] || null;
+              LocalDB.setActiveUser(firstAvailable);
+            }
+
+            // 2. Sync users from Supabase
             for (const u of users) {
               const uname = (u.username || '').toLowerCase().trim();
               if (!uname) continue;
@@ -326,14 +342,20 @@
               })) : [];
 
               if (accounts[uname]) {
+                accounts[uname].id = u.id;
                 accounts[uname].balance = Number(u.balance !== undefined ? u.balance : accounts[uname].balance);
                 if (u.nickname) accounts[uname].nickname = u.nickname;
-                if (u.avatar) accounts[uname].avatar = u.avatar;
+                if (u.avatar) {
+                  accounts[uname].avatar = u.avatar;
+                  accounts[uname].image = u.avatar;
+                }
+                if (u.image) accounts[uname].image = u.image;
                 if (u.email) accounts[uname].email = u.email;
                 if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
                 if (pw) accounts[uname].password = pw;
                 if (realTradeLink) accounts[uname].steamTradeLink = realTradeLink;
-                if (userInv.length > 0) accounts[uname].inventory = userInv;
+                // Unconditional sync: if user deleted skins from Supabase, userInv is [] and accounts[uname].inventory becomes []
+                accounts[uname].inventory = userInv;
               } else {
                 // New user registered from another browser or device!
                 accounts[uname] = {
@@ -342,12 +364,9 @@
                   password: pw || '123456',
                   nickname: u.nickname || uname,
                   avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+                  image: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
                   balance: Number(u.balance || 0),
-                  inventory: userInv.length > 0 ? userInv : (uname === 'test_user' ? window.UPGRADER_CONFIG.starterSkins.slice(0, 4).map((s, idx) => ({
-                    ...s,
-                    id: 'inv_reg_' + (idx + 1) + '_' + Math.floor(Math.random() * 1000),
-                    originalSkinId: s.id
-                  })) : []),
+                  inventory: userInv,
                   upgradesMade: 0,
                   withdrawnAmount: 0.0,
                   withdrawnItemsCount: 0,
@@ -366,7 +385,7 @@
                 };
               }
             }
-            LocalDB.saveAccounts(accounts);
+            LocalDB.saveAccountsLocally(accounts);
             console.log('[SupabaseDB] Synced ' + users.length + ' users from cloud DB to LocalDB.');
           }
         }
@@ -547,18 +566,24 @@
           payload.avatar = fields.avatar;
           payload.image = fields.avatar;
         }
+        if (fields.image !== undefined) payload.image = fields.image;
         if (fields.email !== undefined) payload.email = fields.email;
         if (fields.isEmailVerified !== undefined) payload.is_email_verified = !!fields.isEmailVerified;
         if (fields.steamTradeLink !== undefined) payload.steam_trade_link = fields.steamTradeLink;
         payload.updated_at = new Date().toISOString();
 
-        await fetch(`${url}/rest/v1/users?id=eq.${encodeURIComponent(userId)}`, {
+        const targetQuery = `or=(id.eq.${encodeURIComponent(userId)},username.eq.${encodeURIComponent(userId)})`;
+        const res = await fetch(`${url}/rest/v1/users?${targetQuery}`, {
           method: 'PATCH',
-          headers: this.getHeaders(),
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'return=representation'
+          },
           body: JSON.stringify(payload)
         });
-        return true;
+        return res.ok;
       } catch(err) {
+        console.error('[SupabaseDB] updateUser error:', err);
         return false;
       }
     },
@@ -1356,46 +1381,31 @@
         if (raw) {
           const accs = JSON.parse(raw);
           if (accs && typeof accs === 'object') {
-            let updated = false;
-            // Auto-heal/migrate test_user if empty or missing inventory
-            if (!accs.test_user || !accs.test_user.inventory || accs.test_user.inventory.length === 0 || accs.test_user.balance < 50000 || !accs.test_user.image) {
-              accs.test_user = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS.test_user));
-              updated = true;
-            }
-            if (!accs['666']) {
-              accs['666'] = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS['666']));
-              updated = true;
-            }
-            if (updated) {
-              this.saveAccounts(accs);
-            }
             return accs;
           }
         }
       } catch (e) {}
 
       const initialAccounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
-      this.saveAccounts(initialAccounts);
+      this.saveAccountsLocally(initialAccounts);
       return initialAccounts;
     }
 
     static restoreDefaultAccounts() {
       const accounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
-      this.saveAccounts(accounts);
+      this.saveAccountsLocally(accounts);
       this.setActiveUser('test_user');
       return accounts;
     }
 
-    static saveAccounts(accounts) {
+    static saveAccountsLocally(accounts) {
       try {
         localStorage.setItem(STORAGE_ACCOUNTS_KEY, JSON.stringify(accounts));
-        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-          clearTimeout(LocalDB._dbTimer);
-          LocalDB._dbTimer = setTimeout(() => {
-            SupabaseDB.syncAllToDB();
-          }, 1000);
-        }
       } catch (e) {}
+    }
+
+    static saveAccounts(accounts) {
+      this.saveAccountsLocally(accounts);
     }
 
     static saveUser(user) {
@@ -1917,7 +1927,10 @@
       if (!acc) return;
 
       if (nickname && nickname.trim()) acc.nickname = nickname.trim();
-      if (avatar && avatar.trim()) acc.avatar = avatar.trim();
+      if (avatar && avatar.trim()) {
+        acc.avatar = avatar.trim();
+        acc.image = avatar.trim();
+      }
       if (id !== undefined && id !== null && String(id).trim()) {
         const numId = parseInt(id, 10);
         if (!isNaN(numId) && numId > 0) {
@@ -1925,7 +1938,7 @@
         }
       }
 
-      this.saveAccounts(accounts);
+      this.saveAccountsLocally(accounts);
       this.setActiveUser(username);
       window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
       return acc;
@@ -2251,6 +2264,32 @@
           {
             id: 'crypto',
             name: 'Crypto',
+            children: [
+              {
+                id: 'usdt',
+                name: 'USDT',
+                methods: [
+                  {
+                    id: 'usdt',
+                    name: 'USDT TRC-20',
+                    image: `${origin}/assets/icons/payment-modal-new/crypto.svg`,
+                    minAmount: '10',
+                    maxAmount: '10000',
+                    currency: 'USDT',
+                    userFeeEnabled: false
+                  },
+                  {
+                    id: 'btc',
+                    name: 'Bitcoin',
+                    image: `${origin}/assets/icons/payment-modal-new/crypto.svg`,
+                    minAmount: '20',
+                    maxAmount: '10000',
+                    currency: 'BTC',
+                    userFeeEnabled: false
+                  }
+                ]
+              }
+            ],
             methods: [
               {
                 id: 'usdt',
@@ -2275,6 +2314,7 @@
           {
             id: 'skins',
             name: 'Skins',
+            children: [],
             methods: [
               {
                 id: '100',
@@ -2292,32 +2332,86 @@
       };
     }
 
-    if (path.includes('/create-invoice')) {
-      const num = parseFloat(body.amount) || 500;
-      let user = LocalDB.getActiveUser();
-      if (user) {
-        user.balance = Math.round((Number(user.balance || 0) + num) * 100) / 100;
-        LocalDB.saveUser(user);
-        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-          SupabaseDB.updateUser(user.username, { balance: user.balance }).catch(e => console.warn(e));
-        }
-        WsMock.broadcastBalance(user.balance);
-        if (window.MockSocketInstance && typeof window.MockSocketInstance.send === 'function') {
-          window.MockSocketInstance.send(JSON.stringify({
-            type: 'users.update_balance',
-            data: { balance: user.balance }
-          }));
-        }
-        showToast('Баланс успешно пополнен на ' + num.toLocaleString() + ' ₽', 'success');
-      }
+    if (path.includes('/skins/inventory')) {
       return {
         status: 200,
         data: {
-          id: 'pay_' + Date.now(),
-          status: 'completed',
-          amount: num
+          items: [
+            {
+              id: 'steam_skin_1',
+              marketName: 'AK-47 | Ice Coaled (Field-Tested)',
+              price: 1250,
+              image: 'https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FABz7PLfYQJS5NO0m5O0m_7zO6-fzj9V7cAl2eyVpIrz2FKx_0NpZmGlLNeScVU2M1rU-Ae5wOq-18e0uMzXiSw0e026q08'
+            },
+            {
+              id: 'steam_skin_2',
+              marketName: 'AWP | Atheris (Field-Tested)',
+              price: 890,
+              image: 'https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FABz7PLfYQJG6d2inL-GkvP9Jrafw2lU6ccp0rqVp4rz2Q22qUs6Zjj7d9eTdwU8Y1vX_VG6kO-8gMW66ZzJmiFhu3Qi43-MnAv33089sY8R9A'
+            },
+            {
+              id: 'steam_skin_3',
+              marketName: 'M4A4 | The Emperor (Field-Tested)',
+              price: 2450,
+              image: 'https://community.cloudflare.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhjxszFJTwW09izh4-GkvP9Jrafw2lU6ccp0rqVp4rz2Q22qUs6Zjj7d9eTdwU8Y1vX_VG6kO-8gMW66ZzJmiFhu3Qi43-MnAv33089sY8R9A'
+            }
+          ],
+          hasMore: false
         }
       };
+    }
+
+    if (path.includes('/create-invoice')) {
+      const num = parseFloat(body.amount) || 500;
+      const desktopPromo = document.querySelector('[data-testid="payment-modal-promocode-input-desktop"]')?.value;
+      const mobilePromo = document.querySelector('[data-testid="payment-modal-promocode-input-mobile"]')?.value;
+      const rawPromoInput = document.querySelector('#promocode-input')?.value;
+      const anyPromoInput = document.querySelector('input[placeholder*="промокод" i], input[placeholder*="promo" i]')?.value;
+      const passedPromo = body.promocode || (body.metadata && body.metadata.promocode) || window._currentPromoCode || desktopPromo || mobilePromo || rawPromoInput || anyPromoInput || '';
+      const cleanPromo = String(passedPromo).trim().toLowerCase();
+      const isEnvyPromo = cleanPromo === 'envy!' || cleanPromo === 'envy' || cleanPromo.replace(/['"!]/g, '') === 'envy';
+
+      if (isEnvyPromo) {
+        let user = LocalDB.getActiveUser();
+        if (user) {
+          user.balance = Math.round((Number(user.balance || 0) + num) * 100) / 100;
+          LocalDB.saveUser(user);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.updateUser(user.id || user.username, { balance: user.balance }).catch(e => console.warn(e));
+          }
+          WsMock.broadcastBalance(user.balance);
+          if (window.MockSocketInstance && typeof window.MockSocketInstance.send === 'function') {
+            window.MockSocketInstance.send(JSON.stringify({
+              type: 'users.update_balance',
+              data: { balance: user.balance }
+            }));
+          }
+          closeNativePaymentModal();
+          showToast('Промокод envy! активирован! Баланс пополнен на ' + num.toLocaleString('ru-RU') + ' ₽', 'success');
+        }
+        return {
+          status: 200,
+          data: {
+            id: 'pay_' + Date.now(),
+            status: 'completed',
+            amount: num
+          }
+        };
+      } else {
+        // Not envy! -> Simulate card payment gateway
+        closeNativePaymentModal();
+        setTimeout(() => {
+          renderCardPaymentGatewayModal(num);
+        }, 80);
+        return {
+          status: 200,
+          data: {
+            id: 'pay_' + Date.now(),
+            status: 'processing',
+            redirectUrl: null
+          }
+        };
+      }
     }
 
     if (path.includes('/promo/deposit')) {
@@ -2328,6 +2422,9 @@
     }
 
     if (path.includes('/promo/activate')) {
+      if (body && (body.code || body.promocode)) {
+        window._currentPromoCode = String(body.code || body.promocode).trim();
+      }
       return {
         status: 200,
         data: {
@@ -3405,10 +3502,14 @@
           <input type="number" id="edit-id-input" value="${activeUser.id}" style="width:100%;background:#202126;border:1px solid rgba(255,255,255,0.12);color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;outline:none;" />
         </div>
 
-        <!-- Custom Avatar URL -->
+        <!-- Custom Avatar URL & Device Upload -->
         <div style="margin-bottom:22px;">
-          <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px;">URL аватарки</label>
-          <input type="text" id="edit-avatar-url-input" value="${activeUser.avatar}" style="width:100%;background:#202126;border:1px solid rgba(255,255,255,0.12);color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;outline:none;" />
+          <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px;">Аватарка профиля</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" id="edit-avatar-url-input" value="${activeUser.avatar}" placeholder="URL картинки или файл" style="flex:1;background:#202126;border:1px solid rgba(255,255,255,0.12);color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;outline:none;" />
+            <input type="file" id="edit-avatar-file-input" accept="image/*" style="display:none;" />
+            <button type="button" id="edit-avatar-upload-btn" style="background:#2A2B32;border:1px solid rgba(255,255,255,0.15);color:#FDD911;border-radius:10px;padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">📁 С устройства</button>
+          </div>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -3425,9 +3526,29 @@
     const nickInput = overlay.querySelector('#edit-nickname-input');
     const idInput = overlay.querySelector('#edit-id-input');
     const avatarInput = overlay.querySelector('#edit-avatar-url-input');
+    const fileInput = overlay.querySelector('#edit-avatar-file-input');
+    const uploadBtn = overlay.querySelector('#edit-avatar-upload-btn');
     const previewImg = overlay.querySelector('#edit-avatar-preview');
     const previewNick = overlay.querySelector('#edit-nick-preview');
     const previewId = overlay.querySelector('#edit-id-preview');
+
+    uploadBtn.onclick = () => fileInput.click();
+    fileInput.onchange = () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (file) {
+        if (file.size > 2 * 1024 * 1024) {
+          showToast('Размер файла не должен превышать 2 МБ', 'error');
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target.result;
+          avatarInput.value = dataUrl;
+          previewImg.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+      }
+    };
 
     avatarInput.oninput = () => {
       if (avatarInput.value.trim()) previewImg.src = avatarInput.value.trim();
@@ -3440,7 +3561,10 @@
     };
 
     const saveBtn = overlay.querySelector('#edit-profile-save-btn');
-    saveBtn.onclick = () => {
+    saveBtn.onclick = async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Сохранение в базе данных...';
+
       const newNick = nickInput.value.trim() || activeUser.nickname;
       const newId = idInput.value.trim() || activeUser.id;
       const newAvatar = avatarInput.value.trim() || activeUser.avatar;
@@ -3451,13 +3575,26 @@
         id: newId
       });
 
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        try {
+          await SupabaseDB.updateUser(activeUser.id || activeUser.username, {
+            nickname: newNick,
+            avatar: newAvatar,
+            image: newAvatar,
+            id: newId
+          });
+        } catch(err) {
+          console.warn('[SupabaseDB] updateUser error:', err);
+        }
+      }
+
       overlay.remove();
-      showToast('Профиль успешно обновлен!', 'success');
+      showToast('Профиль успешно обновлен в базе данных!', 'success');
 
       // Update in DOM and reload state
       setTimeout(() => {
         window.location.reload();
-      }, 250);
+      }, 200);
     };
   }
 
@@ -3470,23 +3607,12 @@
     overlay.id = 'upgrader-auth-modal';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Exo 2,sans-serif;';
 
-    const testAcc = window.UPGRADER_CONFIG.testAccount;
-
     overlay.innerHTML = `
       <div style="position:relative;width:100%;max-width:440px;background:#17181C;border:1px solid rgba(255,255,255,0.08);border-radius:24px;box-shadow:0 20px 50px rgba(0,0,0,0.6);padding:32px;color:#fff;">
         <button type="button" id="up-auth-close" style="position:absolute;top:20px;right:20px;background:none;border:none;color:#888;font-size:24px;cursor:pointer;line-height:1;">✕</button>
 
         <h2 style="font-family:Tektur,sans-serif;font-size:22px;margin:0 0 8px;color:#fff;" id="up-auth-title">Вход в аккаунт</h2>
-        <p style="font-size:13px;color:#8E8F94;margin:0 0 20px;" id="up-auth-desc">Локальная авторизация без сторонних сервисов</p>
-
-        <!-- Quick Test Account Login Box -->
-        <div style="background:rgba(253,217,17,0.08);border:1px dashed #FDD911;border-radius:12px;padding:12px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <div style="font-weight:700;font-size:12px;color:#FDD911;text-transform:uppercase;">Тестовый аккаунт</div>
-            <div style="font-size:12px;color:#ccc;">Логин: <b>${testAcc.username}</b> | Баланс: <b>50,000 ₽</b></div>
-          </div>
-          <button type="button" id="up-quick-test-login" style="background:#FDD911;color:#17181C;border:none;border-radius:8px;padding:6px 12px;font-weight:700;font-size:12px;cursor:pointer;">Войти</button>
-        </div>
+        <p style="font-size:13px;color:#8E8F94;margin:0 0 20px;" id="up-auth-desc">Авторизация в апгрейдере</p>
 
         <form id="up-auth-form" style="display:flex;flex-col;gap:14px;flex-direction:column;">
           <div id="up-nickname-group" style="display:none;flex-direction:column;gap:6px;">
@@ -3595,11 +3721,6 @@
         submitBtn.textContent = 'Создать аккаунт';
       }
     }
-
-    overlay.querySelector('#up-quick-test-login').onclick = (e) => {
-      e.stopPropagation();
-      doLogin(testAcc.username, testAcc.password);
-    };
 
     submitBtn.onclick = (e) => {
       e.stopPropagation();
@@ -3755,6 +3876,237 @@
       return true;
     }
     return false;
+  }
+
+  function closeNativePaymentModal() {
+    try {
+      const modalEls = document.querySelectorAll('up-payment-modal-new');
+      for (const el of modalEls) {
+        if (typeof ng !== 'undefined' && ng.getComponent) {
+          const comp = ng.getComponent(el);
+          if (comp && typeof comp.onClose === 'function') {
+            comp.onClose();
+          } else if (comp && typeof comp.hide === 'function') {
+            comp.hide();
+          }
+        }
+      }
+    } catch(e) {}
+
+    const closeBtns = document.querySelectorAll('up-payment-modal-new [data-testid*="close"], up-payment-modal-new button[aria-label="Close"], up-payment-modal-new up-modal-cdk button, [data-testid="modal-close-button"]');
+    for (const btn of closeBtns) {
+      try { btn.click(); } catch(e) {}
+    }
+  }
+
+  function renderCardPaymentGatewayModal(amount = 500) {
+    const existing = document.getElementById('upgrader-card-gateway-modal');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'upgrader-card-gateway-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);z-index:9999999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-sizing:border-box;';
+
+    const orderNum = 'SPAY-' + Math.floor(100000 + Math.random() * 900000);
+
+    overlay.innerHTML = `
+      <div style="position:relative;width:100%;max-width:440px;background:#16171B;border:1px solid rgba(255,255,255,0.12);border-radius:24px;box-shadow:0 25px 60px rgba(0,0,0,0.8);padding:24px;color:#fff;overflow:hidden;">
+        <button type="button" id="cg-close-btn" style="position:absolute;top:18px;right:18px;background:none;border:none;color:#8E8F94;font-size:22px;cursor:pointer;line-height:1;transition:color 0.2s;">✕</button>
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+          <div style="width:36px;height:36px;border-radius:10px;background:#24D17A20;border:1px solid #24D17A40;display:flex;align-items:center;justify-content:center;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#24D17A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <line x1="2" y1="10" x2="22" y2="10"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-weight:700;font-size:16px;color:#fff;display:flex;align-items:center;gap:6px;">
+              S Pay • Банковская карта
+              <span style="font-size:10px;background:#24D17A25;color:#24D17A;padding:2px 6px;border-radius:6px;font-weight:700;">SSL 256-BIT</span>
+            </div>
+            <div style="font-size:12px;color:#8E8F94;">Заказ #${orderNum}</div>
+          </div>
+        </div>
+
+        <div id="cg-content-container">
+          <!-- Order Summary Card -->
+          <div style="background:#1F2026;border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;margin-bottom:18px;display:flex;justify-content:between;align-items:center;justify-content:space-between;">
+            <span style="color:#8E8F94;font-size:13px;">К оплате:</span>
+            <span style="font-size:22px;font-weight:800;color:#FDD911;font-family:Tektur,sans-serif;">${Number(amount).toLocaleString('ru-RU')} ₽</span>
+          </div>
+
+          <!-- Realistic Card Visualizer -->
+          <div style="background:linear-gradient(135deg, #262832 0%, #15161A 100%);border:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:16px;margin-bottom:18px;box-shadow:0 10px 25px rgba(0,0,0,0.5);position:relative;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+              <!-- Gold Chip -->
+              <div style="width:38px;height:28px;background:linear-gradient(135deg, #e6c875 0%, #b8973d 100%);border-radius:6px;border:1px solid rgba(255,255,255,0.2);position:relative;overflow:hidden;">
+                <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:#967623;"></div>
+                <div style="position:absolute;top:0;bottom:0;left:50%;width:1px;background:#967623;"></div>
+              </div>
+              <span id="cg-card-brand" style="font-weight:800;font-size:14px;color:#fff;letter-spacing:1px;text-transform:uppercase;">МИР</span>
+            </div>
+
+            <div id="cg-preview-number" style="font-family:'Courier New',Courier,monospace;font-size:17px;font-weight:700;letter-spacing:2px;color:#fff;margin-bottom:16px;">•••• •••• •••• ••••</div>
+
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+              <div>
+                <div style="font-size:9px;color:#8E8F94;text-transform:uppercase;letter-spacing:0.5px;">Держатель карты</div>
+                <div id="cg-preview-holder" style="font-size:12px;font-weight:600;color:#ddd;letter-spacing:1px;text-transform:uppercase;">CARDHOLDER</div>
+              </div>
+              <div>
+                <div style="font-size:9px;color:#8E8F94;text-transform:uppercase;letter-spacing:0.5px;">Срок действия</div>
+                <div id="cg-preview-expiry" style="font-size:12px;font-weight:600;color:#ddd;letter-spacing:1px;">MM/YY</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Form Inputs -->
+          <form id="cg-form" style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label style="display:block;font-size:12px;color:#8E8F94;margin-bottom:4px;">Номер карты</label>
+              <input type="text" id="cg-input-number" placeholder="2200 0000 0000 0000" maxlength="19" autocomplete="cc-number" style="width:100%;box-sizing:border-box;background:#1F2026;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;font-family:'Courier New',Courier,monospace;letter-spacing:1px;outline:none;" required />
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="display:block;font-size:12px;color:#8E8F94;margin-bottom:4px;">Срок действия</label>
+                <input type="text" id="cg-input-expiry" placeholder="ММ / ГГ" maxlength="5" autocomplete="cc-exp" style="width:100%;box-sizing:border-box;background:#1F2026;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none;text-align:center;" required />
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;color:#8E8F94;margin-bottom:4px;">CVC / CVV</label>
+                <input type="password" id="cg-input-cvc" placeholder="•••" maxlength="3" autocomplete="cc-csc" style="width:100%;box-sizing:border-box;background:#1F2026;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;outline:none;text-align:center;" required />
+              </div>
+            </div>
+
+            <div>
+              <label style="display:block;font-size:12px;color:#8E8F94;margin-bottom:4px;">Имя на карте (латиницей)</label>
+              <input type="text" id="cg-input-holder" placeholder="IVAN IVANOV" autocomplete="cc-name" style="width:100%;box-sizing:border-box;background:#1F2026;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;text-transform:uppercase;outline:none;" required />
+            </div>
+
+            <!-- Hint about promo envy! -->
+            <div style="background:rgba(253,217,17,0.08);border:1px dashed rgba(253,217,17,0.3);border-radius:10px;padding:10px 12px;font-size:11px;color:#ccc;line-height:1.4;">
+              <b style="color:#FDD911;">⚡ Мгновенное зачисление:</b><br/>
+              Чтобы пополнить баланс без ввода данных банковской карты, укажите промокод <b style="color:#FDD911;">envy!</b> в окне пополнения.
+            </div>
+
+            <button type="button" id="cg-submit-btn" style="width:100%;background:#FDD911;color:#16171B;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;transition:opacity 0.2s;font-family:Tektur,sans-serif;">Оплатить ${Number(amount).toLocaleString('ru-RU')} ₽</button>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#cg-close-btn').onclick = () => overlay.remove();
+
+    // Elements
+    const numInput = overlay.querySelector('#cg-input-number');
+    const expInput = overlay.querySelector('#cg-input-expiry');
+    const cvcInput = overlay.querySelector('#cg-input-cvc');
+    const holderInput = overlay.querySelector('#cg-input-holder');
+
+    const prevNumber = overlay.querySelector('#cg-preview-number');
+    const prevHolder = overlay.querySelector('#cg-preview-holder');
+    const prevExpiry = overlay.querySelector('#cg-preview-expiry');
+    const prevBrand = overlay.querySelector('#cg-card-brand');
+
+    const submitBtn = overlay.querySelector('#cg-submit-btn');
+
+    // Number formatting
+    numInput.oninput = () => {
+      let val = numInput.value.replace(/\D/g, '').substring(0, 16);
+      let formatted = val.match(/.{1,4}/g)?.join(' ') || val;
+      numInput.value = formatted;
+
+      prevNumber.textContent = formatted || '•••• •••• •••• ••••';
+
+      if (val.startsWith('2')) prevBrand.textContent = 'МИР';
+      else if (val.startsWith('4')) prevBrand.textContent = 'VISA';
+      else if (val.startsWith('5')) prevBrand.textContent = 'MASTERCARD';
+      else prevBrand.textContent = 'МИР';
+    };
+
+    // Expiry formatting
+    expInput.oninput = () => {
+      let val = expInput.value.replace(/\D/g, '').substring(0, 4);
+      if (val.length >= 2) {
+        val = val.substring(0, 2) + '/' + val.substring(2);
+      }
+      expInput.value = val;
+      prevExpiry.textContent = val || 'MM/YY';
+    };
+
+    holderInput.oninput = () => {
+      prevHolder.textContent = holderInput.value.trim().toUpperCase() || 'CARDHOLDER';
+    };
+
+    // Submit -> 3DS Simulation
+    submitBtn.onclick = () => {
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = '0.7';
+      submitBtn.textContent = 'Авторизация в банке...';
+
+      setTimeout(() => {
+        // Switch to 3DS confirmation screen
+        const container = overlay.querySelector('#cg-content-container');
+        if (!container) return;
+
+        let secondsLeft = 59;
+        container.innerHTML = `
+          <div style="background:#1F2026;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;text-align:center;">
+            <div style="width:48px;height:48px;margin:0 auto 12px;background:#FDD91115;border:1px solid #FDD91140;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FDD911" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+
+            <h4 style="font-family:Tektur,sans-serif;font-size:17px;font-weight:700;margin:0 0 6px;color:#fff;">Подтверждение 3D-Secure</h4>
+            <p style="font-size:12px;color:#8E8F94;margin:0 0 16px;">ПАО СБЕРБАНК / Т-БАНК • Сумма: <b style="color:#FDD911;">${Number(amount).toLocaleString('ru-RU')} ₽</b></p>
+            <p style="font-size:12px;color:#ccc;margin:0 0 14px;">Введите 6-значный SMS-код, отправленный на номер +7 (9••) •••-••-92</p>
+
+            <input type="text" id="cg-sms-code" placeholder="• • • • • •" maxlength="6" style="width:100%;box-sizing:border-box;background:#151619;border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:12px;color:#fff;font-size:20px;text-align:center;letter-spacing:6px;font-weight:700;outline:none;margin-bottom:10px;" />
+
+            <div style="font-size:11px;color:#8E8F94;margin-bottom:16px;">
+              Повторная отправка через: <span id="cg-timer-val" style="color:#FDD911;">00:${secondsLeft}</span>
+            </div>
+
+            <div style="background:rgba(253,217,17,0.08);border:1px dashed rgba(253,217,17,0.3);border-radius:10px;padding:12px;font-size:11px;color:#ccc;text-align:left;line-height:1.4;margin-bottom:16px;">
+              <b style="color:#FDD911;">💡 Информация:</b><br/>
+              Это демонстрационный шлюз оплаты. Реальное списание денег отключено.<br/>
+              Для моментального автоматического зачисления баланса введите промокод <b style="color:#FDD911;">envy!</b> в окне пополнения.
+            </div>
+
+            <div style="display:flex;gap:10px;">
+              <button type="button" id="cg-sms-confirm-btn" style="flex:1;background:#FDD911;color:#16171B;border:none;border-radius:10px;padding:12px;font-weight:700;font-size:14px;cursor:pointer;font-family:Tektur,sans-serif;">Подтвердить</button>
+              <button type="button" id="cg-sms-cancel-btn" style="background:#2A2B32;color:#fff;border:none;border-radius:10px;padding:12px 16px;font-size:13px;cursor:pointer;">Отмена</button>
+            </div>
+          </div>
+        `;
+
+        const timerEl = container.querySelector('#cg-timer-val');
+        const interval = setInterval(() => {
+          secondsLeft--;
+          if (timerEl) {
+            timerEl.textContent = '00:' + (secondsLeft < 10 ? '0' : '') + secondsLeft;
+          }
+          if (secondsLeft <= 0) clearInterval(interval);
+        }, 1000);
+
+        container.querySelector('#cg-sms-cancel-btn').onclick = () => {
+          clearInterval(interval);
+          overlay.remove();
+        };
+
+        container.querySelector('#cg-sms-confirm-btn').onclick = () => {
+          clearInterval(interval);
+          showToast('Тестовый шлюз: реальные списания отключены. Для моментального зачисления укажите промокод envy!', 'warning');
+          overlay.remove();
+        };
+      }, 1200);
+    };
   }
 
   function renderDepositModal() {
@@ -4416,6 +4768,9 @@
     GlobalStats,
     renderAuthModal,
     renderDepositModal,
+    openNativePaymentModal,
+    closeNativePaymentModal,
+    renderCardPaymentGatewayModal,
     renderEmailBindModal,
     renderProfileEditModal,
     renderCompensationCaseModal,
