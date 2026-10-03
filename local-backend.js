@@ -121,6 +121,7 @@
 
       let screen = '';
       if (url.includes('profile')) screen = 'profile';
+      else if (url.includes('vip')) screen = 'vip';
       else if (url.includes('settings')) screen = 'settings';
       else if (url.includes('admin')) screen = 'admin';
       else if (url.includes('tos')) screen = 'tos';
@@ -159,9 +160,19 @@
         if (href.startsWith('mailto:') || href.startsWith('tel:') || (href.startsWith('http') && !href.includes(window.location.host))) {
           return;
         }
+        if (a.closest('up-vip-club') || a.getAttribute('data-testid') === 'vip-club-link' || a.getAttribute('data-testid') === 'vip-club-link-mobile' || href.includes('vip')) {
+          let lang = 'ru';
+          if (href.includes('/en') || href.includes('-en') || (window.location.hash && window.location.hash.endsWith('-en'))) {
+            lang = 'en';
+          }
+          e.preventDefault();
+          window.location.hash = lang === 'en' ? 'vip-en' : 'vip';
+          return;
+        }
         if (href.startsWith('/') || href.startsWith('./') || href.startsWith('../') || href.startsWith('#')) {
           let screen = '';
           if (href.includes('profile')) screen = 'profile';
+          else if (href.includes('vip')) screen = 'vip';
           else if (href.includes('settings')) screen = 'settings';
           else if (href.includes('admin')) screen = 'admin';
           else if (href.includes('tos')) screen = 'tos';
@@ -202,6 +213,7 @@
 
         let screen = '';
         if (s.includes('profile')) screen = 'profile';
+        else if (s.includes('vip')) screen = 'vip';
         else if (s.includes('settings')) screen = 'settings';
         else if (s.includes('admin')) screen = 'admin';
         else if (s.includes('tos')) screen = 'tos';
@@ -905,9 +917,16 @@
   GlobalStats.displayedCount = GlobalStats.getUpgradesCount();
   GlobalStats.targetCount = GlobalStats.displayedCount;
 
-  // Online Counter (Synced from upgrader.best WS / API)
-  let currentOnline = 6720;
+  // Online Counter (Organic realistic fluctuations around 5480)
+  let currentOnline = 5480;
   try {
+    const saved = localStorage.getItem('online');
+    if (saved) {
+      const p = JSON.parse(saved);
+      if (typeof p.onlineCount === 'number' && p.onlineCount >= 4500 && p.onlineCount <= 6500) {
+        currentOnline = p.onlineCount;
+      }
+    }
     localStorage.setItem('online', JSON.stringify({ onlineCount: currentOnline }));
     localStorage.setItem('cookie-consent', 'accepted');
   } catch(e) {}
@@ -939,6 +958,19 @@
     } catch(e) {}
   }
   setInterval(updateOnlineBadgeInDOM, 2000);
+
+  // Organic random online fluctuation (simulating realistic player activity)
+  setInterval(() => {
+    const delta = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5][Math.floor(Math.random() * 9)];
+    currentOnline = Math.max(5150, Math.min(5880, currentOnline + delta));
+    updateOnlineBadgeInDOM();
+    try {
+      WsMock.broadcast({
+        event: 'online',
+        data: currentOnline
+      });
+    } catch(e) {}
+  }, 2200);
 
   // Smooth continuous incrementer (1, 2, or 3 upgrades per tick, strictly <= 200 upgrades/sec)
   setInterval(() => {
@@ -3781,6 +3813,53 @@
         width: 0 !important;
         height: 0 !important;
       }
+
+      /* Authentic iOS-style Toggle Switch for Modals */
+      .up-modal-switch {
+        position: relative !important;
+        display: inline-block !important;
+        width: 44px !important;
+        height: 24px !important;
+        flex-shrink: 0 !important;
+        cursor: pointer !important;
+        user-select: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .up-modal-switch input {
+        opacity: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        position: absolute !important;
+        margin: 0 !important;
+        pointer-events: none !important;
+      }
+      .up-modal-switch-slider {
+        position: absolute !important;
+        inset: 0 !important;
+        background-color: #2F3138 !important;
+        border-radius: 24px !important;
+        transition: background-color 0.2s ease !important;
+        cursor: pointer !important;
+      }
+      .up-modal-switch-slider:before {
+        position: absolute !important;
+        content: "" !important;
+        height: 18px !important;
+        width: 18px !important;
+        left: 3px !important;
+        bottom: 3px !important;
+        background-color: #9CA3AF !important;
+        border-radius: 50% !important;
+        transition: transform 0.2s ease, background-color 0.2s ease !important;
+      }
+      .up-modal-switch input:checked + .up-modal-switch-slider {
+        background-color: #FDD814 !important;
+      }
+      .up-modal-switch input:checked + .up-modal-switch-slider:before {
+        transform: translateX(20px) !important;
+        background-color: #121316 !important;
+      }
     `;
     document.head.appendChild(style);
   })();
@@ -4000,8 +4079,10 @@
             <span class="font-exo flex items-center gap-1.5 text-[1.125rem] leading-normal text-white lg:text-[1.25rem] font-bold">
               ${isEn ? 'Settings' : 'Настройки'}
             </span>
-            <button type="button" id="up-profile-edit-close" data-testid="settings-modal-close" class="p-[5px] bg-transparent border-0 cursor-pointer text-[#8E8F94] hover:text-white transition-colors">
-              <img alt="close-icon" class="h-[0.75rem] w-[0.75rem]" src="/assets/icons/close-gray.svg">
+            <button type="button" id="up-profile-edit-close" data-testid="settings-modal-close" style="background:transparent;border:0;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;color:#8E8F94;transition:color 0.2s;" onmouseenter="this.style.color='#fff'" onmouseleave="this.style.color='#8E8F94'">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;width:14px;height:14px;">
+                <path d="M13 1L1 13M1 1l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
             </button>
           </div>
 
@@ -4075,12 +4156,18 @@
           <div class="mb-[1rem] flex flex-col gap-2 px-[1rem] lg:px-[1.5rem]">
             <div class="flex items-center justify-between">
               <div class="flex flex-col gap-0.5 pr-3">
-                <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Streamer mode' : 'Режим стримера'}</h3>
+                <div class="flex items-center gap-2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FDD814" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                  <h3 class="m-0 text-[1rem] font-medium text-[#FFFFFFCC] font-exo">${isEn ? 'Streamer mode' : 'Режим стримера'}</h3>
+                </div>
                 <p class="m-0 text-[0.8125rem] leading-[140%] font-normal text-white opacity-50 font-exo">${isEn ? 'Hides personal information and balance for safety during streams' : 'Скрывает ваш никнейм и баланс на трансляциях'}</p>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                <input type="checkbox" id="streamer-mode-toggle" class="sr-only peer" ${activeUser.streamerMode ? 'checked' : ''} />
-                <div class="w-11 h-6 bg-[#2A2B32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#121316] peer-checked:after:bg-[#121316] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FDD814]"></div>
+              <label class="up-modal-switch">
+                <input type="checkbox" id="streamer-mode-toggle" ${activeUser.streamerMode ? 'checked' : ''} />
+                <span class="up-modal-switch-slider"></span>
               </label>
             </div>
           </div>
@@ -4263,8 +4350,10 @@
           <span class="font-exo text-[1.125rem] leading-normal font-semibold text-white">
             ${isEn ? 'Manage notifications' : 'Управление уведомлениями'}
           </span>
-          <button type="button" id="up-notif-close" class="p-[5px] bg-transparent border-0 cursor-pointer text-[#8E8F94] hover:text-white transition-colors">
-            <img alt="close-icon" class="h-[0.75rem] w-[0.75rem]" src="/assets/icons/close-gray.svg">
+          <button type="button" id="up-notif-close" style="background:transparent;border:0;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;color:#8E8F94;transition:color 0.2s;" onmouseenter="this.style.color='#fff'" onmouseleave="this.style.color='#8E8F94'">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block;width:14px;height:14px;">
+              <path d="M13 1L1 13M1 1l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
           </button>
         </div>
 
@@ -4277,8 +4366,11 @@
           <!-- Row 1: Email -->
           <div data-testid="notifications-management-email-row" class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">
             <div class="tablet:flex-row flex min-w-0 flex-1 flex-col items-start gap-1 tablet:items-center tablet:gap-3">
-              <div class="flex shrink-0 items-center justify-center rounded-[0.625rem] bg-[#FFFFFF1A] h-10 w-10">
-                <img src="/assets/icons/email.svg" class="h-[1.458rem] w-[1.458rem]" alt="email">
+              <div style="width:40px;height:40px;border-radius:10px;background:#282A2F;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="4"></circle>
+                  <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"></path>
+                </svg>
               </div>
               <div class="flex flex-col gap-0.5 min-w-0 flex-1">
                 <span data-testid="notifications-management-email-label" class="font-exo text-[0.875rem] font-medium text-white opacity-50 lg:text-[1rem]">Email</span>
@@ -4307,14 +4399,17 @@
           <!-- Row 2: Push Notifications -->
           <div class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">
             <div class="flex min-w-0 flex-1 items-center gap-3">
-              <div class="flex shrink-0 items-center justify-center rounded-[0.625rem] bg-[#FFFFFF1A] h-10 w-10">
-                <img src="/assets/icons/bell.svg" class="h-[1.458rem] w-[1.458rem]" alt="bell">
+              <div style="width:40px;height:40px;border-radius:10px;background:#282A2F;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
               </div>
               <span class="font-exo text-[0.875rem] font-medium text-white opacity-50 lg:text-[1rem]">${isEn ? 'Push Notification' : 'Push-уведомления'}</span>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input type="checkbox" id="notif-push-toggle" class="sr-only peer" ${activeUser.pushNotifications ? 'checked' : ''} />
-              <div class="w-11 h-6 bg-[#2A2B32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#121316] peer-checked:after:bg-[#121316] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FDD814]"></div>
+            <label class="up-modal-switch">
+              <input type="checkbox" id="notif-push-toggle" ${activeUser.pushNotifications ? 'checked' : ''} />
+              <span class="up-modal-switch-slider"></span>
             </label>
           </div>
 
@@ -4324,14 +4419,17 @@
           <!-- Row 3: Special email newsletter (Accent Yellow Tag Box!) -->
           <div class="flex w-full items-center justify-between gap-3 py-4 lg:py-6">
             <div class="flex min-w-0 flex-1 items-center gap-3">
-              <div class="flex shrink-0 items-center justify-center rounded-[0.625rem] bg-[#FDD814] h-10 w-10">
-                <img src="/assets/icons/tag.svg" class="h-[1.458rem] w-[1.458rem]" alt="tag" style="filter: brightness(0);">
+              <div style="width:40px;height:40px;border-radius:10px;background:#FDD814;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#121316" stroke="#121316" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                  <circle cx="7" cy="7" r="1.5" fill="#FDD814"></circle>
+                </svg>
               </div>
               <span class="font-exo text-[0.875rem] font-medium text-white opacity-50 lg:text-[1rem]">${isEn ? 'Special email newsletter' : 'Специальная email рассылка'}</span>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input type="checkbox" id="notif-newsletter-toggle" class="sr-only peer" ${activeUser.newsletter !== false ? 'checked' : ''} />
-              <div class="w-11 h-6 bg-[#2A2B32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#121316] peer-checked:after:bg-[#121316] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FDD814]"></div>
+            <label class="up-modal-switch">
+              <input type="checkbox" id="notif-newsletter-toggle" ${activeUser.newsletter !== false ? 'checked' : ''} />
+              <span class="up-modal-switch-slider"></span>
             </label>
           </div>
 

@@ -42,12 +42,18 @@ class UpgraderLiveSync:
 
     def _ticker_worker(self):
         import random
+        last_jitter = time.time()
         while self._running:
             time.sleep(0.025)
             # Smooth increments of 1, 2, or 3 every 25ms (average ~70-100 upgrades/sec, strictly <= 200/sec)
             delta = random.choice([1, 1, 2, 2, 3])
+            now = time.time()
             with self._lock:
                 self.games_count += delta
+                if now - last_jitter >= 2.0:
+                    last_jitter = now
+                    j_delta = random.choice([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5])
+                    self.online = max(5200, min(5900, self.online + j_delta))
 
     def _ws_worker(self):
         async def run():
@@ -216,6 +222,11 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             if os.path.isfile(index_path):
                 self.path = parsed.path.rstrip('/') + '/index.html'
                 return super().do_GET()
+
+        # Direct SPA routes
+        if parsed.path in ['/vip', '/profile', '/tos', '/privacy-policy', '/cookie-policy', '/provably-fair']:
+            self.path = '/cis/index.html'
+            return super().do_GET()
 
         # Admin Panel routes: /admin, /en/admin, /ru/admin, /cis/admin, etc.
         if parsed.path.rstrip('/').endswith('/admin') or parsed.path in ['/admin', '/admin.html']:
