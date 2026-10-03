@@ -1277,8 +1277,8 @@
           const accs = JSON.parse(raw);
           if (accs && typeof accs === 'object') {
             let updated = false;
-            if (!accs.test_user || !accs.test_user.inventory || accs.test_user.inventory.length === 0 || accs.test_user.balance < 50000 || !accs.test_user.image) {
-              accs.test_user = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS.test_user));
+            if (accs.test_user) {
+              delete accs.test_user;
               updated = true;
             }
             if (!accs['666']) {
@@ -1297,10 +1297,11 @@
     }
 
     function restoreFactoryDefaults() {
-      if (confirm('Восстановить аккаунты по умолчанию (Test Winner 50,000 ₽ + 6 скинов + история)?')) {
+      if (confirm('Восстановить аккаунты по умолчанию?')) {
         const initialAccounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
+        delete initialAccounts.test_user;
         saveAccounts(initialAccounts);
-        localStorage.setItem(ACTIVE_KEY, 'test_user');
+        localStorage.removeItem(ACTIVE_KEY);
         populateDropdown();
         loadActiveAccount();
         showToast('Прогресс и аккаунты успешно восстановлены!');
