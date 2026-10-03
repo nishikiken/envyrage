@@ -1,24 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 44" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 50" fill="none">
   <!-- SBP Origami Symbol -->
-  <g transform="translate(6, 6) scale(0.9)">
-    <!-- Red/Orange triangle -->
-    <path d="M18 0L36 12L22 17L18 0Z" fill="#F44336"/>
-    <!-- Orange/Yellow triangle -->
-    <path d="M36 12L32 28L22 17L36 12Z" fill="#FF9800"/>
-    <!-- Yellow/Green triangle -->
-    <path d="M32 28L18 36L19 22L32 28Z" fill="#FFC107"/>
-    <!-- Cyan/Blue triangle -->
-    <path d="M18 36L0 24L14 19L18 36Z" fill="#00BCD4"/>
-    <!-- Blue/Purple triangle -->
-    <path d="M0 24L4 8L14 19L0 24Z" fill="#2196F3"/>
-    <!-- Purple/Red triangle -->
-    <path d="M4 8L18 0L17 14L4 8Z" fill="#9C27B0"/>
+  <g transform="translate(6, 6) scale(1.02)">
+    <!-- Top red/orange -->
+    <path d="M19 1L37 13L23 18L19 1Z" fill="#F44336"/>
+    <!-- Right orange -->
+    <path d="M37 13L33 30L23 18L37 13Z" fill="#FF9800"/>
+    <!-- Bottom yellow-green -->
+    <path d="M33 30L19 38L20 23L33 30Z" fill="#FFC107"/>
+    <!-- Left-bottom green/cyan -->
+    <path d="M19 38L1 25L15 20L19 38Z" fill="#00C853"/>
+    <!-- Left cyan/blue -->
+    <path d="M1 25L5 9L15 20L1 25Z" fill="#00B0FF"/>
+    <!-- Top-left purple -->
+    <path d="M5 9L19 1L18 15L5 9Z" fill="#9C27B0"/>
   </g>
   <!-- Text СБП -->
-  <text x="50" y="21" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="900" font-size="19" letter-spacing="0.5">СБП</text>
-  <!-- Badge A -->
-  <rect x="94" y="8" width="14" height="15" rx="3" fill="#3A3B40"/>
-  <text x="101" y="20" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="800" font-size="11" text-anchor="middle">A</text>
+  <text x="52" y="24" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Exo 2', sans-serif" font-weight="900" font-size="22" letter-spacing="0.5">СБП</text>
+  <!-- Gray Letter A -->
+  <text x="105" y="22" fill="#7E8088" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Exo 2', sans-serif" font-weight="700" font-size="16">A</text>
   <!-- Text QRCODE -->
-  <text x="50" y="36" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="800" font-size="11" letter-spacing="1">QRCODE</text>
+  <text x="52" y="40" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Exo 2', sans-serif" font-weight="800" font-size="12" letter-spacing="1">QRCODE</text>
 </svg>

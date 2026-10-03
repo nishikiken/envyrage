@@ -1,9 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 44" fill="none">
-  <!-- Green Pill Background -->
-  <rect x="2" y="4" width="116" height="36" rx="18" fill="#12C85C"/>
-  <!-- Checkmark Icon inside circular badge -->
-  <circle cx="22" cy="22" r="10" stroke="#FFFFFF" stroke-width="2.2" fill="none"/>
-  <path d="M17.5 22L20.5 25L26.5 19" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 46" fill="none">
+  <defs>
+    <linearGradient id="spay_pill_grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D757"/>
+      <stop offset="100%" stop-color="#00DFAB"/>
+    </linearGradient>
+  </defs>
+  <!-- Pill Background -->
+  <rect x="2" y="3" width="126" height="40" rx="20" fill="url(#spay_pill_grad)"/>
+  <!-- Circular checkmark on left -->
+  <circle cx="34" cy="23" r="10.5" stroke="#FFFFFF" stroke-width="2.5" fill="none"/>
+  <path d="M29.5 23L32.5 26L38.5 19.5" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- Pay Text -->
-  <text x="40" y="28" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="800" font-size="19" letter-spacing="0.5">Pay</text>
+  <text x="52" y="30.5" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Exo 2', sans-serif" font-weight="800" font-size="21" letter-spacing="0.2">Pay</text>
 </svg>

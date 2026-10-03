@@ -709,6 +709,42 @@
         return false;
       }
     },
+    async fetchUserInventory(userId) {
+      const url = this.getUrl();
+      if (!url || !userId) return null;
+      try {
+        const activeUser = LocalDB.getActiveUser();
+        const uname = (activeUser && activeUser.username) ? activeUser.username : '';
+        let query = `user_id=eq.${encodeURIComponent(userId)}`;
+        if (uname && uname !== String(userId)) {
+          query = `or=(user_id.eq.${encodeURIComponent(userId)},user_id.eq.${encodeURIComponent(uname)})`;
+        }
+        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*`, {
+          method: 'GET',
+          headers: this.getHeaders()
+        });
+        if (!res.ok) return null;
+        const list = await res.json();
+        return Array.isArray(list) ? list : null;
+      } catch(e) {
+        return null;
+      }
+    },
+    async syncLiveInventory() {
+      const activeUser = LocalDB.getActiveUser();
+      if (!activeUser || !activeUser.id) return;
+      const cloudInv = await this.fetchUserInventory(activeUser.id);
+      if (cloudInv === null) return;
+      const cloudIds = new Set(cloudInv.map(x => String(x.id)));
+      const localInv = activeUser.inventory || [];
+      const kept = localInv.filter(x => cloudIds.has(String(x.id)));
+      if (kept.length !== localInv.length) {
+        console.log(`[SupabaseDB] Live sync purged ${localInv.length - kept.length} items deleted from DB`);
+        activeUser.inventory = kept;
+        LocalDB.saveUser(activeUser);
+        window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+      }
+    },
     async updateAdminSettings(settings) {
       const url = this.getUrl();
       if (!url) return false;
@@ -734,6 +770,18 @@
   };
 
   window.SupabaseDB = SupabaseDB;
+
+  // Background live inventory sync with SupabaseDB
+  setInterval(() => {
+    if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+      SupabaseDB.syncLiveInventory().catch(() => {});
+    }
+  }, 4000);
+  window.addEventListener('focus', () => {
+    if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+      SupabaseDB.syncLiveInventory().catch(() => {});
+    }
+  });
 
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
   // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
@@ -2510,42 +2558,92 @@
     // /api/items/inventory/sell
     if (path.includes('/items/inventory/sell')) {
       if (!activeUser) return { status: 401, data: { message: 'Unauthorized' } };
-      const itemIds = body && (body.inventoryItemIds || body.itemIds || body.ids || (body.id ? [body.id] : []));
-      let soldTotal = 0;
-      const soldItems = [];
-      if (Array.isArray(itemIds)) {
-        itemIds.forEach(id => {
-          // DO NOT sell skins that are currently being withdrawn!
-          if (LocalDB.isItemWithdrawing(activeUser.username, id)) {
-            return;
+
+      return (async () => {
+        // 1. Live verification against Supabase if configured
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          try {
+            const cloudInv = await SupabaseDB.fetchUserInventory(activeUser.id);
+            if (Array.isArray(cloudInv)) {
+              const cloudIds = new Set(cloudInv.map(x => String(x.id)));
+              const currentLocal = activeUser.inventory || [];
+              const validLocal = currentLocal.filter(x => cloudIds.has(String(x.id)));
+              if (validLocal.length !== currentLocal.length) {
+                console.log(`[local-backend] Sale live verification: purged ${currentLocal.length - validLocal.length} deleted items from DB`);
+                activeUser.inventory = validLocal;
+                LocalDB.saveUser(activeUser);
+                window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
+              }
+            }
+          } catch(err) {
+            console.warn('[local-backend] Sale cloud verification error:', err);
           }
-          const it = (activeUser.inventory || []).find(x => String(x.id) === String(id) || String(x.originalSkinId) === String(id));
-          if (it) {
-            const itPrice = parseFloat(it.price || 0);
-            soldTotal += itPrice;
-            soldItems.push(it);
-            LocalDB.removeItemFromInventory(activeUser.username, it.id);
-          }
-        });
-      }
-      soldTotal = parseFloat(soldTotal.toFixed(2));
-      const newBal = LocalDB.updateBalance(activeUser.username, soldTotal, true);
-      LocalDB.recordSale(activeUser.username, soldItems, soldTotal);
-
-      const updatedUser = LocalDB.getActiveUser();
-      window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: updatedUser }));
-
-      showToast(`Продано предметов: ${soldItems.length} (+${soldTotal.toLocaleString()} ₽)`, 'success');
-
-      return {
-        status: 200,
-        data: {
-          success: true,
-          totalAmount: soldTotal,
-          balance: String(newBal),
-          items: soldItems
         }
-      };
+
+        const freshUser = LocalDB.getActiveUser() || activeUser;
+        const currentInv = freshUser.inventory || [];
+        const itemIds = body && (body.inventoryItemIds || body.itemIds || body.ids || (body.id ? [body.id] : []));
+        let soldTotal = 0;
+        const soldItems = [];
+
+        if (Array.isArray(itemIds)) {
+          for (const id of itemIds) {
+            // DO NOT sell skins that are currently being withdrawn!
+            if (LocalDB.isItemWithdrawing(freshUser.username, id)) {
+              continue;
+            }
+            const it = currentInv.find(x => String(x.id) === String(id) || String(x.originalSkinId) === String(id));
+            if (it) {
+              const itPrice = parseFloat(it.price || 0);
+              soldTotal += itPrice;
+              soldItems.push(it);
+              LocalDB.removeItemFromInventory(freshUser.username, it.id);
+              // Also delete from Supabase if present
+              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                SupabaseDB.removeInventoryItem(it.id).catch(() => {});
+              }
+            }
+          }
+        }
+
+        if (soldItems.length === 0) {
+          showToast('Предметы больше недоступны в инвентаре', 'error');
+          window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: freshUser }));
+          return {
+            status: 400,
+            data: {
+              success: false,
+              message: 'Предметы не найдены в инвентаре или уже удалены',
+              totalAmount: 0,
+              balance: String(freshUser.balance),
+              items: []
+            }
+          };
+        }
+
+        soldTotal = parseFloat(soldTotal.toFixed(2));
+        const newBal = LocalDB.updateBalance(freshUser.username, soldTotal, true);
+        LocalDB.recordSale(freshUser.username, soldItems, soldTotal);
+
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(freshUser.id || freshUser.username, { balance: newBal }).catch(() => {});
+        }
+
+        const updatedUser = LocalDB.getActiveUser();
+        window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: updatedUser }));
+
+        showToast(`Продано предметов: ${soldItems.length} (+${soldTotal.toLocaleString()} ₽)`, 'success');
+
+        return {
+          status: 200,
+          data: {
+            success: true,
+            totalAmount: soldTotal,
+            balance: String(newBal),
+            items: soldItems
+          }
+        };
+      })();
     }
 
     // /withdrawals
@@ -2885,31 +2983,37 @@
         const mockResponse = handleMockApi(method, path, parsedBody, parsedUrl.searchParams);
         if (mockResponse) {
           isMocked = true;
-          const status = mockResponse.status || 200;
-          const responseText = JSON.stringify(mockResponse.data);
+          Promise.resolve(mockResponse).then(resp => {
+            const status = (resp && resp.status) || 200;
+            const responseText = JSON.stringify((resp && resp.data) || {});
 
-          Object.defineProperty(xhr, 'status', { get: () => status });
-          Object.defineProperty(xhr, 'statusText', { get: () => status === 200 ? 'OK' : 'Mock Response' });
-          Object.defineProperty(xhr, 'readyState', { get: () => 4 });
-          Object.defineProperty(xhr, 'responseText', { get: () => responseText });
-          Object.defineProperty(xhr, 'response', { get: () => responseText });
+            Object.defineProperty(xhr, 'status', { get: () => status });
+            Object.defineProperty(xhr, 'statusText', { get: () => status === 200 ? 'OK' : 'Mock Response' });
+            Object.defineProperty(xhr, 'readyState', { get: () => 4 });
+            Object.defineProperty(xhr, 'responseText', { get: () => responseText });
+            Object.defineProperty(xhr, 'response', { get: () => responseText });
 
-          xhr.getAllResponseHeaders = function() {
-            return 'content-type: application/json; charset=utf-8\r\n';
-          };
-          xhr.getResponseHeader = function(h) {
-            if (h && h.toLowerCase() === 'content-type') return 'application/json; charset=utf-8';
-            return null;
-          };
+            xhr.getAllResponseHeaders = function() {
+              return 'content-type: application/json; charset=utf-8\r\n';
+            };
+            xhr.getResponseHeader = function(h) {
+              if (h && h.toLowerCase() === 'content-type') return 'application/json; charset=utf-8';
+              return null;
+            };
 
-          setTimeout(() => {
             xhr.dispatchEvent(new Event('readystatechange'));
             xhr.dispatchEvent(new Event('load'));
             xhr.dispatchEvent(new Event('loadend'));
             if (xhr.onreadystatechange) xhr.onreadystatechange();
             if (xhr.onload) xhr.onload();
             if (xhr.onloadend) xhr.onloadend();
-          }, 10);
+          }).catch(err => {
+            xhr.status = 500;
+            xhr.responseText = JSON.stringify({ message: err.message });
+            xhr.readyState = 4;
+            xhr.dispatchEvent(new Event('readystatechange'));
+            xhr.dispatchEvent(new Event('loadend'));
+          });
           return;
         }
       } catch (err) {
@@ -2946,10 +3050,13 @@
       const path = parsedUrl.pathname;
       const mockResponse = handleMockApi(method, path, body, parsedUrl.searchParams);
       if (mockResponse) {
-        return Promise.resolve(new Response(JSON.stringify(mockResponse.data), {
-          status: mockResponse.status,
-          headers: { 'Content-Type': 'application/json' }
-        }));
+        return Promise.resolve(mockResponse).then(resp => {
+          if (!resp) return originalFetch.apply(this, arguments);
+          return new Response(JSON.stringify(resp.data), {
+            status: resp.status,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        });
       }
     } catch(e) {}
 

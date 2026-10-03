@@ -1,9 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 44" fill="none">
-  <!-- Sber green circle with checkmark -->
-  <circle cx="22" cy="22" r="16" stroke="#21A038" stroke-width="3" fill="none"/>
-  <path d="M14 22L19.5 27.5L29.5 17" stroke="#21A038" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 48" fill="none">
+  <defs>
+    <linearGradient id="sber_ring_grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A3FF"/>
+      <stop offset="45%" stop-color="#00E676"/>
+      <stop offset="100%" stop-color="#CDDC39"/>
+    </linearGradient>
+  </defs>
+  <!-- Sber ring with gradient -->
+  <circle cx="25" cy="24" r="16.5" stroke="url(#sber_ring_grad)" stroke-width="3.5" fill="none"/>
+  <!-- Checkmark inside -->
+  <path d="M17 24L22.5 29.5L33.5 18" stroke="#00C853" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
   <!-- Text СБЕР -->
-  <text x="46" y="20" fill="#21A038" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="900" font-size="16" letter-spacing="0.5">СБЕР</text>
+  <text x="52" y="21" fill="#00C853" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Exo 2', sans-serif" font-weight="900" font-size="18" letter-spacing="0.5">СБЕР</text>
   <!-- Text КАРТЫ -->
-  <text x="46" y="35" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, Exo 2, Inter, sans-serif" font-weight="800" font-size="13" letter-spacing="0.5">КАРТЫ</text>
+  <text x="52" y="38" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Exo 2', sans-serif" font-weight="800" font-size="15" letter-spacing="0.5">КАРТЫ</text>
 </svg>
