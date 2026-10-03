@@ -238,6 +238,97 @@
     window.addEventListener('hashchange', handleHashChange);
   } catch(e) {}
 
+  // Helper to dynamically update the Angular odometer balance display
+  function updateDomBalance(balance) {
+    const numBal = Number(balance);
+    if (isNaN(numBal)) return;
+    const formatted = numBal.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    // 1. Target odometer container in profile-info-balance
+    document.querySelectorAll('[data-testid="profile-info-balance"]').forEach(btn => {
+      const odoContainer = btn.querySelector('.up-odometer-container, [data-testid="odometer-simple"]');
+      if (odoContainer) {
+        let html = '';
+        for (const ch of formatted) {
+          const isMark = (ch === '.' || ch === ',' || ch === ' ' || ch === '\u00A0');
+          const markClass = isMark ? ' odometer-mark' : '';
+          html += `<div class="up-odometer-digit-box${markClass}"><div class="odometer-static-ribbon"><span class="odometer-value">${ch}</span></div></div>`;
+        }
+        odoContainer.innerHTML = html;
+      }
+    });
+
+    // 2. Target any fallback/custom balance elements
+    document.querySelectorAll('[data-testid="header-balance-amount"], up-balance span, .header-balance, .up-header-balance').forEach(el => {
+      el.textContent = formatted + ' ₽';
+    });
+  }
+  window.updateDomBalance = updateDomBalance;
+
+  // WEBSOCKET MOCK ENGINE (Declared before SupabaseDB to prevent TDZ ReferenceError)
+  const WsMock = {
+    clients: new Set(),
+    register(ws) {
+      this.clients.add(ws);
+    },
+    unregister(ws) {
+      this.clients.delete(ws);
+    },
+    broadcast(obj) {
+      const msg = JSON.stringify(obj);
+      this.clients.forEach(ws => {
+        try {
+          if (ws.onmessage) ws.onmessage({ data: msg });
+        } catch (e) {}
+      });
+    },
+    broadcastBalance(balance) {
+      const numBal = Number(balance);
+      const strBal = String(numBal);
+      this.broadcast({
+        event: 'users.update_balance',
+        data: strBal
+      });
+      this.broadcast({
+        event: 'users.update_balance',
+        data: { balance: numBal }
+      });
+      updateDomBalance(numBal);
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'BALANCE_UPDATED',
+            balance: numBal,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
+      try {
+        window.dispatchEvent(new CustomEvent('upgrader:balance-updated', { detail: { balance: numBal } }));
+      } catch(e) {}
+    },
+    broadcastInventoryItem(item) {
+      this.broadcast({
+        event: 'inventory.new_items',
+        data: [item]
+      });
+    },
+    broadcastDeletedItems(itemIds) {
+      const payload = itemIds.map(id => ({ id: String(id) }));
+      this.broadcast({
+        event: 'inventory.items_deleted',
+        data: payload
+      });
+    },
+    broadcastGameCount(count) {
+      this.broadcast({
+        event: 'statistics.game_count',
+        data: count
+      });
+    }
+  };
+  window.WsMock = WsMock;
+
   // 1.0 SUPABASE CLOUD DATABASE SYNC ENGINE
   const SUPABASE_CONFIG = {
     url: 'https://hyxyablgkjtoxcxnurkk.supabase.co',
@@ -833,15 +924,48 @@
           ]);
 
           let cloudUser = null;
+          let userQueryFinished = false;
           if (userRes.ok) {
             const list = await userRes.json();
+            userQueryFinished = true;
             if (Array.isArray(list) && list.length > 0) cloudUser = list[0];
+          }
+
+          // If user was deleted directly from Supabase DB, clear active session locally
+          if (userQueryFinished && !cloudUser) {
+            console.warn('[SupabaseDB] Active user was deleted in Supabase database. Clearing session.');
+            LocalDB.clearActiveUser();
+            window.location.reload();
+            return;
           }
 
           if (cloudUser) {
             // Direct luck column from SQL table if created
             if (cloudUser.luck || cloudUser.chance_rig) {
               userLuck = cloudUser.luck || cloudUser.chance_rig;
+            }
+
+            // Sync avatar from cloud if updated on another device or admin panel
+            const cloudAvatar = cloudUser.avatar || cloudUser.image || '';
+            if (cloudAvatar && cloudAvatar !== activeUser.avatar) {
+              activeUser.avatar = cloudAvatar;
+              activeUser.image = cloudAvatar;
+              const accounts = LocalDB.getAccounts();
+              if (accounts[activeUser.username]) {
+                accounts[activeUser.username].avatar = cloudAvatar;
+                accounts[activeUser.username].image = cloudAvatar;
+              }
+              LocalDB.saveAccounts(accounts);
+              LocalDB.setActiveUser(activeUser.username);
+              
+              // Update DOM avatars safely
+              const domAvatars = document.querySelectorAll('up-avatar-with-placeholder img, up-avatar img, .profile-avatar, up-profile-preview img');
+              domAvatars.forEach(el => {
+                const s = el.getAttribute('src') || '';
+                if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online')) {
+                  el.src = cloudAvatar;
+                }
+              });
             }
 
             // Sync balance from cloud if updated on another device or admin panel
@@ -853,11 +977,7 @@
               LocalDB.saveAccounts(accounts);
               LocalDB.setActiveUser(activeUser.username);
               WsMock.broadcastBalance(cloudBalance);
-
-              // Update DOM balance silently
-              document.querySelectorAll('[data-testid="header-balance-amount"], up-balance span, .header-balance, .up-header-balance').forEach(el => {
-                el.textContent = cloudBalance.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
-              });
+              updateDomBalance(cloudBalance);
             }
           }
 
@@ -1913,6 +2033,19 @@
         if (event.data && event.data.type === 'RIG_UPDATED') {
           applyLiveRigUpdate(event.data);
         }
+        if (event.data && event.data.type === 'BALANCE_UPDATED') {
+          const bal = Number(event.data.balance);
+          const activeUser = LocalDB.getActiveUser();
+          if (activeUser && !isNaN(bal) && Math.abs(bal - activeUser.balance) > 0.001) {
+            activeUser.balance = bal;
+            const accounts = LocalDB.getAccounts();
+            if (accounts[activeUser.username]) accounts[activeUser.username].balance = bal;
+            LocalDB.saveAccounts(accounts);
+            LocalDB.setActiveUser(activeUser.username);
+            WsMock.broadcastBalance(bal);
+            updateDomBalance(bal);
+          }
+        }
       };
     } catch (e) {}
   }
@@ -2590,48 +2723,7 @@
   }
 
   // 6. WEBSOCKET MOCK ENGINE
-  const WsMock = {
-    clients: new Set(),
-    register(ws) {
-      this.clients.add(ws);
-    },
-    unregister(ws) {
-      this.clients.delete(ws);
-    },
-    broadcast(obj) {
-      const msg = JSON.stringify(obj);
-      this.clients.forEach(ws => {
-        try {
-          if (ws.onmessage) ws.onmessage({ data: msg });
-        } catch (e) {}
-      });
-    },
-    broadcastBalance(balance) {
-      this.broadcast({
-        event: 'users.update_balance',
-        data: String(balance)
-      });
-    },
-    broadcastInventoryItem(item) {
-      this.broadcast({
-        event: 'inventory.new_items',
-        data: [item]
-      });
-    },
-    broadcastDeletedItems(itemIds) {
-      const payload = itemIds.map(id => ({ id: String(id) }));
-      this.broadcast({
-        event: 'inventory.items_deleted',
-        data: payload
-      });
-    },
-    broadcastGameCount(count) {
-      this.broadcast({
-        event: 'statistics.game_count',
-        data: count
-      });
-    }
-  };
+  // (WsMock is defined earlier before SupabaseDB to avoid TDZ)
 
   let cachedRealtimeDrops = [];
   const dropStreamQueue = [];

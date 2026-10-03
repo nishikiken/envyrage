@@ -1414,12 +1414,6 @@
 
     function saveAccounts(accounts) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-      if (typeof SupabaseAdmin !== 'undefined') {
-        clearTimeout(window._sbSyncTimer);
-        window._sbSyncTimer = setTimeout(() => {
-          SupabaseAdmin.syncAllToDB();
-        }, 600);
-      }
     }
 
     function showToast(msg, isSuccess = true) {
@@ -1436,6 +1430,7 @@
       const accounts = getAccounts();
       const dd = document.getElementById('accounts-dropdown');
       if (!dd) return;
+      const prevVal = dd.value;
       dd.innerHTML = '<option value="">-- Выбрать аккаунт --</option>';
 
       for (const uname in accounts) {
@@ -1446,6 +1441,11 @@
         opt.textContent = `${a.nickname || a.username} (ID: ${a.id || '---'}) — ${(parseFloat(a.balance) || 0).toLocaleString()} ₽`;
         dd.appendChild(opt);
       }
+      if (prevVal) {
+        dd.value = prevVal;
+      } else if (currentSelectedAcc) {
+        dd.value = currentSelectedAcc.id || currentSelectedAcc.username;
+      }
     }
 
     function displayAccount(acc, isSilent = false) {
@@ -1454,6 +1454,9 @@
 
       const avatar = document.getElementById('disp-avatar');
       if (avatar) avatar.src = acc.avatar || acc.image || '/assets/icons/avatar-placeholder.svg';
+      
+      const dd = document.getElementById('accounts-dropdown');
+      if (dd && acc) dd.value = acc.id || acc.username;
       
       const nickEl = document.getElementById('disp-nickname');
       if (nickEl) nickEl.textContent = acc.nickname || acc.username || 'Пользователь';
@@ -1891,6 +1894,18 @@
         }
       }
 
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'BALANCE_UPDATED',
+            balance: bal,
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
+
       showToast(`✓ Баланс установлен: ${bal.toLocaleString()} ₽`);
     }
 
@@ -2151,8 +2166,24 @@
 
           if (usersRes.ok) {
             const users = await usersRes.json();
-            if (Array.isArray(users) && users.length > 0) {
+            if (Array.isArray(users)) {
               const accounts = getAccounts();
+              const dbUsernames = new Set(users.map(u => (u.username || '').toLowerCase().trim()));
+              const dbIds = new Set(users.map(u => String(u.id)));
+
+              // 1. Prune accounts that no longer exist in Supabase DB (prevent deleted accounts from resurrecting)
+              for (const uname in accounts) {
+                const a = accounts[uname];
+                if (!a) continue;
+                const lowName = uname.toLowerCase().trim();
+                const aId = String(a.id || '');
+                if (!dbUsernames.has(lowName) && !dbIds.has(aId)) {
+                  console.log(`[SupabaseAdmin] Account ${uname} (ID: ${aId}) removed in cloud DB, deleting locally.`);
+                  delete accounts[uname];
+                }
+              }
+
+              // 2. Sync cloud users to local accounts
               for (const u of users) {
                 const uname = (u.username || '').toLowerCase().trim();
                 if (!uname) continue;
@@ -2172,6 +2203,7 @@
                 const uid = String(u.id);
                 const uStats = userStatsMap[uname] || userStatsMap[uid] || {};
                 const uLuck = u.luck || u.chance_rig || userLuckMap[uname] || userLuckMap[uid];
+                const userAvatar = u.avatar || u.image || '';
 
                 if (!accounts[uname]) {
                   accounts[uname] = {
@@ -2179,7 +2211,8 @@
                     username: uname,
                     password: pw || '123456',
                     nickname: u.nickname || uname,
-                    avatar: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+                    avatar: userAvatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+                    image: userAvatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
                     balance: Number(u.balance !== undefined ? u.balance : (uStats.balance !== undefined ? uStats.balance : 0)),
                     inventory: [],
                     upgradesMade: Number(u.upgrades_made !== undefined ? u.upgrades_made : (uStats.upgrades_made !== undefined ? uStats.upgrades_made : 0)),
@@ -2194,7 +2227,10 @@
                 } else {
                   accounts[uname].balance = Number(u.balance !== undefined ? u.balance : (uStats.balance !== undefined ? uStats.balance : accounts[uname].balance));
                   if (u.nickname) accounts[uname].nickname = u.nickname;
-                  if (u.avatar) accounts[uname].avatar = u.avatar;
+                  if (userAvatar) {
+                    accounts[uname].avatar = userAvatar;
+                    accounts[uname].image = userAvatar;
+                  }
                   if (u.email) accounts[uname].email = u.email;
                   if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
                   if (pw) accounts[uname].password = pw;
@@ -2220,7 +2256,7 @@
               populateDropdown();
 
               const curKey = currentSelectedAcc ? (currentSelectedAcc.username || '').toLowerCase() : (localStorage.getItem(ACTIVE_KEY) || '').toLowerCase();
-              const freshAcc = accounts[curKey] || (currentSelectedAcc && Object.values(accounts).find(a => String(a.id) === String(currentSelectedAcc.id))) || Object.values(accounts)[0];
+              let freshAcc = accounts[curKey] || (currentSelectedAcc && Object.values(accounts).find(a => String(a.id) === String(currentSelectedAcc.id))) || Object.values(accounts)[0];
               if (freshAcc) {
                 displayAccount(freshAcc, true);
               }
