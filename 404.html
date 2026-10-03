@@ -2,22 +2,21 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
   <title>UPGRADER</title>
   <script>
-    // GitHub Pages SPA router redirect: keeps /envyrage/ repository path intact
+    // GitHub Pages SPA router redirect: keeps /envyrage/ repository path intact without /cis/
     var path = window.location.pathname;
     var repoPrefix = path.startsWith('/envyrage') ? '/envyrage' : '';
     if (path.includes('/admin')) {
       window.location.replace((repoPrefix || '/envyrage') + '/admin/index.html');
-    } else if (path.includes('/en')) {
-      window.location.replace((repoPrefix || '/envyrage') + '/en/index.html');
     } else {
-      window.location.replace((repoPrefix || '/envyrage') + '/cis/index.html');
+      window.location.replace((repoPrefix || '/envyrage') + '/index.html');
     }
   </script>
-  <meta http-equiv="refresh" content="0; url=./cis/index.html">
+  <meta http-equiv="refresh" content="0; url=./index.html">
 </head>
 <body>
-  <p>Загрузка UPGRADER... <a href="./cis/index.html">Нажмите сюда, если переход не произошел</a></p>
+  <p>Загрузка UPGRADER... <a href="./index.html">Нажмите сюда, если переход не произошел</a></p>
 </body>
 </html>

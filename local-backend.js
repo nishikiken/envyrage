@@ -35,9 +35,17 @@
       const fixUrl = function(url) {
         if (!url) return url;
         if (typeof url === 'string') {
-          if (url.startsWith('/') && !url.startsWith('/envyrage')) {
-            return '/envyrage' + url;
+          let clean = url.replace(/\/cis\/(en|ru|profile)/g, '/$1');
+          if (clean.includes('/cis/')) {
+            clean = clean.replace(/\/cis\//g, '/');
           }
+          if (clean === '/cis') {
+            clean = '/';
+          }
+          if (clean.startsWith('/') && !clean.startsWith('/envyrage')) {
+            return '/envyrage' + clean;
+          }
+          return clean;
         }
         return url;
       };
