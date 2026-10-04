@@ -267,12 +267,12 @@
 
   function updateDomNickname(nickname) {
     if (!nickname) return;
-    document.querySelectorAll('up-user-info span').forEach(el => {
-      if (el.className && el.className.includes('truncate')) {
+    document.querySelectorAll('up-user-info span, [data-testid="header-profile-name"], .header-profile-name, up-header [class*="name"]').forEach(el => {
+      if (el.className && (el.className.includes('truncate') || el.className.includes('name'))) {
         el.textContent = nickname;
       }
     });
-    document.querySelectorAll('[data-testid="header-profile-name"], .header-profile-name, up-header [class*="name"]').forEach(el => {
+    document.querySelectorAll('up-profile-info [class*="nickname"], [data-testid="profile-nickname"], .profile-nickname').forEach(el => {
       el.textContent = nickname;
     });
   }
@@ -281,7 +281,7 @@
   function updateDomId(userId) {
     if (!userId) return;
     const strId = ' ID ' + userId + ' ';
-    document.querySelectorAll('up-user-info span, up-user-info div, [data-testid="user-info-id"]').forEach(el => {
+    document.querySelectorAll('up-user-info span, up-user-info div, [data-testid="user-info-id"], up-profile-info [class*="id"]').forEach(el => {
       if (el.textContent && (el.textContent.trim().startsWith('ID ') || el.textContent.trim().startsWith('ID:') || el.textContent.trim() === 'ID')) {
         el.textContent = strId;
       }
@@ -291,10 +291,26 @@
 
   function updateDomAvatar(avatarUrl) {
     if (!avatarUrl) return;
-    document.querySelectorAll('up-user-info img, up-header img, header img, [data-testid*="avatar"] img, .profile-avatar, up-avatar-with-placeholder img, up-avatar img, up-profile-preview img').forEach(el => {
+    document.querySelectorAll('up-avatar-with-placeholder').forEach(wrap => {
+      const ph = wrap.querySelector('.skeleton-block, [class*="placeholder"], [class*="skeleton"]');
+      if (ph) ph.style.display = 'none';
+      const img = wrap.querySelector('img');
+      if (img) {
+        img.src = avatarUrl;
+        img.classList.remove('opacity-0');
+        img.classList.add('opacity-100');
+        img.style.opacity = '1';
+        img.style.visibility = 'visible';
+      }
+    });
+    document.querySelectorAll('up-user-info img, up-header img, header img, [data-testid*="avatar"] img, .profile-avatar, up-avatar img, up-profile-preview img').forEach(el => {
       const s = el.getAttribute('src') || '';
       if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online') && !s.includes('logo') && !s.includes('bell') && !s.includes('gear')) {
         el.src = avatarUrl;
+        el.classList.remove('opacity-0');
+        el.classList.add('opacity-100');
+        el.style.opacity = '1';
+        el.style.visibility = 'visible';
       }
     });
   }
@@ -304,12 +320,14 @@
     const num = parseInt(count, 10);
     if (isNaN(num)) return;
     const formatted = num.toLocaleString('ru-RU');
-    document.querySelectorAll('up-user-stats div').forEach(card => {
-      const txt = card.innerText || '';
-      if (txt.includes('Апгрейдов') || txt.includes('Upgrades')) {
-        const valEl = card.querySelector('.text-gradient-yellow-main, [class*="text-gradient"], span.font-tektur');
-        if (valEl) valEl.textContent = formatted;
-      }
+    document.querySelectorAll('up-user-stats').forEach(statsComp => {
+      statsComp.querySelectorAll('div').forEach(card => {
+        const txt = card.innerText || '';
+        if ((txt.includes('Апгрейдов') || txt.includes('Upgrades')) && !txt.includes('Выведено') && !txt.includes('Withdrawn')) {
+          const valEl = card.querySelector('.text-gradient-yellow-main, span.font-tektur, [class*="text-gradient"]');
+          if (valEl) valEl.textContent = formatted;
+        }
+      });
     });
   }
   window.updateDomUpgrades = updateDomUpgrades;
@@ -317,54 +335,60 @@
   function updateDomWithdrawn(amount, count) {
     const numAmt = parseFloat(amount);
     const numCnt = parseInt(count, 10);
-    document.querySelectorAll('up-user-stats div').forEach(card => {
-      const txt = card.innerText || '';
-      if (txt.includes('Выведено') || txt.includes('Withdrawn')) {
-        if (!isNaN(numAmt)) {
-          const formatted = numAmt.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-          const amtEl = card.querySelector('.text-gradient-yellow-main, [class*="text-gradient"], span.font-tektur');
-          if (amtEl) amtEl.textContent = formatted;
+    document.querySelectorAll('up-user-stats').forEach(statsComp => {
+      statsComp.querySelectorAll('div').forEach(card => {
+        const txt = card.innerText || '';
+        if ((txt.includes('Выведено') || txt.includes('Withdrawn')) && !txt.includes('Апгрейдов') && !txt.includes('Upgrades')) {
+          if (!isNaN(numAmt)) {
+            const formatted = numAmt.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const amtEl = card.querySelector('.text-gradient-yellow-main, [class*="text-gradient"]');
+            if (amtEl) amtEl.textContent = formatted;
+          }
+          if (!isNaN(numCnt)) {
+            card.querySelectorAll('span').forEach(sp => {
+              if (sp.textContent && (sp.textContent.includes('предмет') || sp.textContent.includes('шт') || sp.textContent.includes('item') || /^\d+\s*$/.test(sp.textContent.trim()))) {
+                sp.textContent = `${numCnt} предметов`;
+              }
+            });
+          }
         }
-        if (!isNaN(numCnt)) {
-          card.querySelectorAll('span').forEach(sp => {
-            if (sp.textContent && (sp.textContent.includes('предмет') || sp.textContent.includes('шт') || sp.textContent.includes('item') || /^\d+\s*$/.test(sp.textContent.trim()))) {
-              sp.textContent = `${numCnt} предметов`;
-            }
-          });
-        }
-      }
+      });
     });
   }
   window.updateDomWithdrawn = updateDomWithdrawn;
 
   function updateDomBestDrop(bestDrop) {
-    const container = document.querySelector('up-best-drop, [data-testid="profile-best-drop"]');
-    if (!container) return;
-    if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
-      const sub = container.querySelector('.text-gray, span.text-xs');
-      if (sub) sub.textContent = 'Отобразится после первой игры';
-      return;
-    }
-    const name = bestDrop.marketName || bestDrop.name || '';
-    const img = bestDrop.imageNew || bestDrop.image || '';
-    const price = parseFloat(bestDrop.price) || 0;
-    
-    // Update image
-    if (img) {
-      const imgEl = container.querySelector('img');
-      if (imgEl && !imgEl.src.includes('coin')) imgEl.src = img;
-    }
-    // Update name
-    container.querySelectorAll('span').forEach(sp => {
-      if (sp.textContent && (sp.textContent.includes('Отобразится') || sp.textContent.includes('★') || sp.textContent.includes('|'))) {
-        sp.textContent = name;
+    const containers = document.querySelectorAll('up-best-drop, [data-testid="profile-best-drop"]');
+    containers.forEach(container => {
+      if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
+        const sub = container.querySelector('.text-gray, span.text-xs');
+        if (sub) sub.textContent = 'Отобразится после первой игры';
+        return;
+      }
+      const name = bestDrop.marketName || bestDrop.name || '';
+      const img = bestDrop.imageNew || bestDrop.image || '';
+      const price = parseFloat(bestDrop.price) || 0;
+      
+      // Update image
+      if (img) {
+        const imgEl = container.querySelector('img');
+        if (imgEl && !imgEl.src.includes('coin') && !imgEl.src.includes('arrow')) {
+          imgEl.src = img;
+          imgEl.style.display = 'block';
+        }
+      }
+      // Update name
+      container.querySelectorAll('span').forEach(sp => {
+        if (sp.textContent && (sp.textContent.includes('Отобразится') || sp.textContent.includes('★') || sp.textContent.includes('|') || (sp.className && sp.className.includes('text-white')))) {
+          sp.textContent = name;
+        }
+      });
+      // Update price
+      if (price > 0) {
+        const prEl = container.querySelector('.text-gradient-yellow-main, [class*="convert"], [class*="price"]');
+        if (prEl) prEl.textContent = price.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
     });
-    // Update price
-    if (price > 0) {
-      const prEl = container.querySelector('.text-gradient-yellow-main, [class*="convert"], [class*="price"]');
-      if (prEl) prEl.textContent = price.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
   }
   window.updateDomBestDrop = updateDomBestDrop;
 
@@ -670,8 +694,36 @@
                 if (u.is_email_verified !== undefined) accounts[uname].isEmailVerified = u.is_email_verified;
                 if (pw) accounts[uname].password = pw;
                 if (realTradeLink) accounts[uname].steamTradeLink = realTradeLink;
-                // Unconditional sync: if user deleted skins from Supabase, userInv is [] and accounts[uname].inventory becomes []
-                accounts[uname].inventory = userInv;
+                if (u.upgrades_made !== undefined) accounts[uname].upgradesMade = Number(u.upgrades_made);
+                if (u.withdrawn_amount !== undefined) accounts[uname].withdrawnAmount = Number(u.withdrawn_amount);
+                if (u.withdrawn_count !== undefined) accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count);
+                if (u.best_drop !== undefined) accounts[uname].bestDrop = u.best_drop;
+                if (userInv.length > 0) {
+                  accounts[uname].inventory = userInv;
+                } else if (accounts[uname].inventory && accounts[uname].inventory.length > 0) {
+                  // Seed local items to Supabase so other browser sessions see them
+                  const localItems = accounts[uname].inventory;
+                  const invPayload = localItems.map(item => {
+                    const it = item.item || item;
+                    return {
+                      id: String(item.id || ('inv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
+                      user_id: String(u.id),
+                      market_name: it.marketName || it.market_name || item.marketName || 'CS2 Skin',
+                      price: Number(item.price || it.price || 0),
+                      image: it.image || item.image || '',
+                      status: item.status || 'available',
+                      extra: it.extra || item.extra || {},
+                      updated_at: new Date().toISOString()
+                    };
+                  });
+                  fetch(`${url}/rest/v1/inventory`, {
+                    method: 'POST',
+                    headers: { ...this.getHeaders(), 'Prefer': 'resolution=merge-duplicates' },
+                    body: JSON.stringify(invPayload)
+                  }).catch(() => {});
+                } else {
+                  accounts[uname].inventory = [];
+                }
               } else {
                 // New user registered from another browser or device!
                 accounts[uname] = {
@@ -683,11 +735,11 @@
                   image: u.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
                   balance: Number(u.balance || 0),
                   inventory: userInv,
-                  upgradesMade: 0,
-                  withdrawnAmount: 0.0,
-                  withdrawnItemsCount: 0,
-                  bestDrop: null,
-                  bestDropProbability: null,
+                  upgradesMade: Number(u.upgrades_made || 0),
+                  withdrawnAmount: Number(u.withdrawn_amount || 0),
+                  withdrawnItemsCount: Number(u.withdrawn_count || 0),
+                  bestDrop: u.best_drop || null,
+                  bestDropProbability: (u.best_drop && u.best_drop.probability) || null,
                   inventoryHistory: [],
                   gamesHistory: [],
                   createdAt: u.created_at || new Date().toISOString(),
@@ -702,6 +754,31 @@
               }
             }
             LocalDB.saveAccountsLocally(accounts);
+
+            // Immediately synchronize active user session and UI with fresh DB state
+            const currentActive = LocalDB.getActiveUser();
+            if (currentActive && accounts[currentActive.username]) {
+              const fresh = accounts[currentActive.username];
+              Object.assign(currentActive, fresh);
+              LocalDB.setActiveUser(currentActive.username);
+              updateDomAvatar(currentActive.avatar);
+              updateDomNickname(currentActive.nickname);
+              updateDomId(currentActive.id);
+              updateDomBalance(currentActive.balance);
+              updateDomUpgrades(currentActive.upgradesMade);
+              updateDomWithdrawn(currentActive.withdrawnAmount, currentActive.withdrawnItemsCount);
+              updateDomBestDrop(currentActive.bestDrop);
+              WsMock.broadcastProfile(currentActive);
+              WsMock.broadcastStats({
+                upgradesMade: currentActive.upgradesMade || 0,
+                withdrawnAmount: currentActive.withdrawnAmount || 0,
+                withdrawnItemsCount: currentActive.withdrawnItemsCount || 0,
+                bestDrop: currentActive.bestDrop || null,
+                bestDropProbability: currentActive.bestDropProbability || null
+              });
+              WsMock.broadcastBalance(currentActive.balance);
+            }
+
             console.log('[SupabaseDB] Synced ' + users.length + ' users from cloud DB to LocalDB.');
           }
         }
@@ -850,13 +927,14 @@
           password: pw || '123456',
           nickname: row.nickname || u,
           avatar: row.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+          image: row.avatar || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
           balance: Number(row.balance || 0),
           inventory: userInv,
-          upgradesMade: 0,
-          withdrawnAmount: 0.0,
-          withdrawnItemsCount: 0,
-          bestDrop: null,
-          bestDropProbability: null,
+          upgradesMade: Number(row.upgrades_made || 0),
+          withdrawnAmount: Number(row.withdrawn_amount || 0),
+          withdrawnItemsCount: Number(row.withdrawn_count || 0),
+          bestDrop: row.best_drop || null,
+          bestDropProbability: (row.best_drop && row.best_drop.probability) || null,
           inventoryHistory: [],
           gamesHistory: [],
           createdAt: row.created_at || new Date().toISOString(),
@@ -899,7 +977,10 @@
         if (fields.chance_rig !== undefined) payload.chance_rig = fields.chance_rig;
         if (fields.upgrades_made !== undefined) payload.upgrades_made = Number(fields.upgrades_made);
         if (fields.best_drop !== undefined) payload.best_drop = fields.best_drop;
+        if (fields.withdrawn_amount !== undefined) payload.withdrawn_amount = Number(fields.withdrawn_amount);
+        if (fields.withdrawn_count !== undefined) payload.withdrawn_count = Number(fields.withdrawn_count);
         if (fields.password !== undefined) {
+          payload.password = fields.password;
           let stl = payload.steam_trade_link || '';
           if (!stl.startsWith('pw:')) {
             stl = 'pw:' + fields.password + (stl ? ('|stl:' + stl) : '');
@@ -1090,7 +1171,6 @@
             if (cloudNick && cloudNick !== activeUser.nickname) {
               activeUser.nickname = cloudNick;
               userChanged = true;
-              updateDomNickname(cloudNick);
             }
 
             // 2. Sync ID from cloud
@@ -1098,7 +1178,6 @@
             if (cloudId && cloudId !== String(activeUser.id)) {
               activeUser.id = cloudId;
               userChanged = true;
-              updateDomId(cloudId);
             }
 
             // 3. Sync Avatar from cloud
@@ -1107,7 +1186,6 @@
               activeUser.avatar = cloudAvatar;
               activeUser.image = cloudAvatar;
               userChanged = true;
-              updateDomAvatar(cloudAvatar);
             }
 
             // 4. Sync Balance from cloud
@@ -1116,7 +1194,6 @@
               activeUser.balance = cloudBal;
               userChanged = true;
               WsMock.broadcastBalance(cloudBal);
-              updateDomBalance(cloudBal);
             }
 
             // 5. Sync Upgrades count from cloud
@@ -1124,7 +1201,6 @@
             if (cloudUpgrades !== undefined && !isNaN(cloudUpgrades) && cloudUpgrades !== (activeUser.upgradesMade || 0)) {
               activeUser.upgradesMade = cloudUpgrades;
               statsChanged = true;
-              updateDomUpgrades(cloudUpgrades);
             }
 
             // 6. Sync Withdrawn amount & items count from cloud
@@ -1140,10 +1216,6 @@
               statsChanged = true;
             }
 
-            if (statsChanged) {
-              updateDomWithdrawn(activeUser.withdrawnAmount, activeUser.withdrawnItemsCount);
-            }
-
             // 7. Sync Best Drop from cloud
             let cloudBestDrop = undefined;
             if (cloudUser.best_drop !== undefined) cloudBestDrop = cloudUser.best_drop;
@@ -1154,7 +1226,6 @@
               if (prevDropStr !== nextDropStr) {
                 activeUser.bestDrop = cloudBestDrop;
                 statsChanged = true;
-                updateDomBestDrop(cloudBestDrop);
               }
             }
 
@@ -1173,39 +1244,6 @@
               }
               LocalDB.saveAccounts(accounts);
               LocalDB.setActiveUser(activeUser.username);
-
-              // Update Angular UserService & UserState
-              try {
-                if (window.__upgraderUserService && typeof window.__upgraderUserService.setUser === 'function') {
-                  window.__upgraderUserService.setUser(activeUser, true);
-                }
-                if (window.__upgraderUserState) {
-                  if (window.__upgraderUserState.currentUser && typeof window.__upgraderUserState.currentUser.set === 'function') {
-                    window.__upgraderUserState.currentUser.set({ ...activeUser });
-                  }
-                  if (window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
-                    window.__upgraderUserState.userStats.set({
-                      upgradesMade: activeUser.upgradesMade || 0,
-                      withdrawnAmount: activeUser.withdrawnAmount || 0,
-                      withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
-                      bestDrop: activeUser.bestDrop || null,
-                      bestDropProbability: activeUser.bestDropProbability || null
-                    });
-                  }
-                }
-              } catch(e) {}
-
-              // WebSocket event broadcast to trigger Angular ChangeDetection in zone
-              try {
-                WsMock.broadcastProfile(activeUser);
-                WsMock.broadcastStats({
-                  upgradesMade: activeUser.upgradesMade || 0,
-                  withdrawnAmount: activeUser.withdrawnAmount || 0,
-                  withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
-                  bestDrop: activeUser.bestDrop || null,
-                  bestDropProbability: activeUser.bestDropProbability || null
-                });
-              } catch(e) {}
 
               // Zero-latency BroadcastChannel
               try {
@@ -1230,6 +1268,63 @@
 
               window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: activeUser }));
             }
+
+            // Unconditionally keep DOM and Angular signals synchronized with activeUser
+            updateDomNickname(activeUser.nickname);
+            updateDomId(activeUser.id);
+            updateDomAvatar(activeUser.avatar);
+            updateDomBalance(activeUser.balance);
+            updateDomUpgrades(activeUser.upgradesMade);
+            updateDomWithdrawn(activeUser.withdrawnAmount, activeUser.withdrawnItemsCount);
+            updateDomBestDrop(activeUser.bestDrop);
+
+            // Update Angular UserService & UserState
+            try {
+              if (window.__upgraderUserService && typeof window.__upgraderUserService.setUser === 'function') {
+                window.__upgraderUserService.setUser({
+                  ...activeUser,
+                  image: activeUser.avatar,
+                  avatar: activeUser.avatar
+                }, true);
+              }
+              if (window.__upgraderUserState) {
+                if (window.__upgraderUserState.currentUser && typeof window.__upgraderUserState.currentUser.set === 'function') {
+                  window.__upgraderUserState.currentUser.set({
+                    ...activeUser,
+                    image: activeUser.avatar,
+                    avatar: activeUser.avatar
+                  });
+                }
+                if (window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+                  const s = window.__upgraderUserState.userStats();
+                  if (!s || s.upgradesMade !== activeUser.upgradesMade || s.withdrawnAmount !== activeUser.withdrawnAmount || s.bestDrop !== activeUser.bestDrop) {
+                    window.__upgraderUserState.userStats.set({
+                      upgradesMade: activeUser.upgradesMade || 0,
+                      withdrawnAmount: activeUser.withdrawnAmount || 0,
+                      withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
+                      bestDrop: activeUser.bestDrop || null,
+                      bestDropProbability: activeUser.bestDropProbability || null
+                    });
+                  }
+                }
+              }
+            } catch(e) {}
+
+            // WebSocket event broadcast to trigger Angular ChangeDetection in zone
+            try {
+              WsMock.broadcastProfile({
+                ...activeUser,
+                image: activeUser.avatar,
+                avatar: activeUser.avatar
+              });
+              WsMock.broadcastStats({
+                upgradesMade: activeUser.upgradesMade || 0,
+                withdrawnAmount: activeUser.withdrawnAmount || 0,
+                withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
+                bestDrop: activeUser.bestDrop || null,
+                bestDropProbability: activeUser.bestDropProbability || null
+              });
+            } catch(e) {}
           }
 
           // Apply luck mode
@@ -2060,6 +2155,19 @@
         }).catch(() => {});
         SupabaseDB.recordUserStatsInAdminSettings(acc.username, String(acc.id), stats).catch(() => {});
       }
+
+      updateDomUpgrades(acc.upgradesMade);
+      if (acc.bestDrop) updateDomBestDrop(acc.bestDrop);
+      try {
+        if (typeof WsMock !== 'undefined') {
+          WsMock.broadcastStats({
+            upgradesMade: acc.upgradesMade,
+            bestDrop: acc.bestDrop,
+            withdrawnAmount: acc.withdrawnAmount,
+            withdrawnItemsCount: acc.withdrawnItemsCount
+          });
+        }
+      } catch(e) {}
     }
 
     static startWithdrawal(username, item) {
@@ -2098,6 +2206,11 @@
       this.saveAccounts(accounts);
       this.setActiveUser(username);
       window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
+
+      // Remove from Supabase inventory immediately so other browsers don't see it as available
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.removeInventoryItem(item.id).catch(() => {});
+      }
 
       // Broadcast WebSocket deletion so main upgrader page table removes it immediately!
       try {
@@ -2142,8 +2255,29 @@
         this.setActiveUser(username);
         window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
 
+        // Persist withdrawal stats and item removal to Supabase
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.removeInventoryItem(item.id).catch(() => {});
+          SupabaseDB.updateUser(acc.id || acc.username, {
+            withdrawn_amount: acc.withdrawnAmount,
+            withdrawn_count: acc.withdrawnItemsCount
+          }).catch(() => {});
+          SupabaseDB.recordUserStatsInAdminSettings(acc.username, String(acc.id), {
+            withdrawn_amount: acc.withdrawnAmount,
+            withdrawn_items_count: acc.withdrawnItemsCount
+          }).catch(() => {});
+        }
+
+        updateDomWithdrawn(acc.withdrawnAmount, acc.withdrawnItemsCount);
+
         try {
-          if (typeof WsMock !== 'undefined' && WsMock.broadcastDeletedItems) {
+          if (typeof WsMock !== 'undefined') {
+            WsMock.broadcastStats({
+              withdrawnAmount: acc.withdrawnAmount,
+              withdrawnItemsCount: acc.withdrawnItemsCount,
+              upgradesMade: acc.upgradesMade,
+              bestDrop: acc.bestDrop
+            });
             WsMock.broadcastDeletedItems([item.id, item.originalSkinId].filter(Boolean));
           }
         } catch(e) {}
@@ -2239,6 +2373,24 @@
 
       this.saveAccountsLocally(accounts);
       this.setActiveUser(username);
+
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(acc.id || acc.username, {
+          nickname: acc.nickname,
+          avatar: acc.avatar,
+          image: acc.avatar,
+          steamTradeLink: acc.steamTradeLink
+        }).catch(() => {});
+      }
+
+      updateDomAvatar(acc.avatar);
+      updateDomNickname(acc.nickname);
+      try {
+        if (typeof WsMock !== 'undefined') {
+          WsMock.broadcastProfile(acc);
+        }
+      } catch(e) {}
+
       window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
       return acc;
     }
@@ -6308,15 +6460,7 @@
     function syncDomAvatars() {
       const activeUser = LocalDB.getActiveUser();
       if (!activeUser || !activeUser.avatar) return;
-      const customAvatar = activeUser.avatar;
-      if (customAvatar && !customAvatar.includes('default-avatar-small')) {
-        const avatarImgs = document.querySelectorAll('up-avatar-with-placeholder img, up-user-info img, up-profile-preview img');
-        avatarImgs.forEach(img => {
-          if (img.src !== customAvatar && (!img.src || img.src.includes('default-avatar') || img.src.includes('avatar-placeholder'))) {
-            img.src = customAvatar;
-          }
-        });
-      }
+      updateDomAvatar(activeUser.avatar);
     }
 
     function syncPushSwitchState() {
