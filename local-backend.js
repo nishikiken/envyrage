@@ -268,12 +268,14 @@
   function updateDomNickname(nickname) {
     if (!nickname) return;
     document.querySelectorAll('up-user-info span, [data-testid="header-profile-name"], .header-profile-name, up-header [class*="name"]').forEach(el => {
-      if (el.className && (el.className.includes('truncate') || el.className.includes('name'))) {
+      if (el.children.length === 0 && el.className && (el.className.includes('truncate') || el.className.includes('name'))) {
         el.textContent = nickname;
       }
     });
     document.querySelectorAll('up-profile-info [class*="nickname"], [data-testid="profile-nickname"], .profile-nickname').forEach(el => {
-      el.textContent = nickname;
+      if (el.children.length === 0) {
+        el.textContent = nickname;
+      }
     });
   }
   window.updateDomNickname = updateDomNickname;
@@ -281,9 +283,50 @@
   function updateDomId(userId) {
     if (!userId) return;
     const strId = ' ID ' + userId + ' ';
-    document.querySelectorAll('up-user-info span, up-user-info div, [data-testid="user-info-id"], up-profile-info [class*="id"]').forEach(el => {
-      if (el.textContent && (el.textContent.trim().startsWith('ID ') || el.textContent.trim().startsWith('ID:') || el.textContent.trim() === 'ID')) {
-        el.textContent = strId;
+    
+    // 1. Only target leaf nodes (children.length === 0) so we never wipe out containers/buttons
+    document.querySelectorAll('up-user-info span, [data-testid="user-info-id"]').forEach(el => {
+      if (el.children.length === 0 && el.textContent) {
+        const txt = el.textContent.trim();
+        if (txt === 'ID' || txt.startsWith('ID ') || txt.startsWith('ID:')) {
+          el.textContent = strId;
+          if (!el.className.includes('border')) {
+            el.className = "!pointer-events-auto mr-1 rounded-[0.375rem] border-[1px] border-[#FFFFFF1A] px-2 pb-[1px] text-[0.8125rem] font-medium text-white/50 !select-auto";
+          }
+        }
+      }
+    });
+
+    // 2. Safeguard: ensure settings and logout buttons exist next to the ID span in up-user-info
+    document.querySelectorAll('up-user-info').forEach(comp => {
+      const allSpans = Array.from(comp.querySelectorAll('span'));
+      const idSpan = allSpans.find(s => s.children.length === 0 && (s.textContent || '').trim().startsWith('ID'));
+      if (idSpan && idSpan.parentElement) {
+        const parent = idSpan.parentElement;
+
+        if (!idSpan.className.includes('border')) {
+          idSpan.className = "!pointer-events-auto mr-1 rounded-[0.375rem] border-[1px] border-[#FFFFFF1A] px-2 pb-[1px] text-[0.8125rem] font-medium text-white/50 !select-auto";
+        }
+
+        if (!parent.querySelector('[data-testid="user-info-settings-button"]')) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.setAttribute('data-testid', 'user-info-settings-button');
+          btn.className = 'flex h-[1.75rem] w-[1.75rem] items-center justify-center rounded-md bg-transparent transition-all duration-200 hover:opacity-80';
+          btn.setAttribute('upcustomtooltip', 'Настройки');
+          btn.innerHTML = '<img alt="" class="h-4 w-4 brightness-0 invert" src="/assets/icons/settings.svg">';
+          parent.appendChild(btn);
+        }
+
+        if (!parent.querySelector('[data-testid="user-info-logout-button"]')) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.setAttribute('data-testid', 'user-info-logout-button');
+          btn.className = 'flex h-[1.75rem] w-[1.75rem] items-center justify-center rounded-md bg-transparent transition-all duration-200 hover:opacity-80';
+          btn.setAttribute('upcustomtooltip', 'Выйти');
+          btn.innerHTML = '<img alt="" class="h-4 w-4 brightness-0 invert" src="/assets/icons/logout.svg">';
+          parent.appendChild(btn);
+        }
       }
     });
   }
@@ -305,7 +348,7 @@
     });
     document.querySelectorAll('up-user-info img, up-header img, header img, [data-testid*="avatar"] img, .profile-avatar, up-avatar img, up-profile-preview img').forEach(el => {
       const s = el.getAttribute('src') || '';
-      if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online') && !s.includes('logo') && !s.includes('bell') && !s.includes('gear')) {
+      if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online') && !s.includes('logo') && !s.includes('bell') && !s.includes('gear') && !s.includes('settings') && !s.includes('logout')) {
         el.src = avatarUrl;
         el.classList.remove('opacity-0');
         el.classList.add('opacity-100');
@@ -6277,6 +6320,33 @@
         e.preventDefault();
         e.stopPropagation();
         renderProfileEditModal();
+        return;
+      }
+
+      // Logout Trigger in profile
+      const isLogoutTrigger = target.closest('[data-testid="user-info-logout-button"]');
+      if (isLogoutTrigger) {
+        e.preventDefault();
+        e.stopPropagation();
+        LocalDB.clearActiveUser();
+        localStorage.removeItem('upgrader_active_user');
+        sessionStorage.removeItem('upgrader_active_user');
+        if (window.__upgraderUserService && typeof window.__upgraderUserService.logout === 'function') {
+          try { window.__upgraderUserService.logout(); } catch(e){}
+        } else if (window.__upgraderUserService && typeof window.__upgraderUserService.setUser === 'function') {
+          try { window.__upgraderUserService.setUser(null); } catch(e){}
+        }
+        if (window.__upgraderUserState && window.__upgraderUserState.currentUser && typeof window.__upgraderUserState.currentUser.set === 'function') {
+          try { window.__upgraderUserState.currentUser.set(null); } catch(e){}
+        }
+        if (window.__upgraderUserState && window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+          try { window.__upgraderUserState.userStats.set(null); } catch(e){}
+        }
+        window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: null }));
+        window.location.hash = '';
+        setTimeout(() => {
+          window.location.reload();
+        }, 80);
         return;
       }
 
