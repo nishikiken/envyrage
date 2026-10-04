@@ -799,7 +799,11 @@
                 if (u.withdrawn_amount !== undefined) accounts[uname].withdrawnAmount = Number(u.withdrawn_amount);
                 if (u.withdrawn_count !== undefined) accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count);
                 if (u.best_drop !== undefined) accounts[uname].bestDrop = u.best_drop;
-                accounts[uname].inventory = userInv;
+                // Merge cloud inventory with existing local items (preserving freshly bought or withdrawing items)
+                const cloudIds = new Set(userInv.map(x => String(x.id)));
+                const currentLocal = accounts[uname].inventory || [];
+                const localOnly = currentLocal.filter(x => !cloudIds.has(String(x.id)));
+                accounts[uname].inventory = [...userInv, ...localOnly];
               } else {
                 // New user registered from another browser or device!
                 accounts[uname] = {
@@ -2268,7 +2272,8 @@
       if (!acc || !item) return null;
 
       acc.withdrawingItems = acc.withdrawingItems || {};
-      const durationMs = Math.floor(65 + Math.random() * 45) * 1000; // 65 to 110 seconds (1 to 2 minutes)
+      const durationMs = Math.floor(180 + Math.random() * 60) * 1000; // 3 to 4 minutes (realistic trade window)
+      const loadingDurationMs = 28000; // 28 seconds authentic loading ("Ожидание продавца")
       const tradeOfferId = Math.floor(1000000000 + Math.random() * 9000000000);
       const expiresAt = new Date(Date.now() + durationMs).toISOString();
 
@@ -2276,6 +2281,7 @@
         id: String(item.id),
         item: item,
         startedAt: Date.now(),
+        loadingDurationMs: loadingDurationMs,
         durationMs: durationMs,
         tradeOfferId: String(tradeOfferId),
         expiresAt: expiresAt
@@ -2298,18 +2304,6 @@
       this.saveAccounts(accounts);
       this.setActiveUser(username);
       window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
-
-      // Remove from Supabase inventory immediately so other browsers don't see it as available
-      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-        SupabaseDB.removeInventoryItem(item.id).catch(() => {});
-      }
-
-      // Broadcast WebSocket deletion so main upgrader page table removes it immediately!
-      try {
-        if (typeof WsMock !== 'undefined' && WsMock.broadcastDeletedItems) {
-          WsMock.broadcastDeletedItems([item.id, item.originalSkinId].filter(Boolean));
-        }
-      } catch(e) {}
 
       return entry;
     }
@@ -4169,7 +4163,8 @@
         const isWithdrawing = LocalDB.isItemWithdrawing(activeUser.username, itemId);
         const wEntry = isWithdrawing ? (activeUser.withdrawingItems && activeUser.withdrawingItems[String(itemId)]) : null;
         const elapsed = wEntry ? (now - wEntry.startedAt) : 0;
-        const isWaitingAccept = elapsed >= 4000;
+        const loadingDuration = (wEntry && wEntry.loadingDurationMs) || 28000;
+        const isWaitingAccept = elapsed >= loadingDuration;
 
         const itemStatus = isWithdrawing ? 'locked_for_withdrawal' : (entry.status || 'available');
         const withdrawalInfo = isWithdrawing ? {
@@ -4835,28 +4830,40 @@
       const itemName = entry.item ? entry.item.marketName : '';
       const itemImg = entry.item ? entry.item.image : '';
 
-      // Find cell by testid, image or item name
+      // Find cell by testid directly, or through cells list
       let parentCell = null;
-      for (const cell of cells) {
-        if (cell.querySelector(`[data-testid*="${id}"]`)) {
-          parentCell = cell;
-          break;
-        }
-        const img = cell.querySelector('img');
-        if (img && itemImg && img.src && (img.src === itemImg || img.src.includes(itemImg.slice(-25)))) {
-          parentCell = cell;
-          break;
-        }
-        if (itemName && cell.textContent && cell.textContent.includes(itemName)) {
-          parentCell = cell;
-          break;
+      const directTarget = document.querySelector(`[data-testid*="withdraw-${id}"]`) ||
+                           document.querySelector(`[data-testid*="${id}"]`);
+      if (directTarget) {
+        parentCell = directTarget.closest('div.relative') || 
+                     directTarget.closest('.grid > div') || 
+                     directTarget.closest('up-profile-items-table div.relative') ||
+                     directTarget.parentElement;
+      }
+
+      if (!parentCell) {
+        for (const cell of cells) {
+          if (cell.querySelector(`[data-testid*="${id}"]`)) {
+            parentCell = cell;
+            break;
+          }
+          const img = cell.querySelector('img');
+          if (img && itemImg && img.src && (img.src === itemImg || img.src.includes(itemImg.slice(-25)))) {
+            parentCell = cell;
+            break;
+          }
+          if (itemName && cell.textContent && cell.textContent.includes(itemName)) {
+            parentCell = cell;
+            break;
+          }
         }
       }
 
       if (parentCell) {
         const elapsed = now - entry.startedAt;
         const remainingMs = Math.max(0, entry.durationMs - elapsed);
-        const isWaitingAccept = elapsed >= 4000;
+        const loadingDuration = entry.loadingDurationMs || 28000;
+        const isWaitingAccept = elapsed >= loadingDuration;
 
         const secs = Math.ceil(remainingMs / 1000);
         const mins = Math.floor(secs / 60);
@@ -4878,6 +4885,7 @@
           parentCell.style.position = 'relative';
           parentCell.prepend(overlay);
         } else {
+          overlay.classList.add('up-withdrawing-overlay');
           overlay.classList.remove('opacity-0', 'pointer-events-none', 'hidden');
           overlay.classList.add('opacity-100', 'pointer-events-auto');
           overlay.style.opacity = '1';
@@ -4894,8 +4902,30 @@
           if (overlay.dataset.stage !== 'stage1') {
             overlay.dataset.stage = 'stage1';
             statusEl.innerHTML = `
-              <img src="${getAssetPath('/assets/icons/loading-yellow.svg')}" alt="" class="mx-auto h-5 w-5 animate-spin" style="width:20px;height:20px;animation:upSpin 1s linear infinite;display:block;margin:0 auto;" />
-              <span class="text-gray text-xxs text-center font-normal" style="color:#8E8F94;font-size:11px;font-family:'Exo 2',sans-serif;font-weight:400;text-align:center;">${waitingText}</span>
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto" style="width:24px;height:24px;animation:upSpin 1s linear infinite;display:block;margin:0 auto;">
+                  <g clip-path="url(#clip0_9367_19811)">
+                    <path d="M5.90914 9.99991C5.90914 9.49785 5.50211 9.09082 5.00004 9.09082H1.36368C0.86162 9.09082 0.45459 9.49785 0.45459 9.99991C0.45459 10.502 0.86162 10.909 1.36368 10.909H5.00004C5.50211 10.909 5.90914 10.502 5.90914 9.99991Z" fill="url(#paint0_linear_9367_19811)"/>
+                    <path d="M18.6365 9.09082H16.8183C16.3162 9.09082 15.9092 9.49785 15.9092 9.99991C15.9092 10.502 16.3162 10.909 16.8183 10.909H18.6365C19.1385 10.909 19.5455 10.502 19.5455 9.99991C19.5455 9.49785 19.1385 9.09082 18.6365 9.09082Z" fill="url(#paint1_linear_9367_19811)"/>
+                    <path d="M10.4545 5.45455C10.9566 5.45455 11.3636 5.04752 11.3636 4.54545V0.909091C11.3636 0.40703 10.9566 0 10.4545 0C9.95244 0 9.54541 0.40703 9.54541 0.909091V4.54545C9.54541 5.04752 9.95244 5.45455 10.4545 5.45455Z" fill="url(#paint2_linear_9367_19811)"/>
+                    <path d="M10.4545 14.5454C9.95244 14.5454 9.54541 14.9524 9.54541 15.4545V19.0909C9.54541 19.5929 9.95244 20 10.4545 20C10.9566 20 11.3636 19.5929 11.3636 19.0909V15.4545C11.3636 14.9524 10.9566 14.5454 10.4545 14.5454Z" fill="url(#paint3_linear_9367_19811)"/>
+                    <path d="M4.6691 2.92885C4.31419 2.57382 3.73855 2.57388 3.38346 2.92885C3.02843 3.28388 3.02843 3.85945 3.38346 4.21448L5.95479 6.78588C6.13231 6.96339 6.36498 7.05218 6.59758 7.05218C6.83019 7.05218 7.06291 6.96339 7.24037 6.78594C7.5954 6.43091 7.5954 5.85533 7.24037 5.5003L4.6691 2.92885Z" fill="url(#paint4_linear_9367_19811)"/>
+                    <path d="M14.9542 13.214C14.5993 12.859 14.0236 12.859 13.6686 13.214C13.3136 13.569 13.3136 14.1446 13.6686 14.4996L16.24 17.0709C16.4175 17.2484 16.6502 17.3371 16.8828 17.3371C17.1155 17.3371 17.3482 17.2483 17.5256 17.0709C17.8807 16.7159 17.8807 16.1403 17.5256 15.7853L14.9542 13.214Z" fill="url(#paint5_linear_9367_19811)"/>
+                    <path d="M5.95473 13.214L3.38346 15.7853C3.02843 16.1403 3.02843 16.7159 3.38346 17.0709C3.56098 17.2485 3.79364 17.3372 4.02631 17.3372C4.25898 17.3372 4.49164 17.2485 4.6691 17.0709L7.24037 14.4997C7.5954 14.1446 7.5954 13.5691 7.24037 13.214C6.88534 12.859 6.3097 12.859 5.95473 13.214Z" fill="url(#paint6_linear_9367_19811)"/>
+                  </g>
+                  <defs>
+                    <linearGradient id="paint0_linear_9367_19811" x1="0.509135" y1="9.17199" x2="6.04465" y2="9.97608" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint1_linear_9367_19811" x1="15.9455" y1="9.17199" x2="19.6787" y2="9.53351" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint2_linear_9367_19811" x1="9.56359" y1="0.243507" x2="11.4472" y2="0.273908" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint3_linear_9367_19811" x1="9.56359" y1="14.7889" x2="11.4472" y2="14.8193" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint4_linear_9367_19811" x1="3.16108" y1="2.85856" x2="7.69905" y2="3.07828" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint5_linear_9367_19811" x1="13.4462" y1="13.1437" x2="17.9843" y2="13.3635" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint6_linear_9367_19811" x1="3.16108" y1="13.1437" x2="7.69905" y2="13.3634" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <clipPath id="clip0_9367_19811"><rect width="20" height="20" fill="white"/></clipPath>
+                  </defs>
+                </svg>
+                <span class="text-gray text-xxs text-center font-normal" style="color:#8E8F94;font-size:11px;font-family:'Exo 2',sans-serif;font-weight:400;text-align:center;">${waitingText}</span>
+              </div>
             `;
           }
         } else {
@@ -4904,7 +4934,17 @@
             overlay.dataset.stage = 'stage2';
             statusEl.innerHTML = `
               <div class="flex items-center justify-center gap-2.5" style="display:flex;align-items:center;justify-content:center;gap:6px;">
-                <img src="${getAssetPath('/assets/icons/yellowTimer.svg')}" alt="" class="h-5 w-5" style="width:18px;height:18px;" />
+                <svg width="20" height="20" viewBox="0 0 21 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:18px;height:18px;display:inline-block;vertical-align:middle;">
+                  <g clip-path="url(#clip0_2248_19073)">
+                    <path d="M16.5582 5.95354L17.7557 4.75604L16.5773 3.57729L15.2963 4.85833C14.126 4.02899 12.7604 3.51786 11.3332 3.375V1.66667H12.9998V0H7.99984V1.66667H9.66651V3.375C8.23929 3.51786 6.87366 4.02899 5.70338 4.85833L4.42234 3.57729L3.24401 4.75604L4.44151 5.95354C3.32371 7.13704 2.57704 8.62203 2.2937 10.2251C2.01036 11.8282 2.20276 13.4791 2.84714 14.9741C3.49152 16.4691 4.55966 17.7426 5.91965 18.6373C7.27964 19.532 8.87192 20.0089 10.4998 20.0089C12.1278 20.0089 13.72 19.532 15.08 18.6373C16.44 17.7426 17.5082 16.4691 18.1525 14.9741C18.7969 13.4791 18.9893 11.8282 18.706 10.2251C18.4226 8.62203 17.676 7.13704 16.5582 5.95354ZM10.4998 18.3333C9.1813 18.3333 7.89237 17.9423 6.79604 17.2098C5.69971 16.4773 4.84523 15.4361 4.34064 14.2179C3.83606 12.9997 3.70404 11.6593 3.96127 10.3661C4.21851 9.07286 4.85345 7.88497 5.7858 6.95262C6.71815 6.02027 7.90603 5.38533 9.19924 5.1281C10.4924 4.87086 11.8329 5.00289 13.0511 5.50747C14.2692 6.01205 15.3104 6.86654 16.043 7.96287C16.7755 9.05919 17.1665 10.3481 17.1665 11.6667C17.1645 13.4342 16.4615 15.1287 15.2117 16.3785C13.9619 17.6283 12.2673 18.3313 10.4998 18.3333Z" fill="url(#paint0_linear_2248_19073)"/>
+                    <path d="M10.5 6.6665V11.6665H5.5C5.5 12.6554 5.79324 13.6221 6.34265 14.4444C6.89206 15.2666 7.67295 15.9075 8.58658 16.2859C9.50021 16.6643 10.5055 16.7634 11.4755 16.5704C12.4454 16.3775 13.3363 15.9013 14.0355 15.202C14.7348 14.5028 15.211 13.6119 15.4039 12.642C15.5969 11.672 15.4978 10.6667 15.1194 9.75309C14.741 8.83946 14.1001 8.05856 13.2779 7.50916C12.4556 6.95975 11.4889 6.6665 10.5 6.6665Z" fill="url(#paint1_linear_2248_19073)"/>
+                  </g>
+                  <defs>
+                    <linearGradient id="paint0_linear_2248_19073" x1="2.33317" y1="0.893253" x2="19.5761" y2="1.5887" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <linearGradient id="paint1_linear_2248_19073" x1="5.6" y1="7.11293" x2="15.9383" y2="7.61352" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                    <clipPath id="clip0_2248_19073"><rect width="20" height="20" fill="white" transform="translate(0.5)"/></clipPath>
+                  </defs>
+                </svg>
                 <span class="up-withdraw-timer font-tektur text-[0.8125rem] leading-[1.0625rem] font-bold text-[#FFDD23]" style="font-family:Tektur,sans-serif;font-size:13px;font-weight:700;color:#FFDD23;">${timerFormatted}</span>
               </div>
               <a href="https://steamcommunity.com/tradeoffer/${entry.tradeOfferId || '9482716492'}/" target="_blank" data-testid="withdrawal-status-accept-link" class="bg-gradient-yellow-main px-auto mx-2.5 flex cursor-pointer items-center justify-center self-stretch rounded-[0.375rem] py-2 transition-all duration-200 hover:shadow-[0_0_10px_0_rgba(255,171,27,0.80)]" style="display:flex;align-items:center;justify-content:center;width:calc(100% - 20px);margin:0 10px;padding:7px 0;border-radius:6px;background:linear-gradient(180deg,#FFE02D 0%,#FFB800 100%);color:#1C1C20;font-family:Tektur,sans-serif;font-size:12px;font-weight:800;text-decoration:none;box-shadow:0 0 12px rgba(255,171,27,0.5);transition:transform 0.15s ease;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;">
@@ -6447,7 +6487,22 @@
         const itemId = testId.replace('profile-items-table-withdraw-', '').replace('item-card-withdraw-', '').trim();
         const activeUser = LocalDB.getActiveUser();
         if (activeUser && itemId) {
-          const item = (activeUser.inventory || []).find(x => String(x.id) === String(itemId) || String(x.originalSkinId) === String(itemId));
+          let item = (activeUser.inventory || []).find(x => String(x.id) === String(itemId) || String(x.originalSkinId) === String(itemId));
+          if (!item) {
+            // Reconstruct item from the clicked card in DOM so withdrawal never fails
+            const cardEl = withdrawBtn.closest('div.relative') || withdrawBtn.closest('up-profile-items-table .grid > div') || withdrawBtn.parentElement;
+            const imgEl = cardEl ? cardEl.querySelector('img') : null;
+            const nameEl = cardEl ? (cardEl.querySelector('span.line-clamp-1') || cardEl.querySelector('span.font-bold') || cardEl.querySelector('span')) : null;
+            item = {
+              id: itemId,
+              marketName: nameEl ? nameEl.textContent.trim() : 'CS2 Item',
+              price: 15.00,
+              image: imgEl ? imgEl.src : ''
+            };
+            if (!activeUser.inventory) activeUser.inventory = [];
+            activeUser.inventory.push(item);
+            LocalDB.saveAccounts(LocalDB.getAccounts());
+          }
           if (item) {
             if (LocalDB.isItemWithdrawing(activeUser.username, item.id)) {
               showToast('Этот скин уже находится в процессе вывода в Steam', 'info');
@@ -6460,6 +6515,20 @@
           }
         }
         return;
+      }
+
+      // Catch clicks on Steam accept link in card overlay: complete withdrawal shortly after user accepts trade offer
+      const acceptLink = target.closest('[data-testid="withdrawal-status-accept-link"]');
+      if (acceptLink) {
+        const overlay = acceptLink.closest('.up-withdrawing-overlay') || acceptLink.closest('[data-withdrawing-id]');
+        const itemId = overlay ? overlay.dataset.withdrawingId : null;
+        const activeUser = LocalDB.getActiveUser();
+        if (activeUser && itemId) {
+          setTimeout(() => {
+            LocalDB.completeWithdrawal(activeUser.username, itemId);
+            syncWithdrawingCards();
+          }, 3500);
+        }
       }
 
       // Catch clicks on push notifications switch toggle in profile

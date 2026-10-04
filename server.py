@@ -266,7 +266,16 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             self.path = '/admin.html'
             return super().do_GET()
 
-        # 4. If path starts with /cis, /en, or /ru, serve that directory's index.html
+        # 4. Check if static asset exists relative to root when requested under /cis/, /en/, or /ru/
+        for lang_prefix in ['/cis/', '/en/', '/ru/']:
+            if parsed.path.startswith(lang_prefix):
+                candidate_rel = parsed.path[len(lang_prefix):]
+                candidate_path = os.path.join(DIRECTORY, candidate_rel)
+                if os.path.isfile(candidate_path):
+                    self.path = '/' + candidate_rel
+                    return super().do_GET()
+
+        # 5. If path starts with /cis, /en, or /ru, serve that directory's index.html
         if parsed.path.startswith('/cis'):
             self.path = '/cis/index.html'
             return super().do_GET()
