@@ -1817,14 +1817,11 @@
           fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: SupabaseAdmin.getHeaders() })
             .then(r => r.json())
             .then(list => {
-              const s = (Array.isArray(list) && list[0]) || {};
-              const cfg = s.config || {};
-              cfg.target_username = acc.username;
-              cfg.target_id = String(acc.id);
-              cfg.luck = mode;
-              cfg.user_luck = cfg.user_luck || {};
-              cfg.user_luck[acc.username.toLowerCase()] = mode;
-              cfg.user_luck[String(acc.id)] = mode;
+              const cfg = {
+                target_username: acc.username,
+                target_id: String(acc.id),
+                luck: mode
+              };
 
               return fetch(`${sbUrl}/rest/v1/admin_settings?key=eq.global_settings`, {
                 method: 'PATCH',
@@ -1893,7 +1890,6 @@
               updated_at: new Date().toISOString()
             })
           }).catch(() => {});
-          SupabaseAdmin.recordUserStats(acc.username, acc.id, { best_drop: null });
         }
       }
 
@@ -1942,7 +1938,6 @@
               updated_at: new Date().toISOString()
             })
           }).catch(() => {});
-          SupabaseAdmin.recordUserStats(acc.username, acc.id, { withdrawn_amount: amt, withdrawn_items_count: count });
         }
       }
 
@@ -1991,7 +1986,6 @@
               updated_at: new Date().toISOString()
             })
           }).catch(() => {});
-          SupabaseAdmin.recordUserStats(acc.username, acc.id, { upgrades_made: count });
         }
       }
 
@@ -2039,7 +2033,6 @@
               updated_at: new Date().toISOString()
             })
           }).catch(() => {});
-          SupabaseAdmin.recordUserStats(acc.username, acc.id, { balance: bal });
         }
       }
 
@@ -2242,27 +2235,8 @@
         };
       },
       async recordUserStats(username, userId, stats) {
-        const url = this.getUrl();
-        if (!url) return;
-        try {
-          const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
-          if (!res.ok) return;
-          const list = await res.json();
-          const s = (Array.isArray(list) && list[0]) || {};
-          const cfg = s.config || {};
-          cfg.user_stats = cfg.user_stats || {};
-          if (username) cfg.user_stats[username.toLowerCase()] = { ...(cfg.user_stats[username.toLowerCase()] || {}), ...stats };
-          if (userId) cfg.user_stats[String(userId)] = { ...(cfg.user_stats[String(userId)] || {}), ...stats };
-
-          await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings`, {
-            method: 'PATCH',
-            headers: this.getHeaders(),
-            body: JSON.stringify({
-              config: cfg,
-              updated_at: new Date().toISOString()
-            })
-          });
-        } catch(e) {}
+        // User data belongs strictly in the 'users' table, not dumped into admin_settings
+        return;
       },
       async syncAllToDB() {
         const url = this.getUrl();
@@ -2312,10 +2286,9 @@
         const url = this.getUrl();
         if (!url) return;
         try {
-          const ts = Date.now();
           const [usersRes, adminRes] = await Promise.all([
-            fetch(`${url}/rest/v1/users?select=*&_t=${ts}`, { headers: this.getHeaders() }),
-            fetch(`${url}/rest/v1/admin_settings?select=*&_t=${ts}`, { headers: this.getHeaders() })
+            fetch(`${url}/rest/v1/users?select=*`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/admin_settings?select=*`, { headers: this.getHeaders() })
           ]);
 
           let settingsObj = null;

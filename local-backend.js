@@ -377,12 +377,38 @@
           imgEl.style.display = 'block';
         }
       }
-      // Update name
-      container.querySelectorAll('span').forEach(sp => {
-        if (sp.textContent && (sp.textContent.includes('Отобразится') || sp.textContent.includes('★') || sp.textContent.includes('|') || (sp.className && sp.className.includes('text-white')))) {
-          sp.textContent = name;
-        }
-      });
+      
+      // Parse skin info parts (e.g. "★ StatTrak™ Butterfly Knife | Blue Steel (Minimal Wear)")
+      let weaponType = '';
+      let skinName = '';
+      let wear = '';
+      if (name.includes('|')) {
+        const parts = name.split('|');
+        weaponType = parts[0].trim();
+        const rem = parts[1].trim();
+        const m = rem.match(/^(.*?)\s*(\([A-Za-z0-9\s-]+\))?$/);
+        skinName = (m && m[1]) ? m[1].trim() : rem;
+        wear = (m && m[2]) ? m[2].trim() : '';
+      } else {
+        skinName = name;
+      }
+
+      // If Angular rendered template with specific spans, update only their respective slots
+      const typeSpan = container.querySelector('span.uppercase, span.text-xxxs.text-gray');
+      if (typeSpan && weaponType) typeSpan.textContent = weaponType;
+
+      const nameSpan = container.querySelector('span.font-tektur.text-white, span.text-13.font-tektur');
+      if (nameSpan && skinName) nameSpan.textContent = skinName;
+
+      const wearSpan = container.querySelector('span.text-\\[\\#A7A7A7\\], span[class*="A7A7A7"]');
+      if (wearSpan && wear) wearSpan.textContent = wear;
+
+      // Only if container is in fallback mode (e.g. shows "Отобразится после первой игры")
+      const fallbackSpan = container.querySelector('span.text-xs');
+      if (fallbackSpan && fallbackSpan.textContent.includes('Отобразится')) {
+        fallbackSpan.textContent = name;
+      }
+
       // Update price
       if (price > 0) {
         const prEl = container.querySelector('.text-gradient-yellow-main, [class*="convert"], [class*="price"]');
@@ -698,32 +724,7 @@
                 if (u.withdrawn_amount !== undefined) accounts[uname].withdrawnAmount = Number(u.withdrawn_amount);
                 if (u.withdrawn_count !== undefined) accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count);
                 if (u.best_drop !== undefined) accounts[uname].bestDrop = u.best_drop;
-                if (userInv.length > 0) {
-                  accounts[uname].inventory = userInv;
-                } else if (accounts[uname].inventory && accounts[uname].inventory.length > 0) {
-                  // Seed local items to Supabase so other browser sessions see them
-                  const localItems = accounts[uname].inventory;
-                  const invPayload = localItems.map(item => {
-                    const it = item.item || item;
-                    return {
-                      id: String(item.id || ('inv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5))),
-                      user_id: String(u.id),
-                      market_name: it.marketName || it.market_name || item.marketName || 'CS2 Skin',
-                      price: Number(item.price || it.price || 0),
-                      image: it.image || item.image || '',
-                      status: item.status || 'available',
-                      extra: it.extra || item.extra || {},
-                      updated_at: new Date().toISOString()
-                    };
-                  });
-                  fetch(`${url}/rest/v1/inventory`, {
-                    method: 'POST',
-                    headers: { ...this.getHeaders(), 'Prefer': 'resolution=merge-duplicates' },
-                    body: JSON.stringify(invPayload)
-                  }).catch(() => {});
-                } else {
-                  accounts[uname].inventory = [];
-                }
+                accounts[uname].inventory = userInv;
               } else {
                 // New user registered from another browser or device!
                 accounts[uname] = {
@@ -1053,7 +1054,7 @@
         if (uname && uname !== String(userId)) {
           query = `or=(user_id.eq.${encodeURIComponent(userId)},user_id.eq.${encodeURIComponent(uname)})`;
         }
-        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*&_t=${Date.now()}`, {
+        const res = await fetch(`${url}/rest/v1/inventory?${query}&select=*`, {
           method: 'GET',
           headers: this.getHeaders()
         });
@@ -1064,28 +1065,9 @@
         return null;
       }
     },
-    async recordUserStatsInAdminSettings(username, userId, stats) {
-      const url = this.getUrl();
-      if (!url) return;
-      try {
-        const res = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
-        if (!res.ok) return;
-        const list = await res.json();
-        const s = (Array.isArray(list) && list[0]) || {};
-        const cfg = s.config || {};
-        cfg.user_stats = cfg.user_stats || {};
-        if (username) cfg.user_stats[username.toLowerCase()] = stats;
-        if (userId) cfg.user_stats[String(userId)] = stats;
-
-        await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings`, {
-          method: 'PATCH',
-          headers: this.getHeaders(),
-          body: JSON.stringify({
-            config: cfg,
-            updated_at: new Date().toISOString()
-          })
-        });
-      } catch(e) {}
+    async recordUserStatsInAdminSettings() {
+      // User data belongs strictly in the 'users' table, not dumped into admin_settings
+      return;
     },
     async syncLiveAccountAndRig() {
       if (this._isLiveSyncing) return;
@@ -1095,18 +1077,23 @@
         if (!url) return;
 
         const activeUser = LocalDB.getActiveUser();
-        const ts = Date.now();
 
         // 1. Fetch admin_settings for real-time cloud luck / rig mode
-        const adminRes = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*&_t=${ts}`, { headers: this.getHeaders() });
+        const adminRes = await fetch(`${url}/rest/v1/admin_settings?key=eq.global_settings&select=*`, { headers: this.getHeaders() });
         let cloudRigMode = 'normal';
         let cloudConfig = {};
+        let targetUname = '';
+        let targetUid = '';
+        let targetLuck = 'normal';
         if (adminRes.ok) {
           const settings = await adminRes.json();
           if (Array.isArray(settings) && settings.length > 0) {
             const s = settings[0];
             cloudRigMode = s.rig_mode === 'custom' ? 'normal' : (s.rig_mode || 'normal');
             cloudConfig = s.config || {};
+            targetUname = (s.target_username || cloudConfig.target_username || '').toLowerCase().trim();
+            targetUid = String(s.target_id || cloudConfig.target_id || '').trim();
+            targetLuck = s.target_luck || cloudConfig.luck || 'normal';
             if (s.server_online) {
               currentOnline = s.server_online;
               updateOnlineBadgeInDOM();
@@ -1118,25 +1105,21 @@
           const uname = (activeUser.username || '').toLowerCase().trim();
           const uid = String(activeUser.id);
 
-          // Determine user's luck from cloudConfig
+          // Determine user's luck from dedicated columns or config
           let userLuck = null;
-          if (cloudConfig.user_luck) {
+          if (targetUname && targetUname === uname) userLuck = targetLuck;
+          if (!userLuck && targetUid && targetUid === uid) userLuck = targetLuck;
+          if (!userLuck && cloudConfig.user_luck) {
             userLuck = cloudConfig.user_luck[uname] || cloudConfig.user_luck[uid];
           }
-          if (!userLuck && cloudConfig.target_username && cloudConfig.target_username.toLowerCase() === uname) {
-            userLuck = cloudConfig.luck || cloudRigMode;
-          }
-          if (!userLuck && cloudConfig.target_id && String(cloudConfig.target_id) === uid) {
-            userLuck = cloudConfig.luck || cloudRigMode;
-          }
-          if (!userLuck && !cloudConfig.target_username && !cloudConfig.target_id) {
+          if (!userLuck && !targetUname && !targetUid) {
             userLuck = cloudRigMode;
           }
 
           // 2. Fetch user's latest row and inventory from Supabase
           const targetQuery = `or=(id.eq.${encodeURIComponent(uid)},username.eq.${encodeURIComponent(uname)})`;
           const [userRes, invRes] = await Promise.all([
-            fetch(`${url}/rest/v1/users?${targetQuery}&select=*&_t=${ts}`, { headers: this.getHeaders() }),
+            fetch(`${url}/rest/v1/users?${targetQuery}&select=*`, { headers: this.getHeaders() }),
             this.fetchUserInventory(uid)
           ]);
 
@@ -1162,7 +1145,6 @@
               userLuck = cloudUser.luck || cloudUser.chance_rig;
             }
 
-            const uStats = (cloudConfig && cloudConfig.user_stats) ? (cloudConfig.user_stats[uname] || cloudConfig.user_stats[uid] || {}) : {};
             let userChanged = false;
             let statsChanged = false;
 
@@ -1188,38 +1170,36 @@
               userChanged = true;
             }
 
-            // 4. Sync Balance from cloud
-            const cloudBal = cloudUser.balance !== undefined ? Number(cloudUser.balance) : (uStats.balance !== undefined ? Number(uStats.balance) : undefined);
+            // 4. Sync Balance from cloud (strictly from users table)
+            const cloudBal = cloudUser.balance !== undefined ? Number(cloudUser.balance) : undefined;
             if (cloudBal !== undefined && !isNaN(cloudBal) && Math.abs(cloudBal - activeUser.balance) > 0.001) {
               activeUser.balance = cloudBal;
               userChanged = true;
               WsMock.broadcastBalance(cloudBal);
             }
 
-            // 5. Sync Upgrades count from cloud
-            const cloudUpgrades = cloudUser.upgrades_made !== undefined ? Number(cloudUser.upgrades_made) : (uStats.upgrades_made !== undefined ? Number(uStats.upgrades_made) : undefined);
+            // 5. Sync Upgrades count from cloud (strictly from users table)
+            const cloudUpgrades = cloudUser.upgrades_made !== undefined ? Number(cloudUser.upgrades_made) : undefined;
             if (cloudUpgrades !== undefined && !isNaN(cloudUpgrades) && cloudUpgrades !== (activeUser.upgradesMade || 0)) {
               activeUser.upgradesMade = cloudUpgrades;
               statsChanged = true;
             }
 
-            // 6. Sync Withdrawn amount & items count from cloud
-            const cloudWithdrawnAmt = cloudUser.withdrawn_amount !== undefined ? Number(cloudUser.withdrawn_amount) : (uStats.withdrawn_amount !== undefined ? Number(uStats.withdrawn_amount) : undefined);
+            // 6. Sync Withdrawn amount & items count from cloud (strictly from users table)
+            const cloudWithdrawnAmt = cloudUser.withdrawn_amount !== undefined ? Number(cloudUser.withdrawn_amount) : undefined;
             if (cloudWithdrawnAmt !== undefined && !isNaN(cloudWithdrawnAmt) && Math.abs(cloudWithdrawnAmt - (activeUser.withdrawnAmount || 0)) > 0.001) {
               activeUser.withdrawnAmount = cloudWithdrawnAmt;
               statsChanged = true;
             }
 
-            const cloudWithdrawnCount = cloudUser.withdrawn_count !== undefined ? Number(cloudUser.withdrawn_count) : (uStats.withdrawn_items_count !== undefined ? Number(uStats.withdrawn_items_count) : (uStats.withdrawn_count !== undefined ? Number(uStats.withdrawn_count) : undefined));
+            const cloudWithdrawnCount = cloudUser.withdrawn_count !== undefined ? Number(cloudUser.withdrawn_count) : undefined;
             if (cloudWithdrawnCount !== undefined && !isNaN(cloudWithdrawnCount) && cloudWithdrawnCount !== (activeUser.withdrawnItemsCount || 0)) {
               activeUser.withdrawnItemsCount = cloudWithdrawnCount;
               statsChanged = true;
             }
 
-            // 7. Sync Best Drop from cloud
-            let cloudBestDrop = undefined;
-            if (cloudUser.best_drop !== undefined) cloudBestDrop = cloudUser.best_drop;
-            else if (uStats.best_drop !== undefined) cloudBestDrop = uStats.best_drop;
+            // 7. Sync Best Drop from cloud (strictly from users table)
+            const cloudBestDrop = cloudUser.best_drop !== undefined ? cloudUser.best_drop : undefined;
             if (cloudBestDrop !== undefined) {
               const prevDropStr = JSON.stringify(activeUser.bestDrop || null);
               const nextDropStr = JSON.stringify(cloudBestDrop || null);
@@ -2153,7 +2133,6 @@
           upgrades_made: acc.upgradesMade,
           best_drop: acc.bestDrop
         }).catch(() => {});
-        SupabaseDB.recordUserStatsInAdminSettings(acc.username, String(acc.id), stats).catch(() => {});
       }
 
       updateDomUpgrades(acc.upgradesMade);
@@ -2261,10 +2240,6 @@
           SupabaseDB.updateUser(acc.id || acc.username, {
             withdrawn_amount: acc.withdrawnAmount,
             withdrawn_count: acc.withdrawnItemsCount
-          }).catch(() => {});
-          SupabaseDB.recordUserStatsInAdminSettings(acc.username, String(acc.id), {
-            withdrawn_amount: acc.withdrawnAmount,
-            withdrawn_items_count: acc.withdrawnItemsCount
           }).catch(() => {});
         }
 
