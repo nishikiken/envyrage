@@ -41,8 +41,39 @@ class UpgraderLiveSync:
         t_tick.start()
 
     def _ticker_worker(self):
-        import random
+        import random, math
         last_jitter = time.time()
+        online_jitter = 0
+
+        schedule = [
+            (0.0, 3500),
+            (3.5, 3440),
+            (5.5, 3480),
+            (7.0, 3750),
+            (8.0, 3980),
+            (10.0, 4020),
+            (12.0, 4080),
+            (13.5, 4750),
+            (15.0, 5040),
+            (16.5, 5080),
+            (18.0, 4980),
+            (19.5, 4550),
+            (21.0, 3950),
+            (22.5, 3600),
+            (23.5, 3510),
+            (24.0, 3500)
+        ]
+
+        def get_base_online(hour):
+            for i in range(len(schedule) - 1):
+                h0, o0 = schedule[i]
+                h1, o1 = schedule[i+1]
+                if h0 <= hour <= h1:
+                    progress = (hour - h0) / (h1 - h0)
+                    smooth = (1 - math.cos(progress * math.pi)) / 2
+                    return o0 + (o1 - o0) * smooth
+            return 4000
+
         while self._running:
             time.sleep(0.025)
             # Smooth increments of 1, 2, or 3 every 25ms (average ~70-100 upgrades/sec, strictly <= 200/sec)
@@ -50,10 +81,17 @@ class UpgraderLiveSync:
             now = time.time()
             with self._lock:
                 self.games_count += delta
-                if now - last_jitter >= 2.0:
+                if now - last_jitter >= 1.8:
                     last_jitter = now
-                    j_delta = random.choice([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5])
-                    self.online = max(5200, min(5900, self.online + j_delta))
+                    lt = time.localtime(now)
+                    hour = lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0
+                    base_online = get_base_online(hour)
+                    step = random.choice([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5])
+                    drift = 0
+                    if online_jitter > 25: drift = -random.randint(1, 3)
+                    elif online_jitter < -25: drift = random.randint(1, 3)
+                    online_jitter = max(-45, min(45, online_jitter + step + drift))
+                    self.online = int(round(base_online + online_jitter))
 
     def _ws_worker(self):
         async def run():
@@ -72,11 +110,6 @@ class UpgraderLiveSync:
                         while self._running:
                             try:
                                 msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
-                                data = json.loads(msg)
-                                val = data.get("data")
-                                if isinstance(val, (int, float)):
-                                    with self._lock:
-                                        self.online = int(val)
                             except asyncio.TimeoutError:
                                 await ws.send(json.dumps({"id": f"poll_online_{time.time()}", "event": "online"}))
                 except Exception:

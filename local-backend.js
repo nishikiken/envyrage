@@ -44,6 +44,32 @@
     }
   } catch(e) {}
 
+  // Remove Steam profile icon completely from profile card
+  try {
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      [data-testid="user-info-steam-link"],
+      up-user-info a[data-testid="user-info-steam-link"],
+      up-user-info a[href*="steamcommunity.com"],
+      up-user-info img[src*="steam-gray"],
+      up-user-info [class*="steam-link"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+    `;
+    if (document.head) {
+      document.head.appendChild(styleEl);
+    } else {
+      document.addEventListener('DOMContentLoaded', () => document.head.appendChild(styleEl));
+    }
+  } catch(e) {}
+
   function isLegacyAccount(acc, key) {
     const k = String(key || '').toLowerCase().trim();
     const u = String((acc && acc.username) || '').toLowerCase().trim();
@@ -277,6 +303,9 @@
         el.textContent = nickname;
       }
     });
+
+    // Remove any steam icon next to nickname in profile card
+    document.querySelectorAll('[data-testid="user-info-steam-link"], up-user-info a[href*="steam"], up-user-info img[src*="steam-gray"]').forEach(el => el.remove());
   }
   window.updateDomNickname = updateDomNickname;
 
@@ -329,6 +358,9 @@
         }
       }
     });
+
+    // Remove any steam icon in profile card
+    document.querySelectorAll('[data-testid="user-info-steam-link"], up-user-info a[href*="steam"], up-user-info img[src*="steam-gray"]').forEach(el => el.remove());
   }
   window.updateDomId = updateDomId;
 
@@ -1137,10 +1169,6 @@
             targetUname = (s.target_username || cloudConfig.target_username || '').toLowerCase().trim();
             targetUid = String(s.target_id || cloudConfig.target_id || '').trim();
             targetLuck = s.target_luck || cloudConfig.luck || 'normal';
-            if (s.server_online) {
-              currentOnline = s.server_online;
-              updateOnlineBadgeInDOM();
-            }
           }
         }
 
@@ -1614,16 +1642,52 @@
   GlobalStats.displayedCount = GlobalStats.getUpgradesCount();
   GlobalStats.targetCount = GlobalStats.displayedCount;
 
-  // Online Counter (Organic realistic fluctuations around 5480)
-  let currentOnline = 5480;
-  try {
-    const saved = localStorage.getItem('online');
-    if (saved) {
-      const p = JSON.parse(saved);
-      if (typeof p.onlineCount === 'number' && p.onlineCount >= 4500 && p.onlineCount <= 6500) {
-        currentOnline = p.onlineCount;
+  // Dynamic Online Counter based on time of day:
+  // - First half of day (morning ~08:00 - 12:00): ~4000
+  // - Peak hours / middle of day (~14:00 - 18:30): ~5000
+  // - Towards night / night (~22:00 - 05:00): ~3500
+  // - Constant organic fluctuations within range: updates every 1.5 - 2s with natural jitter (+/- few players)
+  function getBaseOnlineForHour(hour) {
+    const schedule = [
+      [0.0, 3500],
+      [3.5, 3440],
+      [5.5, 3480],
+      [7.0, 3750],
+      [8.0, 3980],
+      [10.0, 4020],
+      [12.0, 4080],
+      [13.5, 4750],
+      [15.0, 5040],
+      [16.5, 5080],
+      [18.0, 4980],
+      [19.5, 4550],
+      [21.0, 3950],
+      [22.5, 3600],
+      [23.5, 3510],
+      [24.0, 3500]
+    ];
+    for (let i = 0; i < schedule.length - 1; i++) {
+      const [h0, o0] = schedule[i];
+      const [h1, o1] = schedule[i + 1];
+      if (hour >= h0 && hour <= h1) {
+        const progress = (hour - h0) / (h1 - h0);
+        const smoothT = (1 - Math.cos(progress * Math.PI)) / 2;
+        return o0 + (o1 - o0) * smoothT;
       }
     }
+    return 4000;
+  }
+
+  function getDynamicOnlineTarget() {
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+    return getBaseOnlineForHour(h);
+  }
+
+  let onlineJitter = (Math.random() * 20 - 10);
+  let currentOnline = Math.round(getDynamicOnlineTarget() + onlineJitter);
+
+  try {
     localStorage.setItem('online', JSON.stringify({ onlineCount: currentOnline }));
     localStorage.setItem('cookie-consent', 'accepted');
   } catch(e) {}
@@ -1654,12 +1718,18 @@
       GlobalStats.updateHeaderDOM(GlobalStats.displayedCount || GlobalStats.getUpgradesCount());
     } catch(e) {}
   }
-  setInterval(updateOnlineBadgeInDOM, 2000);
+  setInterval(updateOnlineBadgeInDOM, 1000);
 
-  // Organic random online fluctuation (simulating realistic player activity)
+  // Organic random online fluctuation (simulating realistic player activity constantly changing)
   setInterval(() => {
-    const delta = [-5, -4, -3, -2, -1, 1, 2, 3, 4, 5][Math.floor(Math.random() * 9)];
-    currentOnline = Math.max(5150, Math.min(5880, currentOnline + delta));
+    const base = getDynamicOnlineTarget();
+    const step = (Math.random() < 0.5 ? -1 : 1) * (Math.floor(Math.random() * 5) + 1); // ±1..5
+    let drift = 0;
+    if (onlineJitter > 25) drift = -Math.floor(Math.random() * 3 + 1);
+    if (onlineJitter < -25) drift = Math.floor(Math.random() * 3 + 1);
+
+    onlineJitter = Math.max(-45, Math.min(45, onlineJitter + step + drift));
+    currentOnline = Math.round(base + onlineJitter);
     updateOnlineBadgeInDOM();
     try {
       WsMock.broadcast({
@@ -1667,7 +1737,7 @@
         data: currentOnline
       });
     } catch(e) {}
-  }, 2200);
+  }, 1800);
 
   // Smooth continuous incrementer (1, 2, or 3 upgrades per tick, strictly <= 200 upgrades/sec)
   setInterval(() => {
