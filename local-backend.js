@@ -145,127 +145,23 @@
     if (!localStorage.getItem('battle-promo-modal')) {
       localStorage.setItem('battle-promo-modal', JSON.stringify({ isDismissed: true }));
     }
+    if (!localStorage.getItem('cookie-policy-modal')) {
+      localStorage.setItem('cookie-policy-modal', JSON.stringify({ dontShowAgain: true }));
+    }
     const sbUrl = 'https://hyxyablgkjtoxcxnurkk.supabase.co';
     const sbKey = 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb';
     fetch(`${sbUrl}/rest/v1/users?username=in.(666,test_user)`, { method: 'DELETE', headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey } }).catch(() => {});
     fetch(`${sbUrl}/rest/v1/users?id=in.(10001,usr_1790965969344_z52ky)`, { method: 'DELETE', headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey } }).catch(() => {});
   } catch (e) {}
 
-  // Pure Hash Routing Engine for GitHub Pages (only active on GitHub Pages)
+  // SPA Hash Route Restorer for GitHub Pages 404 redirects
   try {
     const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
     if (isGH) {
-    const origPush = history.pushState;
-    const origReplace = history.replaceState;
-
-    function getRepoBase() {
-      const p = window.location.pathname || '/';
-      const m = p.match(/^(\/[^\/]+)/);
-      if (window.location.hostname.includes('github.io') && m) {
-        return m[1];
-      }
-      if (p.startsWith('/envyrage')) return '/envyrage';
-      if (p.startsWith('/portfolio')) return '/portfolio';
-      return '';
-    }
-
-    function formatCleanHashUrl(url) {
-      if (!url) return url;
-      if (typeof url !== 'string') return url;
-      const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-      const base = isGH ? '/envyrage/' : '/';
-
-      let lang = 'ru';
-      if (url.includes('/en') || url.includes('-en') || url.endsWith('/en') || url === 'en') {
-        lang = 'en';
-      } else if (url.includes('/ru') || url.includes('-ru') || url.endsWith('/ru') || url === 'ru') {
-        lang = 'ru';
-      } else if (window.location.hash && window.location.hash.endsWith('-en')) {
-        lang = 'en';
-      }
-
-      let screen = '';
-      if (url.includes('profile')) screen = 'profile';
-      else if (url.includes('battles')) screen = 'battles';
-      else if (url.includes('vip')) screen = 'vip';
-      else if (url.includes('settings')) screen = 'settings';
-      else if (url.includes('admin')) screen = 'admin';
-      else if (url.includes('tos')) screen = 'tos';
-      else if (url.includes('privacy')) screen = 'privacy-policy';
-      else if (url.includes('cookie')) screen = 'cookie-policy';
-      else if (url.includes('fair')) screen = 'provably-fair';
-
-      if (!screen && !url.includes('#') && (url === '/' || url === '' || url === base || url === '/envyrage' || url.startsWith('/?'))) {
-        if (window.location.hash && window.location.hash.length > 1) {
-          return base + window.location.hash;
-        }
-      }
-
-      let hash = '';
-      if (screen) {
-        hash = lang === 'en' ? (screen + '-en') : screen;
-      } else {
-        hash = '-' + lang;
-      }
-
-      return base + '#' + hash;
-    }
-
-    history.pushState = function(state, title, url) {
-      return origPush.call(this, state, title, formatCleanHashUrl(url));
-    };
-    history.replaceState = function(state, title, url) {
-      return origReplace.call(this, state, title, formatCleanHashUrl(url));
-    };
-
-    // Global Click Interceptor for Navigation Links
-    document.addEventListener('click', function(e) {
-      const a = e.target.closest('a');
-      if (a && a.getAttribute('href')) {
-        const href = a.getAttribute('href');
-        if (href.startsWith('mailto:') || href.startsWith('tel:') || (href.startsWith('http') && !href.includes(window.location.host))) {
-          return;
-        }
-        if (a.closest('up-vip-club') || a.getAttribute('data-testid') === 'vip-club-link' || a.getAttribute('data-testid') === 'vip-club-link-mobile' || href.includes('vip')) {
-          let lang = 'ru';
-          if (href.includes('/en') || href.includes('-en') || (window.location.hash && window.location.hash.endsWith('-en'))) {
-            lang = 'en';
-          }
-          e.preventDefault();
-          window.location.hash = lang === 'en' ? 'vip-en' : 'vip';
-          return;
-        }
-        if (href.startsWith('/') || href.startsWith('./') || href.startsWith('../') || href.startsWith('#')) {
-          let screen = '';
-          if (href.includes('profile')) screen = 'profile';
-          else if (href.includes('battles')) screen = 'battles';
-          else if (href.includes('vip')) screen = 'vip';
-          else if (href.includes('settings')) screen = 'settings';
-          else if (href.includes('admin')) screen = 'admin';
-          else if (href.includes('tos')) screen = 'tos';
-          else if (href.includes('privacy')) screen = 'privacy-policy';
-          else if (href.includes('cookie')) screen = 'cookie-policy';
-          else if (href.includes('fair')) screen = 'provably-fair';
-
-          let lang = 'ru';
-          if (href.includes('/en') || href.includes('-en') || (window.location.hash && window.location.hash.endsWith('-en'))) {
-            lang = 'en';
-          }
-
-          let targetHash = screen ? (lang === 'en' ? (screen + '-en') : screen) : ('-' + lang);
-          e.preventDefault();
-          window.location.hash = targetHash;
-        }
-      }
-    }, true);
-
-    // Hash Route Admin & Sanitizer Listener
-    function handleHashChange() {
-      if (typeof window === 'undefined' || !window.location) return;
       const hash = window.location.hash || '';
-
-      // Clean any accidental slashes inside hash (e.g. #/ru -> #-ru)
-      if (hash.includes('/')) {
+      if (hash === '#admin' || hash.startsWith('#admin')) {
+        window.location.href = '/envyrage/admin/index.html';
+      } else if (hash && hash.length > 1) {
         let clean = hash.replace(/^#\/?/, '').replace(/^\//, '');
         let lang = 'ru';
         let s = clean;
@@ -281,33 +177,18 @@
         let screen = '';
         if (s.includes('profile')) screen = 'profile';
         else if (s.includes('battles')) screen = 'battles';
-        else if (s.includes('vip')) screen = 'vip';
+        else if (s.includes('vip')) screen = 'vip-club';
         else if (s.includes('settings')) screen = 'settings';
-        else if (s.includes('admin')) screen = 'admin';
-        else if (s.includes('tos')) screen = 'tos';
+        else if (s.includes('tos')) screen = 'terms-of-service';
         else if (s.includes('privacy')) screen = 'privacy-policy';
         else if (s.includes('cookie')) screen = 'cookie-policy';
         else if (s.includes('fair')) screen = 'provably-fair';
 
-        let target = screen ? (lang === 'en' ? (screen + '-en') : screen) : ('-' + lang);
-        const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-        const base = isGH ? '/envyrage/' : '/';
-        history.replaceState(null, '', base + '#' + target);
+        const target = screen ? (lang + '/' + screen) : lang;
+        history.replaceState(null, '', '/envyrage/' + target);
       }
 
-      if (window.location.hash === '#admin' || window.location.hash.startsWith('#admin')) {
-        const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-        const adminPath = isGH ? '/envyrage/admin/index.html' : '/admin.html';
-        window.location.href = adminPath;
-      }
-    }
-
-    handleHashChange();
-    window.addEventListener('hashchange', handleHashChange);
-    } // end if (isGH)
-
-    // Dynamic Asset Path Interceptor for GitHub Pages (/envyrage/ prefix)
-    if (isGH) {
+      // Dynamic Asset Path Interceptor for GitHub Pages (/envyrage/ prefix)
       const origSetAttr = Element.prototype.setAttribute;
       Element.prototype.setAttribute = function(name, val) {
         if ((name === 'src' || name === 'href') && typeof val === 'string' && val.startsWith('/assets/')) {
@@ -1653,7 +1534,8 @@
       withdrawnItemsCount: 195,
       depositsAmount: 30000.0,
       vipTier: 'vip_gold',
-      vipWeekStart: new Date().toISOString(),
+      tier: 'vip_gold',
+      vipWeekStart: Date.now(),
       luck: 'normal',
       chanceRig: 'normal',
       email: 'envyrage@gmail.com',
@@ -2024,16 +1906,7 @@
       const accounts = this.getAccounts();
       try {
         const activeU = localStorage.getItem(STORAGE_ACTIVE_KEY);
-        if (!activeU || isLegacyAccount(null, activeU.trim())) {
-          if (accounts['envy!']) {
-            this.setActiveUser('envy!');
-            return accounts['envy!'];
-          }
-          const keys = Object.keys(accounts);
-          if (keys.length > 0) {
-            this.setActiveUser(keys[0]);
-            return accounts[keys[0]];
-          }
+        if (!activeU || activeU === '__GUEST__' || isLegacyAccount(null, activeU.trim())) {
           return null;
         }
         const trimmed = activeU.trim();
@@ -2052,6 +1925,13 @@
           }
         }
         if (acc) {
+          if (acc.username === 'envy!') {
+            if (!acc.depositsAmount || acc.depositsAmount < 25000) {
+              acc.depositsAmount = 30000.0;
+            }
+            acc.vipTier = 'vip_gold';
+            acc.tier = 'vip_gold';
+          }
           const beforeDep = acc.depositsAmount;
           this.checkWeeklyVipReset(acc);
           if (beforeDep !== acc.depositsAmount) {
@@ -2150,10 +2030,12 @@
 
     static clearActiveUser() {
       try {
-        localStorage.removeItem(STORAGE_ACTIVE_KEY);
+        localStorage.setItem(STORAGE_ACTIVE_KEY, '__GUEST__');
         localStorage.removeItem('user');
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
+        localStorage.removeItem('upgrader_active_user');
+        sessionStorage.removeItem('upgrader_active_user');
       } catch (e) {}
     }
 
@@ -2333,6 +2215,14 @@
 
     static checkWeeklyVipReset(acc) {
       if (!acc) return;
+      if (acc.username === 'envy!') {
+        if (!acc.depositsAmount || acc.depositsAmount < 25000) {
+          acc.depositsAmount = 30000.0;
+        }
+        acc.vipTier = 'vip_gold';
+        acc.tier = 'vip_gold';
+        return;
+      }
       const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
       const now = Date.now();
       if (!acc.vipWeekStart) {
@@ -3964,6 +3854,50 @@
   window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
 
 
+  // Battle Victory Effects (Fire Animation & Victory Sound)
+  function triggerBattleWinEffects() {
+    try {
+      const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+      const prefix = isGH ? '/envyrage' : '';
+      const audio = new Audio(prefix + '/assets/sounds/battles/battle_win.mp3');
+      audio.volume = 0.9;
+      audio.play().catch(() => {});
+
+      const wheels = document.querySelectorAll('up-battle-wheel');
+      wheels.forEach(w => {
+        w.classList.add('up-battle-wheel-flame');
+        setTimeout(() => {
+          w.classList.remove('up-battle-wheel-flame');
+        }, 6500);
+      });
+    } catch(e) {}
+  }
+
+  // Setup DOM Observer for battle win reveal in battle room
+  try {
+    let lastWinObserved = 0;
+    const observer = new MutationObserver(() => {
+      const room = document.querySelector('[data-testid="battle-room-page"]');
+      if (room) {
+        const transfer = room.getAttribute('upbattlewintransfer') || room.getAttribute('ng-reflect-up-battle-win-transfer');
+        if (transfer !== null && transfer !== '' && transfer !== 'null') {
+          const now = Date.now();
+          if (now - lastWinObserved > 4000) {
+            lastWinObserved = now;
+            triggerBattleWinEffects();
+          }
+        }
+      }
+    });
+    if (document.body) {
+      observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['upbattlewintransfer', 'ng-reflect-up-battle-win-transfer'] });
+    } else {
+      document.addEventListener('DOMContentLoaded', () => {
+        observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['upbattlewintransfer', 'ng-reflect-up-battle-win-transfer'] });
+      });
+    }
+  } catch(e) {}
+
   // =============================================================
   // BATTLE SYSTEM (Case Battles & PvP Duels Engine)
   // =============================================================
@@ -3971,6 +3905,7 @@
     userLobbies: [],
     botLobbies: [],
     liveLobbies: [],
+    allLobbies: new Map(),
     plans: {},
     initialized: false,
     botNames: authenticNicknames,
@@ -3990,10 +3925,15 @@
 
       const idx = Math.floor(Math.random() * this.botNames.length);
       const avIdx = Math.floor(Math.random() * this.botAvatars.length);
+      const av = this.botAvatars[avIdx];
+      const name = this.botNames[idx];
       return {
         id: botId,
-        nickname: this.botNames[idx],
-        image: this.botAvatars[avIdx]
+        username: name,
+        nickname: name,
+        avatar: av,
+        image: av,
+        avatarUrl: av
       };
     },
     getSkinsForAmount(targetAmount, ownerId) {
@@ -4047,7 +3987,7 @@
       }, 3500);
       setInterval(() => {
         this.tickBots();
-      }, 6500);
+      }, 1800);
     },
     syncLiveLobbies() {
       try {
@@ -4073,6 +4013,10 @@
                 return copy;
               });
               this.liveLobbies = clean;
+              clean.forEach(l => {
+                if (l && l.shareToken) this.allLobbies.set(l.shareToken, l);
+                if (l && l.id) this.allLobbies.set(l.id, l);
+              });
             }
           })
           .catch(() => {});
@@ -4125,17 +4069,29 @@
         isMine: false,
         createdAtTime: Date.now()
       };
+      this.allLobbies.set(shareToken, lobby);
+      this.allLobbies.set(id, lobby);
       this.botLobbies.unshift(lobby);
-      if (this.botLobbies.length > 25) {
-        this.botLobbies.pop();
+      // Disappear oldest battle from the end of the list when new battle is created
+      if (this.botLobbies.length > 14) {
+        const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
+        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 12) {
+          const [removed] = this.botLobbies.splice(oldestWaitingIdx, 1);
+          if (removed) {
+            WsMock.broadcast({
+              event: 'battle.lobby_closed',
+              data: { id: removed.id, shareToken: removed.shareToken }
+            });
+          }
+        }
       }
       return lobby;
     },
     tickBots() {
-      // 1. Purge very old finished bot lobbies (> 45s)
+      // 1. Purge very old finished bot lobbies (> 60s)
       const now = Date.now();
       this.botLobbies = this.botLobbies.filter(l => {
-        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 45000)) {
+        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 60000)) {
           return false;
         }
         return true;
@@ -4143,7 +4099,7 @@
 
       // 2. Bot vs Bot: pick a waiting bot lobby and simulate another bot joining!
       const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
-      if (waiting.length > 0 && Math.random() < 0.75) {
+      if (waiting.length > 0 && Math.random() < 0.65) {
         const target = waiting[Math.floor(Math.random() * waiting.length)];
         const opponentBot = this.getRandomBot();
         while (opponentBot.id === target.createdBy.id) {
@@ -4177,33 +4133,54 @@
         const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
 
         target.round.bank = totalBank.toFixed(2);
-        target.round.roll = roll;
-        target.round.maxRoll = 100000;
-        target.round.winnerId = winnerId;
-        target.round.finishedAt = new Date().toISOString();
-        target.round.status = 'finished';
-        target.status = 'finished';
-        target.closedAt = new Date().toISOString();
-        target.finishedTimestamp = Date.now();
+        // Put in progress with countdown (5s) so users can spectate!
+        target.status = 'in_progress';
+        target.round.status = 'in_progress';
+        target.round.countdownSeconds = 5;
+        target.countdownRemaining = 5;
+        target.round.startedAt = new Date().toISOString();
 
         WsMock.broadcast({
-          event: 'battle.round_finished',
+          event: 'battle.lobby_updated',
           data: target
         });
-        WsMock.broadcast({
-          event: 'battle.lobby_closed',
-          data: {
-            id: target.id,
-            shareToken: target.shareToken,
-            opponent: opponentBot,
-            winnerId: winnerId
-          }
-        });
+
+        // Resolve roll and spin after full countdown
+        setTimeout(() => {
+          target.round.roll = roll;
+          target.round.maxRoll = 100000;
+          target.round.winnerId = winnerId;
+          target.round.finishedAt = new Date().toISOString();
+          target.round.status = 'finished';
+          target.status = 'finished';
+          target.closedAt = new Date().toISOString();
+          target.finishedTimestamp = Date.now();
+
+          WsMock.broadcast({
+            event: 'battle.round_finished',
+            data: target
+          });
+
+          triggerBattleWinEffects();
+
+          // Keep in botLobbies for 45s so users can watch spin before lobby closes
+          setTimeout(() => {
+            WsMock.broadcast({
+              event: 'battle.lobby_closed',
+              data: {
+                id: target.id,
+                shareToken: target.shareToken,
+                opponent: opponentBot,
+                winnerId: winnerId
+              }
+            });
+          }, 45000);
+        }, 5000);
       }
 
       // 3. Keep bot lobby feed fresh with new diverse stakes
       const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
-      if (currentWaitingCount < 7) {
+      if (currentWaitingCount < 8) {
         const amounts = [115, 230, 480, 890, 1400, 2600, 5200, 9500, 14000];
         const newAmt = amounts[Math.floor(Math.random() * amounts.length)];
         const fresh = this.createBotLobby(newAmt);
@@ -4278,6 +4255,10 @@
     },
     getLobby(tokenOrId) {
       this.init();
+      if (!tokenOrId) return null;
+      if (this.allLobbies.has(tokenOrId)) {
+        return this.allLobbies.get(tokenOrId);
+      }
       return this.userLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
              this.liveLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
              this.botLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
@@ -4352,8 +4333,11 @@
 
       const creator = {
         id: String(user.id),
+        username: user.nickname || user.username || 'You',
         nickname: user.nickname || user.username || 'You',
-        image: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
+        avatar: user.avatar || user.image || '/assets/images/default-avatar-small.webp',
+        image: user.avatar || user.image || '/assets/images/default-avatar-small.webp',
+        avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
 
       const lobby = {
@@ -4396,6 +4380,8 @@
         isMine: true
       };
 
+      this.allLobbies.set(shareToken, lobby);
+      this.allLobbies.set(id, lobby);
       this.userLobbies.unshift(lobby);
       WsMock.broadcast({
         event: 'battle.lobby_created',
@@ -4480,29 +4466,40 @@
               id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
               marketName: bs.marketName,
               price: bs.price,
-              image: bs.imageUrl,
-              imageUrl: bs.imageUrl,
+              image: bs.imageUrl || bs.image,
+              imageUrl: bs.imageUrl || bs.image,
               extra: bs.extra,
               obtainedAt: new Date().toISOString()
             };
             activeUser.inventory = activeUser.inventory || [];
             activeUser.inventory.unshift(newInvItem);
             WsMock.broadcastInventoryItem(newInvItem);
+            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+              SupabaseDB.addInventoryItem(activeUser.id, newInvItem).catch(() => {});
+            }
           });
           activeUser.userStats = activeUser.userStats || {};
           activeUser.userStats.battlesWon = (activeUser.userStats.battlesWon || 0) + 1;
           activeUser.userStats.profit = Math.round(((activeUser.userStats.profit || 0) + botAmt) * 100) / 100;
         } else {
+          // USER LOST DUEL: permanently remove lost skins from memory, local storage & Supabase database
           if (Array.isArray(activeUser.inventory)) {
             const lostIds = [];
             activeUser.inventory = activeUser.inventory.filter(it => {
               if (it.locked_for_battle) {
-                lostIds.push(it.id);
+                lostIds.push(String(it.id));
                 return false;
               }
               return true;
             });
-            if (lostIds.length > 0) WsMock.broadcastDeletedItems(lostIds);
+            if (lostIds.length > 0) {
+              WsMock.broadcastDeletedItems(lostIds);
+              lostIds.forEach(id => {
+                if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                  SupabaseDB.removeInventoryItem(id).catch(() => {});
+                }
+              });
+            }
           }
           activeUser.userStats = activeUser.userStats || {};
           activeUser.userStats.profit = Math.round(((activeUser.userStats.profit || 0) - userStake) * 100) / 100;
@@ -4516,6 +4513,13 @@
           }).catch(e => console.warn(e));
         }
 
+        // Notify Angular items service to immediately refresh user inventory UI
+        try {
+          if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+            window.__upgraderItemsService.notifyInventoryUpdate(true);
+          }
+        } catch(e) {}
+
         // Record into persistent battle history
         const histEntry = {
           roundId: String(lobby.id),
@@ -4524,7 +4528,8 @@
           opponent: {
             id: String(bot.id),
             nickname: bot.nickname,
-            image: bot.image
+            image: bot.image || bot.avatar,
+            avatar: bot.avatar || bot.image
           },
           isWinner: userWon,
           roundItems: [
@@ -4548,6 +4553,7 @@
         event: 'battle.round_finished',
         data: lobby
       });
+      triggerBattleWinEffects();
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -4563,35 +4569,61 @@
       const lobby = this.getLobby(shareToken);
       const reqAmt = lobby ? parseFloat(lobby.targetAmount) : 100;
       const userBal = Number((user && user.balance) || 0);
-      const userInv = Array.isArray(user && user.inventory) ? user.inventory.filter(i => !i.locked_for_battle) : [];
+      const userInv = Array.isArray(user && user.inventory) ? user.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((user && user.username), (i.id || (i.item && i.item.id)))) : [];
 
       let matchedItems = [];
       let itemsTotal = 0;
       let scenario = 'shop';
 
-      // 1. Try to find skins from user inventory matching reqAmt or suitable for stake/top-up
+      // 1. Prioritize user inventory skins to cover the stake without forcing site balance
       if (userInv.length > 0) {
-        // Sort skins by closeness to target amount
-        const sorted = [...userInv].sort((a, b) => {
-          const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
-          const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
-          return Math.abs(pa - reqAmt) - Math.abs(pb - reqAmt);
+        const singleFit = userInv.find(it => {
+          const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+          return p >= reqAmt * 0.95 && p <= reqAmt * 1.30;
         });
-        const pick = sorted[0];
-        const p = parseFloat(pick.price || (pick.item && pick.item.price) || 0);
-        if (p > 0) {
-          matchedItems = [pick];
-          itemsTotal = p;
-          if (p >= reqAmt || Math.abs(p - reqAmt) <= 1) {
-            scenario = 'inventory';
-          } else {
-            scenario = 'top-up';
+
+        if (singleFit) {
+          matchedItems = [singleFit];
+          itemsTotal = parseFloat(singleFit.price || (singleFit.item && singleFit.item.price) || 0);
+        } else {
+          const sorted = [...userInv].sort((a, b) => {
+            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
+            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
+            return pb - pa;
+          });
+
+          let currentSum = 0;
+          let combo = [];
+          for (const item of sorted) {
+            const p = parseFloat(item.price || (item.item && item.item.price) || 0);
+            if (p > 0 && (currentSum + p <= reqAmt * 1.30 || combo.length === 0)) {
+              combo.push(item);
+              currentSum += p;
+              if (currentSum >= reqAmt * 0.95 || combo.length >= 4) break;
+            }
+          }
+
+          if (currentSum >= reqAmt * 0.90 || combo.length > 0) {
+            matchedItems = combo;
+            itemsTotal = currentSum;
           }
         }
       }
 
       const planToken = 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
-      const balanceNeeded = Math.max(0, reqAmt - itemsTotal);
+
+      // If selected skins cover at least 95% of reqAmt, NO SITE BALANCE REQUIRED!
+      let balanceNeeded = 0;
+      if (itemsTotal >= reqAmt * 0.95) {
+        balanceNeeded = 0;
+        scenario = 'inventory';
+      } else if (itemsTotal > 0) {
+        balanceNeeded = Math.max(0, reqAmt - itemsTotal);
+        scenario = 'top-up';
+      } else {
+        balanceNeeded = reqAmt;
+        scenario = 'shop';
+      }
 
       // Construct stakeItems with both flat properties and nested .item for mapInventoryItemToDisplayData
       const stakeItems = matchedItems.map(it => {
@@ -4631,7 +4663,7 @@
       };
       this.plans[planToken] = plan;
 
-      const buyItems = balanceNeeded > 0 ? [
+      const buyItems = (balanceNeeded > 0 && scenario !== 'inventory') ? [
         {
           item: {
             id: 'topup_bal',
@@ -4652,7 +4684,7 @@
         sell: [],
         buy: buyItems,
         totals: {
-          purchaseAmount: balanceNeeded.toFixed(2),
+          purchaseAmount: balanceNeeded > 0 ? balanceNeeded.toFixed(2) : '0.00',
           saleProceeds: '0.00',
           balanceBefore: userBal.toFixed(2),
           balanceAfter: Math.max(0, userBal - balanceNeeded).toFixed(2),
@@ -4698,8 +4730,11 @@
 
       const player2 = {
         id: String(user.id),
+        username: user.nickname || user.username || 'You',
         nickname: user.nickname || user.username || 'You',
-        image: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
+        avatar: user.avatar || user.image || '/assets/images/default-avatar-small.webp',
+        image: user.avatar || user.image || '/assets/images/default-avatar-small.webp',
+        avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
 
       const p1Stake = parseFloat(lobby.round.stakes[0].amount);
@@ -4765,6 +4800,9 @@
           user.inventory = user.inventory || [];
           user.inventory.unshift(newInvItem);
           WsMock.broadcastInventoryItem(newInvItem);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.addInventoryItem(user.id, newInvItem).catch(() => {});
+          }
         });
         // If user won, return their staked skins too
         stakedSkins.forEach(bs => {
@@ -4779,12 +4817,24 @@
           };
           user.inventory.unshift(returnedItem);
           WsMock.broadcastInventoryItem(returnedItem);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.addInventoryItem(user.id, returnedItem).catch(() => {});
+          }
         });
 
         user.userStats = user.userStats || {};
         user.userStats.battlesWon = (user.userStats.battlesWon || 0) + 1;
         user.userStats.profit = Math.round(((user.userStats.profit || 0) + p1Stake) * 100) / 100;
       } else {
+        // User LOST DUEL: permanently remove staked items from Supabase database
+        if (plan && Array.isArray(plan.matchedRawItems)) {
+          plan.matchedRawItems.forEach(it => {
+            const iid = String(it.id);
+            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+              SupabaseDB.removeInventoryItem(iid).catch(() => {});
+            }
+          });
+        }
         user.userStats = user.userStats || {};
         user.userStats.profit = Math.round(((user.userStats.profit || 0) - reqAmt) * 100) / 100;
       }
@@ -4799,6 +4849,13 @@
         }).catch(e => console.warn(e));
       }
 
+      // Notify Angular items service so inventory refreshes immediately
+      try {
+        if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+          window.__upgraderItemsService.notifyInventoryUpdate(true);
+        }
+      } catch(e) {}
+
       // Record in persistent battle history
       const histEntry = {
         roundId: String(lobby.id),
@@ -4807,7 +4864,8 @@
         opponent: {
           id: String(lobby.createdBy.id),
           nickname: lobby.createdBy.nickname,
-          image: lobby.createdBy.image || lobby.createdBy.avatar
+          image: lobby.createdBy.image || lobby.createdBy.avatar,
+          avatar: lobby.createdBy.avatar || lobby.createdBy.image
         },
         isWinner: userWon,
         roundItems: [
@@ -4830,6 +4888,7 @@
         event: 'battle.round_finished',
         data: lobby
       });
+      triggerBattleWinEffects();
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -4959,12 +5018,17 @@
     // -------------------------------------------------------------
     if (path.includes('/users/me/vip') || path.includes('/user/vip') || path.endsWith('/vip')) {
       const user = LocalDB.getActiveUser();
-      const deposits = Number((user && user.depositsAmount) || 0);
-      let tier = null;
-      if (deposits >= 500000) tier = 'vip_diamond';
-      else if (deposits >= 100000) tier = 'vip_platinum';
-      else if (deposits >= 25000) tier = 'vip_gold';
-      else if (deposits >= 5000) tier = 'vip_silver';
+      let deposits = Number((user && user.depositsAmount) || 0);
+      let tier = (user && (user.vipTier || user.tier)) || null;
+      if (user && user.username === 'envy!') {
+        if (deposits < 25000) deposits = 30000.0;
+        tier = 'vip_gold';
+      } else {
+        if (deposits >= 500000) tier = 'vip_diamond';
+        else if (deposits >= 100000) tier = 'vip_platinum';
+        else if (deposits >= 25000) tier = 'vip_gold';
+        else if (deposits >= 5000) tier = 'vip_silver';
+      }
 
       return {
         status: 200,
@@ -5709,9 +5773,9 @@
           newsletterSubscribed: true,
           email: activeUser.email || null,
           isEmailVerified: !!activeUser.email,
-          tier: activeUser.vipTier || null,
-          vipTier: activeUser.vipTier || null,
-          depositsAmount: Number(activeUser.depositsAmount || 0),
+          tier: activeUser.vipTier || activeUser.tier || (activeUser.username === 'envy!' ? 'vip_gold' : null),
+          vipTier: activeUser.vipTier || activeUser.tier || (activeUser.username === 'envy!' ? 'vip_gold' : null),
+          depositsAmount: Number(activeUser.depositsAmount || (activeUser.username === 'envy!' ? 30000 : 0)),
           token: 'local_jwt_token_' + activeUser.id,
           steamProfileLink: 'https://steamcommunity.com/profiles/' + activeUser.id,
           steamTradeLink: activeUser.steamTradeLink || ''
@@ -5857,9 +5921,10 @@
       const isProfile = typeof window !== 'undefined' && window.location && window.location.pathname.includes('/profile');
       const reqStatus = params.get('status');
 
-      // CRITICAL FIX: If requested available items OR on main upgrader page, NEVER return items locked for withdrawal!
+      // CRITICAL FIX: If requested available items OR on main upgrader page, NEVER return items locked for withdrawal or battle!
       if (reqStatus === 'available' || !isProfile) {
         userInv = userInv.filter(entry => {
+          if (entry.locked_for_battle) return false;
           const itemId = entry.id || (entry.item && entry.item.id) || entry.originalSkinId;
           return !LocalDB.isItemWithdrawing(activeUser.username, itemId);
         });
@@ -6569,6 +6634,53 @@
       .up-modal-switch input:checked + .up-modal-switch-slider:before {
         transform: translateX(20px) !important;
         background-color: #121316 !important;
+      }
+
+      /* Battle Victory Wheel Flame Effects */
+      @keyframes battleWheelFlamePulse {
+        0% {
+          box-shadow: 0 0 25px rgba(255, 120, 0, 0.85), 0 0 55px rgba(255, 60, 0, 0.65), inset 0 0 20px rgba(255, 180, 0, 0.5);
+          filter: drop-shadow(0 0 15px #ff5500);
+        }
+        50% {
+          box-shadow: 0 0 50px rgba(255, 160, 0, 1), 0 0 95px rgba(255, 80, 0, 0.9), inset 0 0 35px rgba(255, 220, 0, 0.8);
+          filter: drop-shadow(0 0 25px #ff9900) drop-shadow(0 0 45px #ff2200);
+        }
+        100% {
+          box-shadow: 0 0 25px rgba(255, 120, 0, 0.85), 0 0 55px rgba(255, 60, 0, 0.65), inset 0 0 20px rgba(255, 180, 0, 0.5);
+          filter: drop-shadow(0 0 15px #ff5500);
+        }
+      }
+      .up-battle-wheel-flame {
+        border-radius: 9999px !important;
+        animation: battleWheelFlamePulse 1.05s infinite ease-in-out !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        position: relative !important;
+      }
+      .up-battle-wheel-flame::after {
+        content: '';
+        position: absolute;
+        inset: -10px;
+        border-radius: 9999px;
+        background: radial-gradient(circle, rgba(255,140,0,0.35) 0%, rgba(255,50,0,0.2) 65%, transparent 100%);
+        pointer-events: none;
+        animation: battleWheelFlamePulse 0.85s infinite alternate !important;
+        z-index: 10;
+      }
+
+      /* Always hide promo modal, cookie banner and push notification prompts */
+      .cdk-overlay-pane.battle-promo-pane,
+      .cdk-global-overlay-wrapper:has(.battle-promo-pane),
+      .cdk-global-overlay-wrapper:has(.cookie-policy-modal),
+      .battle-about-backdrop,
+      .battle-promo-modal,
+      .cookie-policy-modal,
+      .cookies-consent,
+      up-web-push-notifications {
+        display: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
       }
     `;
     document.head.appendChild(style);
@@ -8405,6 +8517,23 @@
         if (backdrop) backdrop.remove();
       }
 
+      // 4.1 Proactively dismiss battle promo overlay or cookie modals if they mount
+      const promoPanes = document.querySelectorAll('.battle-promo-pane, .battle-promo-modal, .cookie-policy-modal, .cookies-consent, [data-testid="battle-promo-later"], [data-testid="cookie-policy-modal-hide"]');
+      if (promoPanes.length > 0) {
+        promoPanes.forEach(el => {
+          const wrapper = el.closest('.cdk-global-overlay-wrapper') || el.closest('.cdk-overlay-pane');
+          if (wrapper) wrapper.remove();
+          else el.remove();
+        });
+        if (!document.querySelector('#upgrader-auth-modal, #upgrader-deposit-modal, #upgrader-withdrawal-modal, #upgrader-profile-edit-modal, #upgrader-notifications-modal')) {
+          document.querySelectorAll('.cdk-overlay-backdrop').forEach(b => b.remove());
+        }
+      }
+      const promoLaterBtn = document.querySelector('[data-testid="battle-promo-later"], [data-testid="cookie-policy-modal-hide"], [data-testid="battle-promo-close"]');
+      if (promoLaterBtn) {
+        try { promoLaterBtn.click(); } catch(e) {}
+      }
+
       // 5. Ensure push notifications switch is visible and synced
       syncPushSwitchState();
 
@@ -8463,11 +8592,18 @@
   }
 
   // Ensure active user state is consistent on boot
-  const initialActiveUser = LocalDB.getActiveUser();
-  if (initialActiveUser) {
-    LocalDB.setActiveUser(initialActiveUser.username);
-  } else {
+  const activeKey = localStorage.getItem(STORAGE_ACTIVE_KEY);
+  if (!activeKey) {
+    LocalDB.setActiveUser('envy!');
+  } else if (activeKey === '__GUEST__') {
     LocalDB.clearActiveUser();
+  } else {
+    const initialActiveUser = LocalDB.getActiveUser();
+    if (initialActiveUser) {
+      LocalDB.setActiveUser(initialActiveUser.username);
+    } else {
+      LocalDB.clearActiveUser();
+    }
   }
 
   // Trigger Cloud Database Sync on boot
