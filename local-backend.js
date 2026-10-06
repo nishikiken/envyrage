@@ -1701,10 +1701,12 @@
 
   try {
     const isSubdir = window.location.pathname.includes('/cis') || window.location.pathname.includes('/en') || window.location.pathname.includes('/ru') || window.location.pathname.includes('/admin');
+    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+    const ghPrefix = isGH ? '/envyrage' : '';
     const candidates = [
       isSubdir ? '../skins.json' : './skins.json',
-      './skins.json',
-      '/skins.json'
+      ghPrefix ? (ghPrefix + '/skins.json') : './skins.json',
+      './skins.json'
     ];
     for (const url of candidates) {
       try {
@@ -4890,6 +4892,23 @@
   // 7. MOCK REST API HANDLER
   function handleMockApi(method, path, body, params) {
     const activeUser = LocalDB.getActiveUser();
+
+    // -------------------------------------------------------------
+    // REALTIME FEED ENDPOINT (online counter & upgrades count)
+    // -------------------------------------------------------------
+    if (path.includes('realtime-feed')) {
+      const hour = new Date().getHours();
+      const baseCurve = 3500 + Math.sin((hour - 6) / 24 * Math.PI * 2) * 800;
+      const online = Math.floor(baseCurve + (Math.random() * 80 - 40));
+      return {
+        status: 200,
+        data: {
+          online: online,
+          upgradesCount: GlobalStats.displayedCount || 2847600,
+          realtimeDrops: (typeof cachedRealtimeDrops !== 'undefined' && cachedRealtimeDrops) ? cachedRealtimeDrops : []
+        }
+      };
+    }
 
     // -------------------------------------------------------------
     // VIP SYSTEM ENDPOINTS
