@@ -107,15 +107,19 @@
         }
       }
     }
+    if (!localStorage.getItem('battle-promo-modal')) {
+      localStorage.setItem('battle-promo-modal', JSON.stringify({ isDismissed: true }));
+    }
     const sbUrl = 'https://hyxyablgkjtoxcxnurkk.supabase.co';
     const sbKey = 'sb_publishable_RKmTApt-swpThYcx8Iyoqw_oeDGFCfb';
     fetch(`${sbUrl}/rest/v1/users?username=in.(666,test_user)`, { method: 'DELETE', headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey } }).catch(() => {});
     fetch(`${sbUrl}/rest/v1/users?id=in.(10001,usr_1790965969344_z52ky)`, { method: 'DELETE', headers: { 'apikey': sbKey, 'Authorization': 'Bearer ' + sbKey } }).catch(() => {});
   } catch (e) {}
 
-  // Pure Hash Routing Engine for GitHub Pages & Localhost
-  // Ensures all URLs strictly follow /#название with NO slashes after '#'
+  // Pure Hash Routing Engine for GitHub Pages (only active on GitHub Pages)
   try {
+    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+    if (isGH) {
     const origPush = history.pushState;
     const origReplace = history.replaceState;
 
@@ -262,6 +266,7 @@
 
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
+    } // end if (isGH)
   } catch(e) {}
 
   // Helper to dynamically update the Angular odometer balance display
@@ -367,6 +372,7 @@
   function updateDomAvatar(avatarUrl) {
     if (!avatarUrl) return;
     document.querySelectorAll('up-avatar-with-placeholder').forEach(wrap => {
+      if (wrap.closest('up-profile-preview, up-item-card, up-user-item-card, up-my-items-table, up-desired-items-table')) return;
       const ph = wrap.querySelector('.skeleton-block, [class*="placeholder"], [class*="skeleton"]');
       if (ph) ph.style.display = 'none';
       const img = wrap.querySelector('img');
@@ -378,8 +384,15 @@
         img.style.visibility = 'visible';
       }
     });
-    document.querySelectorAll('up-user-info img, up-header img, header img, [data-testid*="avatar"] img, .profile-avatar, up-avatar img, up-profile-preview img').forEach(el => {
+    // Target only header, user menu, and current user's profile avatar; NEVER touch other profiles, items, or skins!
+    document.querySelectorAll('up-user-info img, up-header up-avatar img, header up-avatar img, [data-testid*="header-avatar"] img, .profile-avatar').forEach(el => {
+      if (el.closest('up-item-card, up-user-item-card, up-drop-item, up-drop-item-horizontal, up-best-drop-item, [class*="item-card"], [class*="item_card"], up-my-items-table, up-desired-items-table, up-profile-preview, .items-container, up-battle-stake-item, up-battle-items-strip')) {
+        return;
+      }
       const s = el.getAttribute('src') || '';
+      if (s.includes('economy/image') || s.includes('steamstatic.com/economy') || s.includes('pricempire') || s.includes('items') || s.includes('weapon') || s.includes('skin')) {
+        return;
+      }
       if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online') && !s.includes('logo') && !s.includes('bell') && !s.includes('gear') && !s.includes('settings') && !s.includes('logout')) {
         el.src = avatarUrl;
         el.classList.remove('opacity-0');
@@ -643,6 +656,12 @@
             is_email_verified: !!a.isEmailVerified,
             steam_trade_link: tradeLink,
             steam_privacy: a.steamPrivacy || 'public',
+            deposits_amount: Number(a.depositsAmount || 0),
+            vip_tier: a.vipTier || null,
+            vip_week_start: a.vipWeekStart ? new Date(a.vipWeekStart).toISOString() : new Date().toISOString(),
+            inventory_history: Array.isArray(a.inventoryHistory) ? a.inventoryHistory : [],
+            games_history: Array.isArray(a.gamesHistory) ? a.gamesHistory : [],
+            battles_history: Array.isArray(a.battleHistory) ? a.battleHistory : (Array.isArray(a.battlesHistory) ? a.battlesHistory : []),
             updated_at: new Date().toISOString()
           });
 
@@ -799,6 +818,14 @@
                 if (u.withdrawn_amount !== undefined) accounts[uname].withdrawnAmount = Number(u.withdrawn_amount);
                 if (u.withdrawn_count !== undefined) accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count);
                 if (u.best_drop !== undefined) accounts[uname].bestDrop = u.best_drop;
+                // Preserve VIP and deposit progress
+                const existingDeposits = accounts[uname].depositsAmount || 0;
+                const existingTier = accounts[uname].vipTier || null;
+                accounts[uname].depositsAmount = existingDeposits;
+                accounts[uname].vipTier = existingTier;
+                accounts[uname].inventoryHistory = LocalDB.getInventoryHistory(uname);
+                accounts[uname].gamesHistory = LocalDB.getGamesHistory(uname);
+                accounts[uname].battleHistory = LocalDB.getBattleHistory(uname);
                 // Merge cloud inventory with existing local items (preserving freshly bought or withdrawing items)
                 const cloudIds = new Set(userInv.map(x => String(x.id)));
                 const currentLocal = accounts[uname].inventory || [];
@@ -820,12 +847,15 @@
                   withdrawnItemsCount: Number(u.withdrawn_count || 0),
                   bestDrop: u.best_drop || null,
                   bestDropProbability: (u.best_drop && u.best_drop.probability) || null,
-                  inventoryHistory: [],
-                  gamesHistory: [],
+                  inventoryHistory: LocalDB.getInventoryHistory(uname),
+                  gamesHistory: LocalDB.getGamesHistory(uname),
+                  battleHistory: LocalDB.getBattleHistory(uname),
                   createdAt: u.created_at || new Date().toISOString(),
                   email: u.email || '',
                   isEmailVerified: !!u.is_email_verified,
                   steamTradeLink: realTradeLink,
+                  depositsAmount: 0,
+                  vipTier: null,
                   isTosRead: true,
                   isTosAccepted: true,
                   tosAccepted: true,
@@ -1014,9 +1044,14 @@
           withdrawnAmount: Number(row.withdrawn_amount || 0),
           withdrawnItemsCount: Number(row.withdrawn_count || 0),
           bestDrop: row.best_drop || null,
-          bestDropProbability: (row.best_drop && row.best_drop.probability) || null,
-          inventoryHistory: [],
-          gamesHistory: [],
+          depositsAmount: Number(row.deposits_amount || row.depositsAmount || 0),
+          vipTier: row.vip_tier || row.vipTier || null,
+          tier: row.vip_tier || row.vipTier || null,
+          vipWeekStart: row.vip_week_start || row.vipWeekStart || Date.now(),
+          inventoryHistory: Array.isArray(row.inventory_history) ? row.inventory_history : [],
+          gamesHistory: Array.isArray(row.games_history) ? row.games_history : [],
+          battleHistory: Array.isArray(row.battles_history) ? row.battles_history : (Array.isArray(row.battle_history) ? row.battle_history : []),
+          battlesHistory: Array.isArray(row.battles_history) ? row.battles_history : (Array.isArray(row.battle_history) ? row.battle_history : []),
           createdAt: row.created_at || new Date().toISOString(),
           email: row.email || '',
           isEmailVerified: !!row.is_email_verified,
@@ -1058,7 +1093,6 @@
         if (fields.upgrades_made !== undefined) payload.upgrades_made = Number(fields.upgrades_made);
         if (fields.best_drop !== undefined) payload.best_drop = fields.best_drop;
         if (fields.withdrawn_amount !== undefined) payload.withdrawn_amount = Number(fields.withdrawn_amount);
-        if (fields.withdrawn_count !== undefined) payload.withdrawn_count = Number(fields.withdrawn_count);
         if (fields.password !== undefined) {
           payload.password = fields.password;
           let stl = payload.steam_trade_link || '';
@@ -1067,6 +1101,19 @@
           }
           payload.steam_trade_link = stl;
         }
+        if (fields.depositsAmount !== undefined) payload.deposits_amount = Number(fields.depositsAmount);
+        if (fields.deposits_amount !== undefined) payload.deposits_amount = Number(fields.deposits_amount);
+        if (fields.vipTier !== undefined) payload.vip_tier = fields.vipTier;
+        if (fields.vip_tier !== undefined) payload.vip_tier = fields.vip_tier;
+        if (fields.vipWeekStart !== undefined) payload.vip_week_start = new Date(fields.vipWeekStart).toISOString();
+        if (fields.vip_week_start !== undefined) payload.vip_week_start = new Date(fields.vip_week_start).toISOString();
+        if (fields.inventoryHistory !== undefined) payload.inventory_history = fields.inventoryHistory;
+        if (fields.inventory_history !== undefined) payload.inventory_history = fields.inventory_history;
+        if (fields.gamesHistory !== undefined) payload.games_history = fields.gamesHistory;
+        if (fields.games_history !== undefined) payload.games_history = fields.games_history;
+        if (fields.battlesHistory !== undefined) payload.battles_history = fields.battlesHistory;
+        if (fields.battles_history !== undefined) payload.battles_history = fields.battles_history;
+        if (fields.battleHistory !== undefined) payload.battles_history = fields.battleHistory;
         payload.updated_at = new Date().toISOString();
 
         const targetQuery = `or=(id.eq.${encodeURIComponent(userId)},username.eq.${encodeURIComponent(userId)})`;
@@ -1526,7 +1573,88 @@
 
   // 1. EMBEDDED DEFAULT USER ACCOUNTS & INVENTORY SEED
   // Ensures seamless offline / GitHub Pages persistence without depending on sync skins.json loading
-  const DEFAULT_SEED_ACCOUNTS = {};
+  const DEFAULT_SEED_ACCOUNTS = {
+    'envy!': {
+      id: '1733154',
+      username: 'envy!',
+      nickname: 'm8envyrage',
+      avatar: 'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg',
+      image: 'https://avatars.steamstatic.com/5967dabd8087f06ba16aeb85a4b6d5418242326a_full.jpg',
+      balance: 126938.09,
+      upgradesMade: 719,
+      withdrawnAmount: 371941.75,
+      withdrawnItemsCount: 195,
+      depositsAmount: 30000.0,
+      vipTier: 'vip_gold',
+      vipWeekStart: new Date().toISOString(),
+      luck: 'normal',
+      chanceRig: 'normal',
+      email: 'envyrage@gmail.com',
+      isEmailVerified: true,
+      emailVerified: true,
+      steamTradeLink: 'stl:https://steamcommunity.com/tradeoffer/new/?partner=1173231520&token=2StVgS3y',
+      steamPrivacy: 'public',
+      isTosRead: true,
+      isTosAccepted: true,
+      tosAccepted: true,
+      newsletterSubscribed: true,
+      bestDrop: {
+        id: '27451',
+        appId: 730,
+        extra: { e: 2, g: null, n: ['★ Specialist Gloves', 'Big Swell', 'Factory New'], r: 11, s: false, t: 6, ch: 'ffae39', st: false },
+        image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk71ruQBH4jYLf-i5U-fe9V6NhL-aWMXSAxO1_se1gXD2MghwxtgKHlpr8HifOOV5kFJJyFOVZuhC8l9XjNL-3tgHcg41HzHr4hntBuntpse0LUvZwr_bX3QjfcepqIIhMOUI/360fx360f',
+        price: '171166.510',
+        marketName: '★ Specialist Gloves | Big Swell (Factory New)'
+      },
+      inventory: [
+        {
+          id: 'inv_envy_1',
+          appId: 730,
+          marketName: 'M4A4 | Etch Lord (Field-Tested)',
+          price: '1509.54',
+          image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwSFS-uCvfLViHfecCW2dxeluv_FkAXn3x0gntT_Qyd6sISiQOlFkCsAmFf1c50G5w47mY-7g5AeLiY5FySyp3y5I5C67n3f-vB957v2f8A/360fx360f',
+          status: 'available',
+          extra: { e: 3, g: 14, n: ['M4A4', 'Etch Lord', 'Field-Tested'], r: 13, s: false, t: 16, ch: '4b69ff', st: false }
+        },
+        {
+          id: 'inv_envy_2',
+          appId: 730,
+          marketName: 'StatTrak™ AUG | Arctic Wolf (Factory New)',
+          price: '1510.10',
+          image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL0iYHX9hpb7uaeebZiJ_OQD2eQ2e5j4_RnQSr8xEt04DyEydisdn_COlR0DMIjRu4D50K6woPjYezg4AeMi9tFyXyp2y1Juioqug/360fx360f',
+          status: 'available',
+          extra: { e: 2, g: 2, n: ['AUG', 'Arctic Wolf', 'Factory New'], r: 14, s: false, t: 16, ch: '5e98d9', st: true }
+        },
+        {
+          id: 'inv_envy_3',
+          appId: 730,
+          marketName: 'XM1014 | Bone Machine (Factory New)',
+          price: '1513.45',
+          image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6i5nb_hxZ5P_aebZ_Je-GDWaCze1gu_RlASr9zhggt2-HnNyqIn6RbgtwBMJ1QOFY4UPqldDkMO_l41HXit9AmTK-0H_rOqg4/360fx360f',
+          status: 'available',
+          extra: { e: 2, g: 21, n: ['XM1014', 'Bone Machine', 'Factory New'], r: 13, s: false, t: 16, ch: '4b69ff', st: false }
+        },
+        {
+          id: 'inv_envy_4',
+          appId: 730,
+          marketName: 'Souvenir SG 553 | Gator Mesh (Factory New)',
+          price: '1509.26',
+          image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL5l53b_hxZ5P_aebZiJ_OUDmue1OFm4_RlAX74zkt24D-EyY6uJ3rCOlxwDMYlR-4O50K-kdPiYejg4AeMi4tFyXyp2y1Juy24ug/360fx360f',
+          status: 'available',
+          extra: { e: 2, g: 19, n: ['SG 553', 'Gator Mesh', 'Factory New'], r: 14, s: false, t: 16, ch: '5e98d9', st: false }
+        },
+        {
+          id: 'inv_envy_5',
+          appId: 730,
+          marketName: 'StatTrak™ Dual Berettas | Marina (Minimal Wear)',
+          price: '1510.10',
+          image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwSFS-uCvfLViHfecCW2dxeluv_FkAXn3x0gntT_Qyd6sISiQOlFkCsAmFf1c50G5w47mY-7g5AeLiY5FySyp3y5I5C67n3f-vB957v2f8A/360fx360f',
+          status: 'available',
+          extra: { e: 4, g: 5, n: ['Dual Berettas', 'Marina', 'Minimal Wear'], r: 13, s: false, t: 16, ch: '4b69ff', st: true }
+        }
+      ]
+    }
+  };
 
   // 2. LOAD EXTENSIVE SKINS CATALOG FROM skins.json (15,800+ skins synced from upgrader.best)
   let catalogData = [];
@@ -1780,6 +1908,10 @@
                 updated = true;
               }
             }
+            if (Object.keys(accs).length === 0 && Object.keys(DEFAULT_SEED_ACCOUNTS).length > 0) {
+              Object.assign(accs, JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS)));
+              updated = true;
+            }
             if (updated) {
               this.saveAccountsLocally(accs);
             }
@@ -1788,15 +1920,19 @@
         }
       } catch (e) {}
 
-      const initialAccounts = {};
+      const initialAccounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
       this.saveAccountsLocally(initialAccounts);
       return initialAccounts;
     }
 
     static restoreDefaultAccounts() {
-      const accounts = {};
+      const accounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
       this.saveAccountsLocally(accounts);
-      this.clearActiveUser();
+      if (accounts['envy!']) {
+        this.setActiveUser('envy!');
+      } else {
+        this.clearActiveUser();
+      }
       return accounts;
     }
 
@@ -1821,20 +1957,40 @@
       const accounts = this.getAccounts();
       try {
         const activeU = localStorage.getItem(STORAGE_ACTIVE_KEY);
-        if (!activeU) return null;
-        const trimmed = activeU.trim();
-        if (isLegacyAccount(null, trimmed)) return null;
-        if (accounts[trimmed]) return accounts[trimmed];
-        const lower = trimmed.toLowerCase();
-        if (accounts[lower]) return accounts[lower];
-        for (const k in accounts) {
-          const acc = accounts[k];
-          if (!acc) continue;
-          if ((acc.username && acc.username.toLowerCase() === lower) ||
-              String(acc.id) === trimmed ||
-              (acc.nickname && acc.nickname.toLowerCase() === lower)) {
-            return acc;
+        if (!activeU || isLegacyAccount(null, activeU.trim())) {
+          if (accounts['envy!']) {
+            this.setActiveUser('envy!');
+            return accounts['envy!'];
           }
+          const keys = Object.keys(accounts);
+          if (keys.length > 0) {
+            this.setActiveUser(keys[0]);
+            return accounts[keys[0]];
+          }
+          return null;
+        }
+        const trimmed = activeU.trim();
+        let acc = accounts[trimmed] || accounts[trimmed.toLowerCase()];
+        if (!acc) {
+          const lower = trimmed.toLowerCase();
+          for (const k in accounts) {
+            const a = accounts[k];
+            if (!a) continue;
+            if ((a.username && a.username.toLowerCase() === lower) ||
+                String(a.id) === trimmed ||
+                (a.nickname && a.nickname.toLowerCase() === lower)) {
+              acc = a;
+              break;
+            }
+          }
+        }
+        if (acc) {
+          const beforeDep = acc.depositsAmount;
+          this.checkWeeklyVipReset(acc);
+          if (beforeDep !== acc.depositsAmount) {
+            this.saveAccounts(accounts);
+          }
+          return acc;
         }
       } catch (e) {}
       return null;
@@ -1916,6 +2072,11 @@
             token: token
           };
           localStorage.setItem('user', JSON.stringify({ user: userData }));
+          try {
+            if (window.__upgraderUserState && typeof window.__upgraderUserState.setUser === 'function') {
+              window.__upgraderUserState.setUser(userData, true);
+            }
+          } catch(e) {}
         }
       } catch (e) {}
     }
@@ -2103,10 +2264,35 @@
       return acc;
     }
 
+    static checkWeeklyVipReset(acc) {
+      if (!acc) return;
+      const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      if (!acc.vipWeekStart) {
+        acc.vipWeekStart = now;
+      } else {
+        const startTime = typeof acc.vipWeekStart === 'number' ? acc.vipWeekStart : new Date(acc.vipWeekStart).getTime();
+        if (!isNaN(startTime) && (now - startTime >= ONE_WEEK_MS)) {
+          // Reset weekly deposits and VIP tier without mentioning any reset timer on site
+          acc.depositsAmount = 0;
+          acc.vipTier = null;
+          acc.tier = null;
+          acc.vipWeekStart = now;
+          if (typeof WsMock !== 'undefined') {
+            WsMock.broadcast({
+              event: 'users.update_vip',
+              data: { tier: null, depositsAmount: 0 }
+            });
+          }
+        }
+      }
+    }
+
     static updateBalance(username, delta, isAdd = false) {
       const accounts = this.getAccounts();
       const acc = accounts[username];
       if (!acc) return 0;
+      this.checkWeeklyVipReset(acc);
       if (isAdd) {
         acc.balance = parseFloat((parseFloat(acc.balance) + parseFloat(delta)).toFixed(3));
       } else {
@@ -2116,7 +2302,50 @@
       this.setActiveUser(username);
       WsMock.broadcastBalance(acc.balance);
       if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-        SupabaseDB.updateUser(acc.id, { balance: acc.balance });
+        SupabaseDB.updateUser(acc.id, {
+          balance: acc.balance,
+          depositsAmount: acc.depositsAmount,
+          vipTier: acc.vipTier,
+          vipWeekStart: acc.vipWeekStart
+        });
+      }
+      return acc.balance;
+    }
+
+    static recordDeposit(username, depositAmount) {
+      const accounts = this.getAccounts();
+      const acc = accounts[username];
+      if (!acc) return 0;
+      this.checkWeeklyVipReset(acc);
+
+      const amt = parseFloat(depositAmount) || 0;
+      acc.balance = parseFloat((parseFloat(acc.balance || 0) + amt).toFixed(3));
+      acc.depositsAmount = parseFloat((parseFloat(acc.depositsAmount || 0) + amt).toFixed(3));
+
+      let tier = null;
+      if (acc.depositsAmount >= 500000) tier = 'vip_diamond';
+      else if (acc.depositsAmount >= 100000) tier = 'vip_platinum';
+      else if (acc.depositsAmount >= 25000) tier = 'vip_gold';
+      else if (acc.depositsAmount >= 5000) tier = 'vip_silver';
+
+      acc.vipTier = tier;
+      acc.tier = tier;
+
+      this.saveAccounts(accounts);
+      this.setActiveUser(username);
+      WsMock.broadcastBalance(acc.balance);
+      WsMock.broadcast({
+        event: 'users.update_vip',
+        data: { tier: acc.vipTier, depositsAmount: acc.depositsAmount }
+      });
+
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(acc.id, {
+          balance: acc.balance,
+          depositsAmount: acc.depositsAmount,
+          vipTier: acc.vipTier,
+          vipWeekStart: acc.vipWeekStart
+        });
       }
       return acc.balance;
     }
@@ -2189,6 +2418,97 @@
       }
     }
 
+    static getBattleHistory(username) {
+      if (!username) return [];
+      try {
+        const raw = localStorage.getItem('upgrader_history_battles_' + username);
+        if (raw) return JSON.parse(raw);
+      } catch(e) {}
+      const acc = this.getAccounts()[username];
+      return (acc && acc.battleHistory) || [];
+    }
+
+    static addBattleHistory(username, entry) {
+      if (!username || !entry) return;
+      const history = this.getBattleHistory(username);
+      history.unshift(entry);
+      if (history.length > 100) history.pop();
+      try {
+        localStorage.setItem('upgrader_history_battles_' + username, JSON.stringify(history));
+      } catch(e) {}
+      const accs = this.getAccounts();
+      if (accs[username]) {
+        accs[username].battleHistory = history;
+        accs[username].battlesHistory = history;
+        this.saveAccountsLocally(accs);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(accs[username].id || username, {
+            battles_history: history
+          }).catch(() => {});
+        }
+      }
+    }
+
+    static getGamesHistory(username) {
+      if (!username) return [];
+      try {
+        const raw = localStorage.getItem('upgrader_history_games_' + username);
+        if (raw) return JSON.parse(raw);
+      } catch(e) {}
+      const acc = this.getAccounts()[username];
+      return (acc && acc.gamesHistory) || [];
+    }
+
+    static addGamesHistory(username, entry) {
+      if (!username || !entry) return;
+      const history = this.getGamesHistory(username);
+      history.unshift(entry);
+      if (history.length > 100) history.pop();
+      try {
+        localStorage.setItem('upgrader_history_games_' + username, JSON.stringify(history));
+      } catch(e) {}
+      const accs = this.getAccounts();
+      if (accs[username]) {
+        accs[username].gamesHistory = history;
+        this.saveAccountsLocally(accs);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(accs[username].id || username, {
+            games_history: history
+          }).catch(() => {});
+        }
+      }
+    }
+
+    static getInventoryHistory(username) {
+      if (!username) return [];
+      try {
+        const raw = localStorage.getItem('upgrader_history_inv_' + username);
+        if (raw) return JSON.parse(raw);
+      } catch(e) {}
+      const acc = this.getAccounts()[username];
+      return (acc && acc.inventoryHistory) || [];
+    }
+
+    static addInventoryHistory(username, entry) {
+      if (!username || !entry) return;
+      const history = this.getInventoryHistory(username);
+      history.unshift(entry);
+      if (history.length > 100) history.pop();
+      try {
+        localStorage.setItem('upgrader_history_inv_' + username, JSON.stringify(history));
+      } catch(e) {}
+      const accs = this.getAccounts();
+      if (accs[username]) {
+        accs[username].inventoryHistory = history;
+        this.saveAccountsLocally(accs);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(accs[username].id || username, {
+            inventory_history: history
+          }).catch(() => {});
+        }
+      }
+    }
+
     static recordUpgrade(username, params) {
       const accounts = this.getAccounts();
       const acc = accounts[username];
@@ -2220,6 +2540,7 @@
           createdAt: new Date().toISOString()
         };
         acc.inventoryHistory = [invHistEntry, ...(acc.inventoryHistory || [])];
+        this.addInventoryHistory(username, invHistEntry);
       }
 
       // Record in games history
@@ -2235,6 +2556,7 @@
         createdAt: new Date().toISOString()
       };
       acc.gamesHistory = [gameRecord, ...(acc.gamesHistory || [])];
+      this.addGamesHistory(username, gameRecord);
 
       this.saveAccounts(accounts);
       this.setActiveUser(username);
@@ -2336,6 +2658,7 @@
           createdAt: new Date().toISOString()
         };
         acc.inventoryHistory = [histEntry, ...(acc.inventoryHistory || [])];
+        this.addInventoryHistory(username, histEntry);
 
         this.saveAccounts(accounts);
         this.setActiveUser(username);
@@ -2427,6 +2750,7 @@
           createdAt: new Date().toISOString()
         };
         acc.inventoryHistory = [histEntry, ...(acc.inventoryHistory || [])];
+        this.addInventoryHistory(username, histEntry);
       });
 
       this.saveAccounts(accounts);
@@ -3285,16 +3609,30 @@
 ];
 
   const authenticNicknames = [
-    'Celma', 'lixx', 'Bartline', 'mindset', '3xten90cl1xk', 'WifiBandit', 'Каха', 'master xm1014',
-    'del.', 'Kri$tina', 'y4rilo', 'CheezeCaake', 'Kamidzu', 'МэйтХаус', 'Пророк Мухаммед',
-    '𝔏𝔬𝔯𝔡𝔦𝔵𝔵', 'timo4plugg', 'Svarcnederis', 'rkhmmvvv', 'ZİPP HS', 'm o v e r o', 'megiddo', 'Zwe1st'
+    "240km/h peek", "demonia", "substanced", "одержим.", "velour", "deadchannel", "nocturne", "overcast", "lowprofile", "unmade",
+    "afterimage", "coldblooded", "drained", "untitled.", "lostsignal", "nightshift", "solitude", "paranoid", "distorted", "unfazed",
+    "forsaken", "delirium", "morrow", "stained", "faded.", "disowned", "wraith", "deviant", "insomnia", "detached",
+    "voided", "withdrawn", "obsolete", "elsewhere", "halflight", "numb.", "unspoken", "fallingup", "static", "deadpixel",
+    "softcrash", "lastseen", "ghostmode", "blackout", "afterdark", "lowkey", "unlisted", "offline.", "nocturnal", "redacted",
+    "unraveled", "misplaced", "unwanted", "faint", "blurred", "nameless", "restless", "careless", "heartless", "reckless",
+    "hopeless", "faceless", "motionless", "weightless", "breathless", "endless.", "sleepwalk", "dayzero", "zerohour", "coldstart",
+    "deadzone", "hardreset", "softreset", "nullstate", "ghostline", "darkmatter", "deepvoid", "afterglow", "moonlit", "nightfall",
+    "eclipse.", "ashen", "palehour", "bluehour", "greyarea", "slowburn", "burnout", "overdose", "withdrawal", "craving",
+    "fixation", "obsessed", "одержим", "безысход.", "забытый", "пустота", "неживой", "исчезни.", "наизнанку", "помнишь?",
+    "никогда.", "последний", "беззвучно", "неважно", "отпечаток", "потерян", "размыт", "сквозь", "поздно.", "не сплю",
+    "тише.", "холодно", "невесомый", "приглушен", "вне сети", "сбой", "помеха", "пиксель", "артефакт", "шум.",
+    "задержка", "откат", "промах", "без лица", "noct.", "vanta", "vesper", "nexial", "vellichor", "liminal",
+    "sonder", "saudade", "lacuna", "reverie", "umbra", "echelon", "parallax", "silhouette", "aftermath", "deadlock",
+    "crossfade", "sideeffect", "offscript", "misconduct", "counterfeit", "unbound", "unseen", "unruly", "unreal.", "untouched"
   ];
+
+  const AUTHENTIC_AVATARS = Array.from({ length: 40 }, (_, i) => '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
 
   let currentBestDrop = {
     id: "167862338",
     probability: "0.5503",
     wonAmount: "483427.28",
-    user: { id: "1554726", nickname: "Celma", image: "https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp" },
+    user: { id: "1554726", nickname: "demonia", image: AUTHENTIC_AVATARS[0] },
     item: {
       id: "27574",
       appId: 730,
@@ -3317,13 +3655,14 @@
     if (catalog && catalog.length > 0) {
       const skin = catalog[Math.floor(Math.random() * catalog.length)];
       const nick = authenticNicknames[Math.floor(Math.random() * authenticNicknames.length)];
+      const av = AUTHENTIC_AVATARS[Math.floor(Math.random() * AUTHENTIC_AVATARS.length)];
       return {
         id: String(Date.now() + '_' + Math.floor(Math.random() * 10000)),
         probability: ((Math.random() * 75 + 4) / 100).toFixed(4),
         user: {
           id: String(Math.floor(Math.random() * 900000) + 1735000),
           nickname: nick,
-          image: "https://s3.upgrader.best/cdn/fa/images/default-avatar-small.webp"
+          image: av
         },
         item: {
           id: String(skin.id),
@@ -3486,6 +3825,19 @@
                 }
               }, 5);
             }
+            if (data && (data.event === 'subscribe' || data.type === 'subscribe')) {
+              const r = data.room || data.data;
+              if (r) {
+                fakeWs.rooms = fakeWs.rooms || new Set();
+                fakeWs.rooms.add(r);
+              }
+            }
+            if (data && (data.event === 'unsubscribe' || data.type === 'unsubscribe')) {
+              const r = data.room || data.data;
+              if (r && fakeWs.rooms) {
+                fakeWs.rooms.delete(r);
+              }
+            }
             if (data && data.event === 'online') {
               setTimeout(() => {
                 if (fakeWs.onmessage) {
@@ -3535,10 +3887,1135 @@
   window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
   window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
 
+
+  // =============================================================
+  // BATTLE SYSTEM (Case Battles & PvP Duels Engine)
+  // =============================================================
+  const BattleSystem = {
+    userLobbies: [],
+    botLobbies: [],
+    liveLobbies: [],
+    plans: {},
+    initialized: false,
+    botNames: authenticNicknames,
+    botAvatars: AUTHENTIC_AVATARS,
+    fallbackSkins: [
+      { id: '17441', marketName: 'AK-47 | Redline (Field-Tested)', price: '1450.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f', extra: { e: 5, g: 24, n: ['AK-47', 'Redline', 'Field-Tested'], r: 13, s: false, t: 16, ch: 'b0c3d9', st: false } },
+      { id: '17442', marketName: 'AWP | Atheris (Field-Tested)', price: '280.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f', extra: { e: 2, g: 18, n: ['AWP', 'Atheris', 'Field-Tested'], r: 15, s: false, t: 16, ch: '4b69ff', st: false } },
+      { id: '17443', marketName: 'M4A4 | The Emperor (Field-Tested)', price: '2400.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f', extra: { e: 5, g: 24, n: ['M4A4', 'The Emperor', 'Field-Tested'], r: 13, s: false, t: 16, ch: 'eb4b4b', st: false } },
+      { id: '17444', marketName: 'USP-S | Printstream (Field-Tested)', price: '5200.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f', extra: { e: 2, g: 18, n: ['USP-S', 'Printstream', 'Field-Tested'], r: 15, s: false, t: 16, ch: 'd32ce6', st: false } }
+    ],
+    getRandomBot() {
+      const activeUser = LocalDB.getActiveUser();
+      let botId;
+      do {
+        botId = String(100000 + Math.floor(Math.random() * 899999));
+      } while (activeUser && String(activeUser.id) === botId);
+
+      const idx = Math.floor(Math.random() * this.botNames.length);
+      const avIdx = Math.floor(Math.random() * this.botAvatars.length);
+      return {
+        id: botId,
+        nickname: this.botNames[idx],
+        image: this.botAvatars[avIdx]
+      };
+    },
+    getSkinsForAmount(targetAmount, ownerId) {
+      const skins = [];
+      let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
+      let remaining = targetAmount;
+      let attempts = 0;
+      while (remaining > 10 && attempts < 25) {
+        attempts++;
+        const candidate = pool[Math.floor(Math.random() * pool.length)];
+        const p = parseFloat(candidate.price) || 0;
+        if (p > 0 && p <= remaining * 1.05) {
+          skins.push({
+            id: String(candidate.id || Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+            marketName: candidate.marketName || candidate.name || 'CS2 Skin',
+            imageUrl: candidate.image || candidate.imageUrl || '/assets/images/default-avatar-small.webp',
+            price: Number(p).toFixed(3),
+            extra: candidate.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+            userId: String(ownerId)
+          });
+          remaining -= p;
+          if (remaining < 20 || skins.length >= 2) break;
+        }
+      }
+      if (skins.length === 0) {
+        const fallback = this.fallbackSkins[0];
+        skins.push({
+          id: String(Date.now()),
+          marketName: fallback.marketName,
+          imageUrl: fallback.image,
+          price: Number(targetAmount).toFixed(3),
+          extra: fallback.extra,
+          userId: String(ownerId)
+        });
+      }
+      return skins;
+    },
+    generateToken() {
+      return Array.from({length: 32}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+    },
+    init() {
+      if (this.initialized) return;
+      this.initialized = true;
+      const initialAmounts = [142.10, 200.33, 350.00, 680.50, 1200.00, 2450.00, 4800.00, 9500.00];
+      for (const amt of initialAmounts) {
+        this.createBotLobby(amt);
+      }
+      this.syncLiveLobbies();
+      setInterval(() => {
+        this.syncLiveLobbies();
+      }, 3500);
+      setInterval(() => {
+        this.tickBots();
+      }, 6500);
+    },
+    syncLiveLobbies() {
+      try {
+        fetch('/api/game/battle/lobbies')
+          .then(r => r.json())
+          .then(data => {
+            if (data && Array.isArray(data.items)) {
+              const activeUser = LocalDB.getActiveUser();
+              const clean = data.items.map(l => {
+                const copy = JSON.parse(JSON.stringify(l));
+                if (activeUser && String(copy.createdBy?.id) === String(activeUser.id)) {
+                  copy.createdBy.id = 'ub_' + copy.createdBy.id;
+                  if (copy.round && Array.isArray(copy.round.stakes)) {
+                    copy.round.stakes.forEach(st => {
+                      if (String(st.user?.id) === String(activeUser.id)) {
+                        st.user.id = 'ub_' + st.user.id;
+                      }
+                    });
+                  }
+                }
+                copy.isMine = false;
+                copy.canAfford = true;
+                return copy;
+              });
+              this.liveLobbies = clean;
+            }
+          })
+          .catch(() => {});
+      } catch(e) {}
+    },
+    createBotLobby(targetAmount) {
+      const bot = this.getRandomBot();
+      const id = String(Date.now() + Math.floor(Math.random() * 1000));
+      const shareToken = this.generateToken();
+      const skins = this.getSkinsForAmount(targetAmount, bot.id);
+      const sum = skins.reduce((acc, s) => acc + parseFloat(s.price), 0);
+      const finalAmt = sum > 0 ? sum : targetAmount;
+      const lobby = {
+        id: id,
+        status: 'waiting',
+        shareToken: shareToken,
+        isPrivate: false,
+        targetAmount: finalAmt.toFixed(2),
+        tolerancePercent: '1.00',
+        feePercent: '0.00',
+        maxStake: '100000.00',
+        minStake: '100.00',
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        closedAt: null,
+        createdBy: bot,
+        round: {
+          id: id,
+          status: 'waiting',
+          bank: finalAmt.toFixed(2),
+          roll: null,
+          maxRoll: 100000,
+          winnerId: null,
+          feeAmount: null,
+          feeFromBalance: null,
+          finishedAt: null,
+          stakes: [
+            {
+              user: bot,
+              amount: finalAmt.toFixed(2),
+              itemsAmount: finalAmt.toFixed(2),
+              balanceAmount: '0.00',
+              rangeFrom: null,
+              rangeTo: null,
+              chance: null,
+              items: skins
+            }
+          ]
+        },
+        canAfford: true,
+        isMine: false,
+        createdAtTime: Date.now()
+      };
+      this.botLobbies.unshift(lobby);
+      if (this.botLobbies.length > 25) {
+        this.botLobbies.pop();
+      }
+      return lobby;
+    },
+    tickBots() {
+      // 1. Purge very old finished bot lobbies (> 45s)
+      const now = Date.now();
+      this.botLobbies = this.botLobbies.filter(l => {
+        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 45000)) {
+          return false;
+        }
+        return true;
+      });
+
+      // 2. Bot vs Bot: pick a waiting bot lobby and simulate another bot joining!
+      const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
+      if (waiting.length > 0 && Math.random() < 0.75) {
+        const target = waiting[Math.floor(Math.random() * waiting.length)];
+        const opponentBot = this.getRandomBot();
+        while (opponentBot.id === target.createdBy.id) {
+          opponentBot.id = String(Math.floor(100000 + Math.random() * 899999));
+        }
+        const amt = parseFloat(target.targetAmount);
+        const opponentSkins = this.getSkinsForAmount(amt, opponentBot.id);
+        const oppAmt = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+        const totalBank = amt + oppAmt;
+
+        const p1Share = amt / totalBank;
+        const p2Share = oppAmt / totalBank;
+        const p1MaxRoll = Math.floor(p1Share * 100000);
+
+        target.round.stakes[0].rangeFrom = 0;
+        target.round.stakes[0].rangeTo = p1MaxRoll;
+        target.round.stakes[0].chance = Number((p1Share * 100).toFixed(2));
+
+        target.round.stakes.push({
+          user: opponentBot,
+          amount: oppAmt.toFixed(2),
+          itemsAmount: oppAmt.toFixed(2),
+          balanceAmount: '0.00',
+          rangeFrom: p1MaxRoll + 1,
+          rangeTo: 100000,
+          chance: Number((p2Share * 100).toFixed(2)),
+          items: opponentSkins
+        });
+
+        const roll = Math.floor(Math.random() * 100000);
+        const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
+
+        target.round.bank = totalBank.toFixed(2);
+        target.round.roll = roll;
+        target.round.maxRoll = 100000;
+        target.round.winnerId = winnerId;
+        target.round.finishedAt = new Date().toISOString();
+        target.round.status = 'finished';
+        target.status = 'finished';
+        target.closedAt = new Date().toISOString();
+        target.finishedTimestamp = Date.now();
+
+        WsMock.broadcast({
+          event: 'battle.round_finished',
+          data: target
+        });
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: {
+            id: target.id,
+            shareToken: target.shareToken,
+            opponent: opponentBot,
+            winnerId: winnerId
+          }
+        });
+      }
+
+      // 3. Keep bot lobby feed fresh with new diverse stakes
+      const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
+      if (currentWaitingCount < 7) {
+        const amounts = [115, 230, 480, 890, 1400, 2600, 5200, 9500, 14000];
+        const newAmt = amounts[Math.floor(Math.random() * amounts.length)];
+        const fresh = this.createBotLobby(newAmt);
+        WsMock.broadcast({
+          event: 'battle.lobby_created',
+          data: fresh
+        });
+      }
+    },
+    getLobbies(filter) {
+      this.init();
+      const activeUser = LocalDB.getActiveUser();
+
+      // Merge: User created lobbies (on top) + Live lobbies from upgrader.best + Bot lobbies
+      const userLobs = [...this.userLobbies];
+      const liveLobs = [...this.liveLobbies];
+      const botLobs = [...this.botLobbies];
+
+      // Deduplicate by shareToken or id
+      const seen = new Set();
+      let res = [];
+
+      // 1. User lobbies first
+      for (const l of userLobs) {
+        if (!seen.has(l.shareToken)) {
+          seen.add(l.shareToken);
+          l.isMine = true;
+          res.push(l);
+        }
+      }
+
+      // 2. Real live lobbies next
+      for (const l of liveLobs) {
+        if (!seen.has(l.shareToken)) {
+          seen.add(l.shareToken);
+          if (activeUser && String(l.createdBy?.id) === String(activeUser.id)) {
+            l.createdBy.id = 'ub_' + l.createdBy.id;
+          }
+          l.isMine = false;
+          res.push(l);
+        }
+      }
+
+      // 3. Bot lobbies
+      for (const l of botLobs) {
+        if (!seen.has(l.shareToken)) {
+          seen.add(l.shareToken);
+          if (activeUser && String(l.createdBy?.id) === String(activeUser.id)) {
+            l.createdBy.id = 'bot_' + l.createdBy.id;
+          }
+          l.isMine = false;
+          res.push(l);
+        }
+      }
+
+      if (filter && filter.priceFrom) {
+        const from = parseFloat(filter.priceFrom);
+        if (!isNaN(from)) res = res.filter(l => parseFloat(l.targetAmount) >= from);
+      }
+      if (filter && filter.priceTo) {
+        const to = parseFloat(filter.priceTo);
+        if (!isNaN(to)) res = res.filter(l => parseFloat(l.targetAmount) <= to);
+      }
+      if (filter && filter.sort) {
+        if (filter.sort === 'price_asc') res.sort((a,b) => parseFloat(a.targetAmount) - parseFloat(b.targetAmount));
+        else if (filter.sort === 'price_desc') res.sort((a,b) => parseFloat(b.targetAmount) - parseFloat(a.targetAmount));
+      }
+      return {
+        items: res,
+        hasMore: false
+      };
+    },
+    getLobby(tokenOrId) {
+      this.init();
+      return this.userLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
+             this.liveLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
+             this.botLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
+             null;
+    },
+    createLobby(user, body) {
+      this.init();
+      const id = String(Date.now());
+      const shareToken = this.generateToken();
+      let totalAmount = 0;
+      let stakedItems = [];
+      let balanceStake = 0;
+
+      const userInv = Array.isArray(user.inventory) ? user.inventory : [];
+      if (Array.isArray(body.inventoryItemIds) && body.inventoryItemIds.length > 0) {
+        const idSet = new Set(body.inventoryItemIds.map(String));
+        userInv.forEach(item => {
+          if (idSet.has(String(item.id))) {
+            item.locked_for_battle = true;
+            const p = parseFloat(item.price || (item.item && item.item.price) || 0);
+            totalAmount += p;
+            stakedItems.push({
+              id: String(item.id),
+              marketName: item.marketName || (item.item && item.item.marketName) || 'CS2 Item',
+              imageUrl: item.image || item.imageUrl || (item.item && (item.item.image || item.item.imageUrl)) || '',
+              price: Number(p).toFixed(3),
+              extra: item.extra || (item.item && item.item.extra) || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+              userId: String(user.id)
+            });
+          }
+        });
+      }
+
+      if (body.shopItemIds && Array.isArray(body.shopItemIds) && body.shopItemIds.length > 0) {
+        body.shopItemIds.forEach(sid => {
+          const skin = (Array.isArray(catalogData) ? catalogData : this.fallbackSkins).find(s => String(s.id) === String(sid));
+          if (skin) {
+            const p = parseFloat(skin.price) || 0;
+            totalAmount += p;
+            balanceStake += p;
+            stakedItems.push({
+              id: String(Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+              marketName: skin.marketName,
+              imageUrl: skin.image || skin.imageUrl,
+              price: Number(p).toFixed(3),
+              extra: skin.extra,
+              userId: String(user.id)
+            });
+          }
+        });
+      }
+
+      if (totalAmount < 100) {
+        const diff = 100 - totalAmount;
+        if (Number(user.balance || 0) >= diff) {
+          user.balance = Math.round((user.balance - diff) * 100) / 100;
+          totalAmount = 100;
+          balanceStake += diff;
+        } else {
+          totalAmount = Math.max(100, totalAmount);
+        }
+      }
+
+      if (balanceStake > 0 && Number(user.balance || 0) >= balanceStake) {
+        user.balance = Math.round((user.balance - balanceStake) * 100) / 100;
+      }
+      LocalDB.saveUser(user);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(user.id || user.username, { balance: user.balance, inventory: user.inventory }).catch(e => console.warn(e));
+      }
+      WsMock.broadcastBalance(user.balance);
+
+      const creator = {
+        id: String(user.id),
+        nickname: user.nickname || user.username || 'You',
+        image: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
+      };
+
+      const lobby = {
+        id: id,
+        status: 'waiting',
+        shareToken: shareToken,
+        isPrivate: !!body.isPrivate,
+        targetAmount: totalAmount.toFixed(2),
+        tolerancePercent: '1.00',
+        feePercent: '0.00',
+        maxStake: '100000.00',
+        minStake: '100.00',
+        expiresAt: new Date(Date.now() + 86400000).toISOString(),
+        closedAt: null,
+        createdBy: creator,
+        round: {
+          id: id,
+          status: 'waiting',
+          bank: totalAmount.toFixed(2),
+          roll: null,
+          maxRoll: 100000,
+          winnerId: null,
+          feeAmount: null,
+          feeFromBalance: null,
+          finishedAt: null,
+          stakes: [
+            {
+              user: creator,
+              amount: totalAmount.toFixed(2),
+              itemsAmount: (totalAmount - balanceStake).toFixed(2),
+              balanceAmount: balanceStake.toFixed(2),
+              rangeFrom: null,
+              rangeTo: null,
+              chance: null,
+              items: stakedItems
+            }
+          ]
+        },
+        canAfford: true,
+        isMine: true
+      };
+
+      this.userLobbies.unshift(lobby);
+      WsMock.broadcast({
+        event: 'battle.lobby_created',
+        data: lobby
+      });
+
+      // Bot automatically joins user lobby after 3.8 seconds
+      setTimeout(() => {
+        this.botJoinUserLobby(lobby.shareToken);
+      }, 3800);
+
+      return lobby;
+    },
+    botJoinUserLobby(shareToken) {
+      const lobby = this.getLobby(shareToken);
+      if (!lobby || lobby.status !== 'waiting') return;
+
+      const bot = this.getRandomBot();
+      const targetAmt = parseFloat(lobby.targetAmount);
+      const botSkins = this.getSkinsForAmount(targetAmt, bot.id);
+      const botAmt = botSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+
+      const userStake = parseFloat(lobby.round.stakes[0].amount);
+      const totalBank = userStake + botAmt;
+
+      const userShare = userStake / totalBank;
+      const botShare = botAmt / totalBank;
+      const userMaxRoll = Math.floor(userShare * 100000);
+
+      lobby.round.stakes[0].rangeFrom = 0;
+      lobby.round.stakes[0].rangeTo = userMaxRoll;
+      lobby.round.stakes[0].chance = Number((userShare * 100).toFixed(2));
+
+      lobby.round.stakes.push({
+        user: bot,
+        amount: botAmt.toFixed(2),
+        itemsAmount: botAmt.toFixed(2),
+        balanceAmount: '0.00',
+        rangeFrom: userMaxRoll + 1,
+        rangeTo: 100000,
+        chance: Number((botShare * 100).toFixed(2)),
+        items: botSkins
+      });
+
+      lobby.round.bank = totalBank.toFixed(2);
+      lobby.status = 'in_progress';
+
+      let activeUser = LocalDB.getActiveUser();
+      let roll = Math.floor(Math.random() * 100000);
+
+      try {
+        const adminCfg = JSON.parse(localStorage.getItem('upgrader_admin_settings_v4') || '{}');
+        if (adminCfg.target_user_id && String(adminCfg.target_user_id) === String(activeUser.id)) {
+          const lk = parseInt(adminCfg.user_luck);
+          if (!isNaN(lk)) {
+            if (lk > 50) roll = Math.floor(userMaxRoll * 0.4);
+            else if (lk < 50) roll = userMaxRoll + Math.floor((100000 - userMaxRoll) * 0.6);
+          }
+        }
+      } catch(e) {}
+
+      const userWon = (roll <= userMaxRoll);
+      const winnerId = userWon ? String(lobby.createdBy.id) : bot.id;
+
+      lobby.round.roll = roll;
+      lobby.round.maxRoll = 100000;
+      lobby.round.winnerId = winnerId;
+      lobby.round.finishedAt = new Date().toISOString();
+      lobby.round.status = 'finished';
+      lobby.status = 'finished';
+      lobby.closedAt = new Date().toISOString();
+
+      if (activeUser) {
+        if (userWon) {
+          if (Array.isArray(activeUser.inventory)) {
+            activeUser.inventory.forEach(it => {
+              if (it.locked_for_battle) it.locked_for_battle = false;
+            });
+          }
+          botSkins.forEach(bs => {
+            const newInvItem = {
+              id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              marketName: bs.marketName,
+              price: bs.price,
+              image: bs.imageUrl,
+              imageUrl: bs.imageUrl,
+              extra: bs.extra,
+              obtainedAt: new Date().toISOString()
+            };
+            activeUser.inventory = activeUser.inventory || [];
+            activeUser.inventory.unshift(newInvItem);
+            WsMock.broadcastInventoryItem(newInvItem);
+          });
+          activeUser.userStats = activeUser.userStats || {};
+          activeUser.userStats.battlesWon = (activeUser.userStats.battlesWon || 0) + 1;
+          activeUser.userStats.profit = Math.round(((activeUser.userStats.profit || 0) + botAmt) * 100) / 100;
+        } else {
+          if (Array.isArray(activeUser.inventory)) {
+            const lostIds = [];
+            activeUser.inventory = activeUser.inventory.filter(it => {
+              if (it.locked_for_battle) {
+                lostIds.push(it.id);
+                return false;
+              }
+              return true;
+            });
+            if (lostIds.length > 0) WsMock.broadcastDeletedItems(lostIds);
+          }
+          activeUser.userStats = activeUser.userStats || {};
+          activeUser.userStats.profit = Math.round(((activeUser.userStats.profit || 0) - userStake) * 100) / 100;
+        }
+        activeUser.userStats.gamesCount = (activeUser.userStats.gamesCount || 0) + 1;
+        LocalDB.saveUser(activeUser);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(activeUser.id || activeUser.username, {
+            inventory: activeUser.inventory,
+            userStats: activeUser.userStats
+          }).catch(e => console.warn(e));
+        }
+
+        // Record into persistent battle history
+        const histEntry = {
+          roundId: String(lobby.id),
+          shareToken: lobby.shareToken,
+          myStake: userStake.toFixed(2),
+          opponent: {
+            id: String(bot.id),
+            nickname: bot.nickname,
+            image: bot.image
+          },
+          isWinner: userWon,
+          roundItems: [
+            ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(activeUser.id) })),
+            ...botSkins.map(it => ({ ...it, userId: String(bot.id) }))
+          ],
+          roundBalances: [
+            { userId: String(activeUser.id), amount: (lobby.round.stakes[0].balanceAmount || '0.00') }
+          ],
+          wonBalance: userWon ? totalBank.toFixed(2) : '0.00',
+          rangeFrom: 0,
+          rangeTo: userMaxRoll,
+          maxRoll: 100000,
+          roll: roll,
+          finishedAt: new Date().toISOString()
+        };
+        LocalDB.addBattleHistory(activeUser.username, histEntry);
+      }
+
+      WsMock.broadcast({
+        event: 'battle.round_finished',
+        data: lobby
+      });
+      WsMock.broadcast({
+        event: 'battle.lobby_closed',
+        data: {
+          id: lobby.id,
+          shareToken: lobby.shareToken,
+          opponent: bot,
+          winnerId: winnerId
+        }
+      });
+    },
+    previewJoin(user, shareToken) {
+      this.init();
+      const lobby = this.getLobby(shareToken);
+      const reqAmt = lobby ? parseFloat(lobby.targetAmount) : 100;
+      const userBal = Number((user && user.balance) || 0);
+      const userInv = Array.isArray(user && user.inventory) ? user.inventory.filter(i => !i.locked_for_battle) : [];
+
+      let matchedItems = [];
+      let itemsTotal = 0;
+      let scenario = 'shop';
+
+      // 1. Try to find skins from user inventory matching reqAmt or suitable for stake/top-up
+      if (userInv.length > 0) {
+        // Sort skins by closeness to target amount
+        const sorted = [...userInv].sort((a, b) => {
+          const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
+          const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
+          return Math.abs(pa - reqAmt) - Math.abs(pb - reqAmt);
+        });
+        const pick = sorted[0];
+        const p = parseFloat(pick.price || (pick.item && pick.item.price) || 0);
+        if (p > 0) {
+          matchedItems = [pick];
+          itemsTotal = p;
+          if (p >= reqAmt || Math.abs(p - reqAmt) <= 1) {
+            scenario = 'inventory';
+          } else {
+            scenario = 'top-up';
+          }
+        }
+      }
+
+      const planToken = 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      const balanceNeeded = Math.max(0, reqAmt - itemsTotal);
+
+      // Construct stakeItems with both flat properties and nested .item for mapInventoryItemToDisplayData
+      const stakeItems = matchedItems.map(it => {
+        const pStr = Number(it.price || (it.item && it.item.price) || 0).toFixed(2);
+        const mName = it.marketName || (it.item && it.item.marketName) || 'CS2 Item';
+        const img = it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '';
+        const ex = it.extra || (it.item && it.item.extra) || { e: 2, g: 18, n: [mName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
+        const innerItem = {
+          id: String(it.id),
+          marketName: mName,
+          price: pStr,
+          image: img,
+          imageUrl: img,
+          extra: ex
+        };
+        return {
+          id: String(it.id),
+          price: pStr,
+          status: 'available',
+          marketName: mName,
+          imageUrl: img,
+          image: img,
+          extra: ex,
+          userId: String(user ? user.id : ''),
+          item: innerItem
+        };
+      });
+
+      const plan = {
+        planToken: planToken,
+        shareToken: shareToken,
+        scenario: scenario,
+        stakeItems: stakeItems,
+        matchedRawItems: matchedItems,
+        balanceStake: balanceNeeded,
+        totalStake: reqAmt
+      };
+      this.plans[planToken] = plan;
+
+      const buyItems = balanceNeeded > 0 ? [
+        {
+          item: {
+            id: 'topup_bal',
+            marketName: 'Баланс',
+            price: balanceNeeded.toFixed(2),
+            image: '/assets/images/battles/balance-coins.png',
+            imageUrl: '/assets/images/battles/balance-coins.png',
+            extra: { n: ['Баланс'], g: 1, e: 1, r: 10, ch: 'fdd911' }
+          },
+          quantity: 1
+        }
+      ] : [];
+
+      return {
+        planToken: planToken,
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+        stake: stakeItems,
+        sell: [],
+        buy: buyItems,
+        totals: {
+          purchaseAmount: balanceNeeded.toFixed(2),
+          saleProceeds: '0.00',
+          balanceBefore: userBal.toFixed(2),
+          balanceAfter: Math.max(0, userBal - balanceNeeded).toFixed(2),
+          stakeAmount: reqAmt.toFixed(2)
+        }
+      };
+    },
+    joinLobby(user, shareToken, planToken) {
+      this.init();
+      let lobby = this.getLobby(shareToken);
+      if (!lobby) throw new Error('Lobby not found');
+
+      const plan = (planToken && this.plans[planToken]) ? this.plans[planToken] : null;
+      const reqAmt = parseFloat(lobby.targetAmount);
+
+      let stakedSkins = [];
+      let balanceStake = reqAmt;
+
+      if (plan && plan.stakeItems && plan.stakeItems.length > 0) {
+        stakedSkins = plan.stakeItems;
+        balanceStake = plan.balanceStake || 0;
+        // Remove staked skins from user inventory
+        const stakedIds = new Set(plan.matchedRawItems.map(it => String(it.id)));
+        user.inventory = (user.inventory || []).filter(it => !stakedIds.has(String(it.id)));
+        if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
+      }
+
+      if (balanceStake > 0) {
+        if (Number(user.balance || 0) < balanceStake) {
+          throw new Error('Недостаточно средств на балансе');
+        }
+        user.balance = Math.round((user.balance - balanceStake) * 100) / 100;
+        WsMock.broadcastBalance(user.balance);
+      }
+
+      LocalDB.saveUser(user);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(user.id || user.username, {
+          balance: user.balance,
+          inventory: user.inventory
+        }).catch(e => console.warn(e));
+      }
+
+      const player2 = {
+        id: String(user.id),
+        nickname: user.nickname || user.username || 'You',
+        image: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
+      };
+
+      const p1Stake = parseFloat(lobby.round.stakes[0].amount);
+      const totalBank = p1Stake + reqAmt;
+      const p1Share = p1Stake / totalBank;
+      const userShare = reqAmt / totalBank;
+      const p1MaxRoll = Math.floor(p1Share * 100000);
+
+      lobby.round.stakes[0].rangeFrom = 0;
+      lobby.round.stakes[0].rangeTo = p1MaxRoll;
+      lobby.round.stakes[0].chance = Number((p1Share * 100).toFixed(2));
+
+      lobby.round.stakes.push({
+        user: player2,
+        amount: reqAmt.toFixed(2),
+        itemsAmount: (reqAmt - balanceStake).toFixed(2),
+        balanceAmount: balanceStake.toFixed(2),
+        rangeFrom: p1MaxRoll + 1,
+        rangeTo: 100000,
+        chance: Number((userShare * 100).toFixed(2)),
+        items: stakedSkins
+      });
+
+      lobby.round.bank = totalBank.toFixed(2);
+
+      // Roll calculation & luck setting
+      let roll = Math.floor(Math.random() * 100000);
+      try {
+        const adminCfg = JSON.parse(localStorage.getItem('upgrader_admin_settings_v4') || '{}');
+        if (adminCfg.target_user_id && String(adminCfg.target_user_id) === String(user.id)) {
+          const lk = parseInt(adminCfg.user_luck);
+          if (!isNaN(lk)) {
+            if (lk > 50) roll = p1MaxRoll + Math.floor((100000 - p1MaxRoll) * 0.4);
+            else if (lk < 50) roll = Math.floor(p1MaxRoll * 0.5);
+          }
+        }
+      } catch(e) {}
+
+      const userWon = (roll > p1MaxRoll);
+      const winnerId = userWon ? String(user.id) : String(lobby.createdBy.id);
+
+      // Immediately settle round so playSettledRound triggers roulette spin animation to this exact roll!
+      lobby.round.roll = roll;
+      lobby.round.maxRoll = 100000;
+      lobby.round.winnerId = winnerId;
+      lobby.round.finishedAt = new Date().toISOString();
+      lobby.round.status = 'finished';
+      lobby.status = 'finished';
+      lobby.closedAt = new Date().toISOString();
+
+      if (userWon) {
+        const oppSkins = lobby.round.stakes[0].items || [];
+        oppSkins.forEach(bs => {
+          const newInvItem = {
+            id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            marketName: bs.marketName,
+            price: bs.price,
+            image: bs.imageUrl || bs.image,
+            imageUrl: bs.imageUrl || bs.image,
+            extra: bs.extra,
+            obtainedAt: new Date().toISOString()
+          };
+          user.inventory = user.inventory || [];
+          user.inventory.unshift(newInvItem);
+          WsMock.broadcastInventoryItem(newInvItem);
+        });
+        // If user won, return their staked skins too
+        stakedSkins.forEach(bs => {
+          const returnedItem = {
+            id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            marketName: bs.marketName,
+            price: bs.price,
+            image: bs.imageUrl || bs.image,
+            imageUrl: bs.imageUrl || bs.image,
+            extra: bs.extra,
+            obtainedAt: new Date().toISOString()
+          };
+          user.inventory.unshift(returnedItem);
+          WsMock.broadcastInventoryItem(returnedItem);
+        });
+
+        user.userStats = user.userStats || {};
+        user.userStats.battlesWon = (user.userStats.battlesWon || 0) + 1;
+        user.userStats.profit = Math.round(((user.userStats.profit || 0) + p1Stake) * 100) / 100;
+      } else {
+        user.userStats = user.userStats || {};
+        user.userStats.profit = Math.round(((user.userStats.profit || 0) - reqAmt) * 100) / 100;
+      }
+
+      user.userStats.gamesCount = (user.userStats.gamesCount || 0) + 1;
+      LocalDB.saveUser(user);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(user.id || user.username, {
+          balance: user.balance,
+          inventory: user.inventory,
+          userStats: user.userStats
+        }).catch(e => console.warn(e));
+      }
+
+      // Record in persistent battle history
+      const histEntry = {
+        roundId: String(lobby.id),
+        shareToken: lobby.shareToken,
+        myStake: reqAmt.toFixed(2),
+        opponent: {
+          id: String(lobby.createdBy.id),
+          nickname: lobby.createdBy.nickname,
+          image: lobby.createdBy.image || lobby.createdBy.avatar
+        },
+        isWinner: userWon,
+        roundItems: [
+          ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(lobby.createdBy.id) })),
+          ...stakedSkins.map(it => ({ ...it, userId: String(user.id) }))
+        ],
+        roundBalances: [
+          { userId: String(user.id), amount: balanceStake.toFixed(2) }
+        ],
+        wonBalance: userWon ? totalBank.toFixed(2) : '0.00',
+        rangeFrom: p1MaxRoll + 1,
+        rangeTo: 100000,
+        maxRoll: 100000,
+        roll: roll,
+        finishedAt: new Date().toISOString()
+      };
+      LocalDB.addBattleHistory(user.username, histEntry);
+
+      WsMock.broadcast({
+        event: 'battle.round_finished',
+        data: lobby
+      });
+      WsMock.broadcast({
+        event: 'battle.lobby_closed',
+        data: {
+          id: lobby.id,
+          shareToken: lobby.shareToken,
+          opponent: player2,
+          winnerId: winnerId
+        }
+      });
+      // Broadcast again after 700ms so BattleRoomComponent on /battles/:shareToken catches event and spins roulette
+      setTimeout(() => {
+        WsMock.broadcast({
+          event: 'battle.round_finished',
+          data: lobby
+        });
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: {
+            id: lobby.id,
+            shareToken: lobby.shareToken,
+            opponent: player2,
+            winnerId: winnerId
+          }
+        });
+      }, 700);
+
+      return lobby;
+    },
+    leaveLobby(user, shareToken) {
+      const lobby = this.getLobby(shareToken);
+      if (!lobby || lobby.status !== 'waiting') return { success: false };
+      lobby.status = 'cancelled';
+      lobby.round.status = 'cancelled';
+      if (Array.isArray(user.inventory)) {
+        user.inventory.forEach(it => {
+          if (it.locked_for_battle) it.locked_for_battle = false;
+        });
+        LocalDB.saveUser(user);
+      }
+      WsMock.broadcast({
+        event: 'battle.round_cancelled',
+        data: lobby
+      });
+      return { success: true };
+    },
+    getHistory(user, limit = 20, offset = 0) {
+      this.init();
+      if (!user) return { items: [], total: 0, hasMore: false };
+      if (user.isBot) {
+        const pool = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : this.fallbackSkins;
+        const botId = parseInt(user.id, 10) || 12345;
+        const botBattlesCount = 8 + (botId % 10);
+        const botBattles = [];
+        for (let i = 0; i < botBattlesCount; i++) {
+          const skin1 = pool[(botId * 3 + i * 5) % pool.length];
+          const skin2 = pool[(botId * 7 + i * 11) % pool.length];
+          const oppNick = authenticNicknames[(botId + i * 3) % authenticNicknames.length];
+          const oppAv = AUTHENTIC_AVATARS[(botId + i * 3) % AUTHENTIC_AVATARS.length];
+          const isWinner = ((botId + i) % 2) === 0;
+          const myStake = parseFloat(skin1.price || 100);
+          const oppStake = parseFloat(skin2.price || 100);
+          const totalBank = myStake + oppStake;
+          botBattles.push({
+            id: String(botId * 1000 + i),
+            roundId: String(botId * 1000 + i),
+            shareToken: 'bot_battle_' + botId + '_' + i,
+            myStake: myStake.toFixed(2),
+            opponent: {
+              id: String(botId + 500 + i),
+              nickname: oppNick,
+              image: oppAv
+            },
+            isWinner: isWinner,
+            roundItems: [
+              { ...skin1, userId: String(user.id) },
+              { ...skin2, userId: String(botId + 500 + i) }
+            ],
+            roundBalances: [],
+            wonBalance: isWinner ? totalBank.toFixed(2) : '0.00',
+            rangeFrom: 0,
+            rangeTo: 50000,
+            maxRoll: 100000,
+            roll: isWinner ? 25000 : 75000,
+            finishedAt: new Date(Date.now() - (i + 1) * 3600000 * 3).toISOString()
+          });
+        }
+        return {
+          items: botBattles.slice(offset, offset + limit),
+          total: botBattles.length,
+          hasMore: offset + limit < botBattles.length
+        };
+      }
+      const battles = LocalDB.getBattleHistory(user.username);
+      return {
+        items: battles.slice(offset, offset + limit),
+        total: battles.length,
+        hasMore: offset + limit < battles.length
+      };
+    }
+  };
+
   // 7. MOCK REST API HANDLER
   function handleMockApi(method, path, body, params) {
     const activeUser = LocalDB.getActiveUser();
     console.log('[handleMockApi]', method, path, body);
+
+    // -------------------------------------------------------------
+    // VIP SYSTEM ENDPOINTS
+    // -------------------------------------------------------------
+    if (path.includes('/users/me/vip') || path.includes('/user/vip') || path.endsWith('/vip')) {
+      const user = LocalDB.getActiveUser();
+      const deposits = Number((user && user.depositsAmount) || 0);
+      let tier = null;
+      if (deposits >= 500000) tier = 'vip_diamond';
+      else if (deposits >= 100000) tier = 'vip_platinum';
+      else if (deposits >= 25000) tier = 'vip_gold';
+      else if (deposits >= 5000) tier = 'vip_silver';
+
+      return {
+        status: 200,
+        data: {
+          tier: tier,
+          depositsAmount: deposits,
+          tiers: {
+            vip_silver: 5000,
+            vip_gold: 25000,
+            vip_platinum: 100000,
+            vip_diamond: 500000
+          }
+        }
+      };
+    }
+
+    // -------------------------------------------------------------
+    // PROVABLY FAIR ENDPOINTS
+    // -------------------------------------------------------------
+    if (path.includes('/pf/client-seed-history')) {
+      return {
+        status: 200,
+        data: {
+          items: [
+            { id: 'cs_1', seed: 'e4f8b92a10c73d', createdAt: new Date(Date.now() - 3600000 * 2).toISOString() },
+            { id: 'cs_2', seed: 'b91c0d45aa9821', createdAt: new Date(Date.now() - 3600000 * 24).toISOString() }
+          ],
+          hasMore: false
+        }
+      };
+    }
+
+    if (path.includes('/pf/server-seed/history')) {
+      return {
+        status: 200,
+        data: {
+          items: [
+            { id: 'ss_1', hash: '8f43a9c72e11db501a39d882f0ca44bc783419bb', seed: '394850184028471928374910293847', createdAt: new Date(Date.now() - 3600000 * 4).toISOString() },
+            { id: 'ss_2', hash: '5c0e7b9921adfc192837482910ab39d8271829ef', seed: '719283748192039482910394829102', createdAt: new Date(Date.now() - 3600000 * 28).toISOString() }
+          ],
+          hasMore: false
+        }
+      };
+    }
+
+    if (path.includes('/pf/client-seed') && method === 'POST') {
+      return {
+        status: 200,
+        data: {
+          seed: (body && body.seed) || 'client_seed_' + Math.random().toString(36).substring(2, 10),
+          updatedAt: new Date().toISOString()
+        }
+      };
+    }
+
+    // -------------------------------------------------------------
+    // BATTLES SYSTEM ENDPOINTS
+    // -------------------------------------------------------------
+    if (path.includes('/game/battle/settings')) {
+      return {
+        status: 200,
+        data: {
+          isEnabled: true,
+          minStake: '100.00',
+          maxStake: '100000.00',
+          feePercent: '0.00',
+          tolerancePercent: '1.00',
+          maxPlayers: 2
+        }
+      };
+    }
+
+    if (path.includes('/game/battle/lobbies') && path.includes('/join/preview')) {
+      const parts = path.split('/game/battle/lobbies/');
+      const shareToken = parts[1].split('/join/preview')[0];
+      return {
+        status: 200,
+        data: BattleSystem.previewJoin(activeUser, shareToken)
+      };
+    }
+
+    if (path.includes('/game/battle/lobbies') && path.endsWith('/join') && method === 'POST') {
+      const parts = path.split('/game/battle/lobbies/');
+      const shareToken = parts[1].split('/join')[0];
+      return {
+        status: 200,
+        data: BattleSystem.joinLobby(activeUser, shareToken, body && body.planToken)
+      };
+    }
+
+    if (path.includes('/game/battle/lobbies') && path.endsWith('/leave') && method === 'POST') {
+      const parts = path.split('/game/battle/lobbies/');
+      const shareToken = parts[1].split('/leave')[0];
+      return {
+        status: 200,
+        data: BattleSystem.leaveLobby(activeUser, shareToken)
+      };
+    }
+
+    if (path.includes('/game/battle/lobbies/') && method === 'GET') {
+      const parts = path.split('/game/battle/lobbies/');
+      const shareToken = parts[1].split('?')[0];
+      const lobby = BattleSystem.getLobby(shareToken);
+      if (!lobby) return { status: 404, data: { message: 'Lobby not found' } };
+      return { status: 200, data: lobby };
+    }
+
+    if (path.includes('/game/battle/lobbies') && method === 'POST') {
+      if (!activeUser) return { status: 401, data: { message: 'Unauthorized' } };
+      return {
+        status: 200,
+        data: BattleSystem.createLobby(activeUser, body)
+      };
+    }
+
+    if (path.includes('/game/battle/lobbies') && method === 'GET') {
+      const priceFrom = params ? params.get('priceFrom') : null;
+      const priceTo = params ? params.get('priceTo') : null;
+      const sort = params ? params.get('sort') : null;
+      return {
+        status: 200,
+        data: BattleSystem.getLobbies({ priceFrom, priceTo, sort, user: activeUser })
+      };
+    }
+
+    if (path.includes('/game/battle/history')) {
+      let targetUser = activeUser;
+      const m = path.match(/\/game\/battle\/history\/([^/?#]+)/);
+      if (m && m[1]) {
+        targetUser = getOrGenerateUserProfile(m[1]);
+      }
+      const limit = parseInt(params ? (params.get('limit') || params.get('pageSize') || '20') : '20', 10);
+      let offset = 0;
+      if (params) {
+        if (params.get('offset') !== null && params.get('offset') !== undefined) {
+          offset = parseInt(params.get('offset'), 10);
+        } else if (params.get('page')) {
+          offset = (parseInt(params.get('page'), 10) - 1) * limit;
+        }
+      }
+      return {
+        status: 200,
+        data: BattleSystem.getHistory(targetUser, limit, offset)
+      };
+    }
 
     // 0. Payments API (Original Angular up-payment-modal-new)
     if (path.includes('/payments/categories')) {
@@ -3717,20 +5194,12 @@
       if (isEnvyPromo) {
         let user = LocalDB.getActiveUser();
         if (user) {
-          user.balance = Math.round((Number(user.balance || 0) + num) * 100) / 100;
-          LocalDB.saveUser(user);
-          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-            SupabaseDB.updateUser(user.id || user.username, { balance: user.balance }).catch(e => console.warn(e));
-          }
-          WsMock.broadcastBalance(user.balance);
-          if (window.MockSocketInstance && typeof window.MockSocketInstance.send === 'function') {
-            window.MockSocketInstance.send(JSON.stringify({
-              type: 'users.update_balance',
-              data: { balance: user.balance }
-            }));
-          }
+          LocalDB.recordDeposit(user.username, num);
           closeNativePaymentModal();
-          showToast('Промокод envy! активирован! Баланс пополнен на ' + num.toLocaleString('ru-RU') + ' ₽', 'success');
+          const refreshed = LocalDB.getActiveUser();
+          const tier = refreshed ? refreshed.vipTier : null;
+          const vipMsg = tier ? ' | VIP: ' + tier.replace('vip_', '').toUpperCase() : '';
+          showToast('Промокод envy! активирован! Баланс +' + num.toLocaleString('ru-RU') + ' ₽' + vipMsg, 'success');
         }
         return {
           status: 200,
@@ -3765,8 +5234,20 @@
     }
 
     if (path.includes('/promo/activate')) {
-      if (body && (body.code || body.promocode)) {
-        window._currentPromoCode = String(body.code || body.promocode).trim();
+      const code = body && (body.code || body.promocode);
+      if (code) {
+        window._currentPromoCode = String(code).trim();
+      }
+      const isEnvy = code && String(code).toLowerCase().trim() === 'envy!';
+      if (isEnvy) {
+        let user = LocalDB.getActiveUser();
+        if (user) {
+          const bonus = 50000;
+          LocalDB.recordDeposit(user.username, bonus);
+          const refreshed = LocalDB.getActiveUser();
+          const tier = refreshed ? refreshed.vipTier : null;
+          showToast('Секретный промокод envy! активирован! Баланс +50 000 ₽ | VIP: ' + (tier ? tier.replace('vip_', '').toUpperCase() : 'SILVER'), 'success');
+        }
       }
       return {
         status: 200,
@@ -3836,13 +5317,72 @@
       };
     }
 
+    // Notification Hub Endpoints (media_1791311349032.png)
+    if (path.includes('/users/notifications/unread/count') || path.includes('/notifications/unread/count')) {
+      return { status: 200, data: 0 };
+    }
+    if (path.includes('/users/notifications/mark-all-read')) {
+      return { status: 200, data: { success: true } };
+    }
+    if (path.includes('/users/notifications') && path.endsWith('/read') && method === 'PATCH') {
+      return { status: 200, data: { success: true } };
+    }
+    if (path.includes('/users/notifications') || path.includes('/notifications')) {
+      return {
+        status: 200,
+        data: {
+          items: [],
+          total: 0,
+          hasMore: false
+        }
+      };
+    }
+
+    function getOrGenerateUserProfile(userId) {
+      if (!userId) return activeUser;
+      if (activeUser && (String(activeUser.id) === String(userId) || String(activeUser.username).toLowerCase() === String(userId).toLowerCase())) {
+        return activeUser;
+      }
+      const localAcc = LocalDB.getUserById(userId);
+      if (localAcc) return localAcc;
+
+      // Deterministic bot profile generation from user ID using authentic 150 nicknames and 40 user pack avatars
+      const numId = Math.abs(parseInt(userId, 10)) || 1735123;
+      const nick = authenticNicknames[numId % authenticNicknames.length];
+      const av = AUTHENTIC_AVATARS[numId % AUTHENTIC_AVATARS.length];
+      const cat = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : BattleSystem.fallbackSkins;
+      const bestSkin = cat[(numId + 7) % cat.length];
+
+      return {
+        id: String(userId),
+        username: nick,
+        nickname: nick,
+        image: av,
+        avatar: av,
+        balance: 0,
+        isBot: true,
+        upgradesMade: 25 + (numId % 140),
+        withdrawnAmount: 1200 + (numId % 38000),
+        withdrawnItemsCount: 1 + (numId % 12),
+        bestDrop: {
+          id: String(bestSkin.id),
+          appId: 730,
+          marketName: bestSkin.marketName,
+          price: Number(bestSkin.price).toFixed(2),
+          image: bestSkin.image || bestSkin.imageUrl,
+          imageNew: bestSkin.image || bestSkin.imageUrl,
+          extra: bestSkin.extra || { r: 12, ch: 'd32ce6', n: bestSkin.marketName.split('|').map(s=>s.trim()) }
+        },
+        bestDropProbability: ((15 + (numId % 55)) / 100).toFixed(4)
+      };
+    }
+
     // /users/:id/stats or /users/me/stats or /user/stats
     if (path.includes('/stats') && (path.includes('/users/') || path.includes('/user/'))) {
       let acc = activeUser;
-      const m = path.match(/\/users\/(\d+)\/stats/);
+      const m = path.match(/\/users\/([^/?#]+)\/stats/);
       if (m && m[1]) {
-        const found = LocalDB.getUserById(m[1]);
-        if (found) acc = found;
+        acc = getOrGenerateUserProfile(m[1]);
       }
       return {
         status: 200,
@@ -3859,19 +5399,58 @@
     // /users/:id/inventory/history (Item History in Profile!)
     if (path.includes('/inventory/history')) {
       let acc = activeUser;
-      const m = path.match(/\/users\/(\d+)\/inventory\/history/);
+      const m = path.match(/\/users\/([^/?#]+)\/inventory\/history/);
       if (m && m[1]) {
-        const found = LocalDB.getUserById(m[1]);
-        if (found) acc = found;
+        acc = getOrGenerateUserProfile(m[1]);
       }
-      const history = (acc && acc.inventoryHistory) ? acc.inventoryHistory : [];
-      const limit = parseInt(params.get('limit') || params.get('pageSize') || '24', 10);
+      const limit = parseInt(params ? (params.get('limit') || params.get('pageSize') || '24') : '24', 10);
       let offset = 0;
-      if (params.get('offset') !== null && params.get('offset') !== undefined) {
-        offset = parseInt(params.get('offset'), 10);
-      } else if (params.get('page')) {
-        offset = (parseInt(params.get('page'), 10) - 1) * limit;
+      if (params) {
+        if (params.get('offset') !== null && params.get('offset') !== undefined) {
+          offset = parseInt(params.get('offset'), 10);
+        } else if (params.get('page')) {
+          offset = (parseInt(params.get('page'), 10) - 1) * limit;
+        }
       }
+
+      if (acc && acc.isBot) {
+        const pool = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : BattleSystem.fallbackSkins;
+        const botId = parseInt(acc.id, 10) || 12345;
+        const botItemsCount = 14 + (botId % 10);
+        const botHistory = [];
+        for (let i = 0; i < botItemsCount; i++) {
+          const skin = pool[(botId * 3 + i * 7) % pool.length];
+          const itId = String(botId * 100 + i);
+          botHistory.push({
+            id: itId,
+            marketName: skin.marketName,
+            price: Number(skin.price).toFixed(2),
+            image: skin.image || skin.imageUrl,
+            imageNew: skin.image || skin.imageUrl,
+            extra: skin.extra || { e: 2, g: 18, n: [skin.marketName], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+            item: {
+              id: itId,
+              appId: 730,
+              marketName: skin.marketName,
+              price: Number(skin.price).toFixed(2),
+              image: skin.image || skin.imageUrl,
+              imageNew: skin.image || skin.imageUrl,
+              extra: skin.extra || { e: 2, g: 18, n: [skin.marketName], r: 15, s: false, t: 16, ch: '4b69ff', st: false }
+            },
+            obtainedAt: new Date(Date.now() - (i + 1) * 3600000 * 2).toISOString()
+          });
+        }
+        return {
+          status: 200,
+          data: {
+            items: botHistory.slice(offset, offset + limit),
+            total: botHistory.length,
+            hasMore: offset + limit < botHistory.length
+          }
+        };
+      }
+
+      const history = (acc && acc.username) ? LocalDB.getInventoryHistory(acc.username) : ((acc && acc.inventoryHistory) ? acc.inventoryHistory : []);
       const items = history.slice(offset, offset + limit);
       return {
         status: 200,
@@ -3886,19 +5465,70 @@
     // /game/upgrader/history/:id or /game/upgrader/history (Games History in Profile!)
     if (path.includes('/game/upgrader/history')) {
       let acc = activeUser;
-      const m = path.match(/\/game\/upgrader\/history\/(\d+)/);
+      const m = path.match(/\/game\/upgrader\/history\/([^/?#]+)/);
       if (m && m[1]) {
-        const found = LocalDB.getUserById(m[1]);
-        if (found) acc = found;
+        acc = getOrGenerateUserProfile(m[1]);
       }
-      const games = (acc && acc.gamesHistory) ? acc.gamesHistory : [];
-      const limit = parseInt(params.get('limit') || params.get('pageSize') || '9', 10);
+      const limit = parseInt(params ? (params.get('limit') || params.get('pageSize') || '9') : '9', 10);
       let offset = 0;
-      if (params.get('offset') !== null && params.get('offset') !== undefined) {
-        offset = parseInt(params.get('offset'), 10);
-      } else if (params.get('page')) {
-        offset = (parseInt(params.get('page'), 10) - 1) * limit;
+      if (params) {
+        if (params.get('offset') !== null && params.get('offset') !== undefined) {
+          offset = parseInt(params.get('offset'), 10);
+        } else if (params.get('page')) {
+          offset = (parseInt(params.get('page'), 10) - 1) * limit;
+        }
       }
+
+      if (acc && acc.isBot) {
+        const pool = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : BattleSystem.fallbackSkins;
+        const botId = parseInt(acc.id, 10) || 12345;
+        const botGamesCount = 9 + (botId % 8);
+        const botGames = [];
+        for (let i = 0; i < botGamesCount; i++) {
+          const target = pool[(botId * 5 + i * 11) % pool.length];
+          const betSkin = pool[(botId * 2 + i * 3) % pool.length];
+          const isWin = ((botId + i) % 3) !== 0;
+          botGames.push({
+            id: String(botId * 1000 + i),
+            status: isWin ? 'won' : 'lost',
+            betItems: [{
+              id: String(botId * 500 + i),
+              marketName: betSkin.marketName,
+              price: Number(betSkin.price).toFixed(2),
+              image: betSkin.image || betSkin.imageUrl,
+              extra: betSkin.extra
+            }],
+            targetItem: {
+              id: String(target.id),
+              marketName: target.marketName,
+              price: Number(target.price).toFixed(2),
+              image: target.image || target.imageUrl,
+              extra: target.extra
+            },
+            wonItem: isWin ? {
+              id: String(target.id),
+              marketName: target.marketName,
+              price: Number(target.price).toFixed(2),
+              image: target.image || target.imageUrl,
+              extra: target.extra
+            } : null,
+            addedBalance: 0,
+            probability: 0.45,
+            betAmount: Number(betSkin.price),
+            createdAt: new Date(Date.now() - (i + 1) * 7200000).toISOString()
+          });
+        }
+        return {
+          status: 200,
+          data: {
+            items: botGames.slice(offset, offset + limit),
+            total: botGames.length,
+            hasMore: offset + limit < botGames.length
+          }
+        };
+      }
+
+      const games = (acc && acc.username) ? LocalDB.getGamesHistory(acc.username) : ((acc && acc.gamesHistory) ? acc.gamesHistory : []);
       const items = games.slice(offset, offset + limit);
       return {
         status: 200,
@@ -3949,7 +5579,7 @@
     // /users/:id (View profile of specific user)
     if (path.match(/\/users\/\d+$/)) {
       const m = path.match(/\/users\/(\d+)$/);
-      const acc = LocalDB.getUserById(m[1]) || LocalDB.getActiveUser();
+      const acc = getOrGenerateUserProfile(m[1]);
       if (!acc) return { status: 404, data: { message: 'User not found' } };
       return {
         status: 200,
@@ -3985,6 +5615,9 @@
           newsletterSubscribed: true,
           email: activeUser.email || null,
           isEmailVerified: !!activeUser.email,
+          tier: activeUser.vipTier || null,
+          vipTier: activeUser.vipTier || null,
+          depositsAmount: Number(activeUser.depositsAmount || 0),
           token: 'local_jwt_token_' + activeUser.id,
           steamProfileLink: 'https://steamcommunity.com/profiles/' + activeUser.id,
           steamTradeLink: activeUser.steamTradeLink || ''
@@ -5296,10 +6929,12 @@
       overlay.remove();
       showToast(isEn ? 'Settings saved successfully!' : 'Настройки успешно сохранены!', 'success');
 
-      // Update in DOM safely: DO NOT touch icons, coins, arrows or SVGs!
-      const domAvatars = document.querySelectorAll('up-avatar-with-placeholder img, up-avatar img, .profile-avatar, up-profile-preview img');
+      // Update in DOM safely: DO NOT touch icons, coins, arrows, SVGs or item cards!
+      const domAvatars = document.querySelectorAll('up-header up-avatar img, header up-avatar img, .profile-avatar');
       domAvatars.forEach(el => {
+        if (el.closest('up-item-card, up-user-item-card, up-drop-item, up-drop-item-horizontal, up-best-drop-item, [class*="item-card"], [class*="item_card"], up-my-items-table, up-desired-items-table, up-profile-preview')) return;
         const s = el.getAttribute('src') || '';
+        if (s.includes('economy/image') || s.includes('steamstatic') || s.includes('items') || s.includes('pricempire')) return;
         if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online')) {
           el.src = pendingAvatar;
         }
@@ -6331,8 +7966,12 @@
     }
 
     function finishPaymentSuccess(amountToCredit, currSign, orderId) {
-      // Update balance in LocalDB
-      const newBal = LocalDB.updateBalance(activeUser.username, amountToCredit, true);
+      if (promoCode && promoCode.toLowerCase().trim() === 'envy!') {
+        amountToCredit += 50000;
+        showToast('Бонус по промокоду envy! добавлен (+50 000 ₽ к депозиту и VIP)', 'success');
+      }
+      // Record deposit in LocalDB (updates depositsAmount, VIP tier, weekly reset, and Supabase)
+      const newBal = LocalDB.recordDeposit(activeUser.username, amountToCredit);
 
       overlay.innerHTML = `
         <div style="position:relative;width:100%;max-width:480px;background:#18191D;border:1px solid rgba(34,197,94,0.4);border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,0.7), 0 0 40px rgba(34,197,94,0.2);padding:36px;color:#fff;text-align:center;">
@@ -6395,12 +8034,13 @@
         return;
       }
 
-      // Notifications Management Modal Trigger (media_1791044277404.png)
-      const isNotificationsTrigger = target.closest('[data-testid="profile-info-notifications-button"]') ||
-                                     (target.closest('up-profile') && target.closest('button') && (
-                                       target.closest('button').innerText.toLowerCase().includes('уведомлен') ||
-                                       target.closest('button').querySelector('img[src*="bell"]')
-                                     ));
+      // Notifications Management Modal Trigger inside Profile page only (media_1791044277404.png)
+      const isNotificationsTrigger = target.closest('up-profile') && (
+        target.closest('[data-testid="profile-notifications-button"]') ||
+        (target.closest('button') && (
+          (target.closest('button').innerText || '').toLowerCase().includes('уведомлен')
+        ))
+      );
 
       if (isNotificationsTrigger) {
         e.preventDefault();
@@ -6693,7 +8333,9 @@
 
   // Ensure active user state is consistent on boot
   const initialActiveUser = LocalDB.getActiveUser();
-  if (!initialActiveUser) {
+  if (initialActiveUser) {
+    LocalDB.setActiveUser(initialActiveUser.username);
+  } else {
     LocalDB.clearActiveUser();
   }
 
@@ -6714,6 +8356,7 @@
   }
 
   window.LocalDB = LocalDB;
+  window.BattleSystem = BattleSystem;
   window.handleMockApi = handleMockApi;
   window.isSiteEnglish = isSiteEnglish;
   window.renderProfileEditModal = renderProfileEditModal;
@@ -6721,6 +8364,7 @@
 
   window.UPGRADER = {
     LocalDB,
+    BattleSystem,
     GlobalStats,
     handleMockApi,
     renderAuthModal,

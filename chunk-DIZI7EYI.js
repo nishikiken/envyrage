@@ -1,0 +1,1 @@
+import{a as o}from"./chunk-FQJ6EBRH.js";import{w as l}from"./chunk-OEDFCCBM.js";import{Ic as i,ga as n}from"./chunk-5ZTXQG3S.js";function d(){let t=n(o);return i(()=>{if(!t.isAuthenticated())return()=>null;let e=t.currentUser()?.id,s=e==null?null:String(e);return r=>l(r===s?"/profile":`/users/${r}`)})}export{d as a};

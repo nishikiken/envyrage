@@ -29,6 +29,7 @@ class UpgraderLiveSync:
         self.seen_drop_ids = set()
         self.new_drops_queue = []
         self.best_live_drop = None
+        self.battle_lobbies = []
         self._lock = threading.Lock()
         self._running = True
 
@@ -176,6 +177,19 @@ class UpgraderLiveSync:
                 except Exception:
                     pass
 
+            # 4. Poll live battle lobbies from https://upgrader.best/api/game/battle/lobbies
+            if poll_counter % 2 == 0 or not self.battle_lobbies:
+                try:
+                    req = urllib.request.Request("https://upgrader.best/api/game/battle/lobbies", headers=headers)
+                    with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
+                        res = json.loads(r.read().decode())
+                        items = res.get("items", [])
+                        if items:
+                            with self._lock:
+                                self.battle_lobbies = items
+                except Exception:
+                    pass
+
             time.sleep(1.0)
 
     def get_snapshot(self):
@@ -187,7 +201,8 @@ class UpgraderLiveSync:
                 "gamesCount": self.games_count,
                 "liveDrops": list(self.live_drops),
                 "newDrops": fresh,
-                "bestLiveDrop": self.best_live_drop
+                "bestLiveDrop": self.best_live_drop,
+                "battleLobbies": list(self.battle_lobbies)
             }
 
 LIVE_SYNC = UpgraderLiveSync()
@@ -240,6 +255,10 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             best = snap.get("bestLiveDrop")
             return self.send_json({"bestLiveDrop": best} if best else {"bestLiveDrop": None})
 
+        # Battle lobbies live feed directly synced from upgrader.best
+        if parsed.path in ['/api/game/battle/lobbies/live', '/game/battle/lobbies/live', '/api/game/battle/lobbies', '/game/battle/lobbies']:
+            return self.send_json({"items": LIVE_SYNC.battle_lobbies, "hasMore": False})
+
         # 1. Root redirect to cis/index.html
         if parsed.path in ['', '/', '/index.html']:
             self.path = '/cis/index.html'
@@ -257,7 +276,7 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
                 return super().do_GET()
 
         # Direct SPA routes
-        if parsed.path in ['/vip', '/profile', '/tos', '/privacy-policy', '/cookie-policy', '/provably-fair']:
+        if parsed.path in ['/vip', '/profile', '/tos', '/privacy-policy', '/cookie-policy', '/provably-fair', '/battles', '/battles/create'] or parsed.path.startswith('/battles/'):
             self.path = '/cis/index.html'
             return super().do_GET()
 
@@ -275,7 +294,41 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
                     self.path = '/' + candidate_rel
                     return super().do_GET()
 
-        # 5. If path starts with /cis, /en, or /ru, serve that directory's index.html
+        # 5. Missing /assets/... proxying directly from upgrader.best S3 CDN with local disk cache
+        if parsed.path.startswith('/assets/'):
+            try:
+                ssl_ctx = ssl.create_default_context()
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
+                rel_path = parsed.path[len('/assets/'):]
+                urls = [
+                    "https://s3.upgrader.best/cdn/fa/" + rel_path,
+                    "https://upgrader.best" + parsed.path
+                ]
+                for target_url in urls:
+                    try:
+                        req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0"})
+                        with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
+                            if r.status == 200:
+                                content = r.read()
+                                stripped = content.strip().lower()
+                                if not (stripped.startswith(b'<!doctype') or stripped.startswith(b'<html')):
+                                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                                    with open(local_path, "wb") as f_out:
+                                        f_out.write(content)
+                                    mime = r.headers.get_content_type() or 'application/octet-stream'
+                                    self.send_response(200)
+                                    self.send_header('Content-Type', mime)
+                                    self.send_header('Content-Length', str(len(content)))
+                                    self.end_headers()
+                                    self.wfile.write(content)
+                                    return
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+        # 6. If path starts with /cis, /en, or /ru, serve that directory's index.html
         if parsed.path.startswith('/cis'):
             self.path = '/cis/index.html'
             return super().do_GET()
@@ -286,17 +339,26 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             self.path = '/ru/index.html'
             return super().do_GET()
 
-        # 5. Missing media fallback
+        # 7. Missing media fallback (exact byte length, matching Content-Length)
         ext = os.path.splitext(parsed.path)[1].lower()
-        if ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.ico']:
+        if ext == '.webp':
+            webp_1x1 = b'RIFF\x1a\x00\x00\x00WEBPVP8L\x0e\x00\x00\x00/\x00\x00\x00\x00\x07\x85\x85\x88\x88%\x00\x00'
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/webp')
+            self.send_header('Content-Length', str(len(webp_1x1)))
+            self.end_headers()
+            self.wfile.write(webp_1x1)
+            return
+        if ext in ['.png', '.jpg', '.jpeg', '.gif', '.ico']:
+            png_1x1 = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
             self.send_response(200)
             self.send_header('Content-Type', 'image/png')
-            self.send_header('Content-Length', '68')
+            self.send_header('Content-Length', str(len(png_1x1)))
             self.end_headers()
-            self.wfile.write(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82')
+            self.wfile.write(png_1x1)
             return
         if ext == '.svg':
-            svg_data = b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>'
+            svg_data = b'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"></svg>'
             self.send_response(200)
             self.send_header('Content-Type', 'image/svg+xml')
             self.send_header('Content-Length', str(len(svg_data)))
