@@ -1700,12 +1700,10 @@
   }
 
   try {
-    const isSubdir = window.location.pathname.includes('/cis') || window.location.pathname.includes('/en') || window.location.pathname.includes('/ru') || window.location.pathname.includes('/admin');
     const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-    const ghPrefix = isGH ? '/envyrage' : '';
+    const isSubdir = window.location.pathname.includes('/cis') || window.location.pathname.includes('/en') || window.location.pathname.includes('/ru') || window.location.pathname.includes('/admin');
     const candidates = [
-      isSubdir ? '../skins.json' : './skins.json',
-      ghPrefix ? (ghPrefix + '/skins.json') : './skins.json',
+      isGH ? '/envyrage/skins.json' : (isSubdir ? '../skins.json' : './skins.json'),
       './skins.json'
     ];
     for (const url of candidates) {
@@ -3752,9 +3750,18 @@
 
   async function pollRealtimeFeed() {
     try {
-      const res = await fetch('/api/realtime-feed');
-      if (!res.ok) return;
-      const feed = await res.json();
+      let feed = null;
+      try {
+        const mockRes = handleMockApi('GET', '/api/realtime-feed');
+        if (mockRes && mockRes.data) {
+          feed = mockRes.data;
+        }
+      } catch (e) {}
+      if (!feed) {
+        const res = await fetch('/api/realtime-feed');
+        if (res.ok) feed = await res.json();
+      }
+      if (!feed) return;
       if (typeof feed.online === 'number' && feed.online > 0) {
         currentOnline = feed.online;
         GlobalStats.onlineCount = feed.online;
@@ -4904,7 +4911,9 @@
         status: 200,
         data: {
           online: online,
+          gamesCount: GlobalStats.displayedCount || 2847600,
           upgradesCount: GlobalStats.displayedCount || 2847600,
+          liveDrops: (typeof cachedRealtimeDrops !== 'undefined' && cachedRealtimeDrops) ? cachedRealtimeDrops : [],
           realtimeDrops: (typeof cachedRealtimeDrops !== 'undefined' && cachedRealtimeDrops) ? cachedRealtimeDrops : []
         }
       };
