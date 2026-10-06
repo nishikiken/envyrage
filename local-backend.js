@@ -25,6 +25,41 @@
     }
   } catch(e) {}
 
+  // Stub OneSignal on non-upgrader domains to prevent domain validation error crashes
+  try {
+    const isUpgraderDomain = window.location.hostname === 'upgrader.pro' || window.location.hostname === 'www.upgrader.pro';
+    if (!isUpgraderDomain) {
+      const mockOneSignal = {
+        init: () => Promise.resolve(),
+        User: {
+          PushSubscription: {
+            optedIn: false,
+            optIn: () => Promise.resolve(),
+            optOut: () => Promise.resolve()
+          }
+        },
+        login: () => Promise.resolve(),
+        logout: () => Promise.resolve(),
+        on: () => {},
+        off: () => {}
+      };
+      window.OneSignal = mockOneSignal;
+      const deferredQueue = [];
+      window.OneSignalDeferred = new Proxy(deferredQueue, {
+        get(target, prop) {
+          if (prop === 'push') {
+            return function(fn) {
+              if (typeof fn === 'function') {
+                try { fn(mockOneSignal); } catch(e) {}
+              }
+            };
+          }
+          return target[prop];
+        }
+      });
+    }
+  } catch(e) {}
+
   // Safety patch: prevent Angular or CDN prepending paths to data:image URLs
   try {
     const origSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
@@ -6294,8 +6329,25 @@
     let requestHeaders = {};
     let isMocked = false;
 
+    let customResponseType = '';
+    try {
+      const nativeDesc = Object.getOwnPropertyDescriptor(OriginalXHR.prototype, 'responseType');
+      Object.defineProperty(xhr, 'responseType', {
+        get: () => customResponseType || (nativeDesc?.get ? nativeDesc.get.call(xhr) : ''),
+        set: (val) => {
+          customResponseType = val;
+          try {
+            if (nativeDesc && nativeDesc.set) {
+              nativeDesc.set.call(xhr, val);
+            }
+          } catch(e) {}
+        },
+        configurable: true
+      });
+    } catch(e) {}
+
     const originalOpen = xhr.open;
-    xhr.open = function(m, u, async, user, password) {
+    xhr.open = function(m, u) {
       method = (m || 'GET').toUpperCase();
       const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
       if (isGH && typeof u === 'string') {
@@ -6303,7 +6355,13 @@
         else if (u === '/skins.json' || u === './skins.json') u = '/envyrage/skins.json';
       }
       url = u;
-      return originalOpen.call(xhr, m, u, async, user, password);
+      const args = Array.from(arguments);
+      args[0] = m;
+      args[1] = u;
+      if (args.length < 3) {
+        args[2] = true;
+      }
+      return originalOpen.apply(xhr, args);
     };
 
     const originalSetRequestHeader = xhr.setRequestHeader;
@@ -6331,12 +6389,16 @@
           Promise.resolve(mockResponse).then(resp => {
             const status = (resp && resp.status) || 200;
             const responseText = JSON.stringify((resp && resp.data) || {});
+            let respVal = responseText;
+            if (xhr.responseType === 'json') {
+              try { respVal = (resp && resp.data !== undefined) ? resp.data : JSON.parse(responseText); } catch(e) {}
+            }
 
-            Object.defineProperty(xhr, 'status', { get: () => status });
-            Object.defineProperty(xhr, 'statusText', { get: () => status === 200 ? 'OK' : 'Mock Response' });
-            Object.defineProperty(xhr, 'readyState', { get: () => 4 });
-            Object.defineProperty(xhr, 'responseText', { get: () => responseText });
-            Object.defineProperty(xhr, 'response', { get: () => responseText });
+            Object.defineProperty(xhr, 'status', { get: () => status, configurable: true });
+            Object.defineProperty(xhr, 'statusText', { get: () => status === 200 ? 'OK' : 'Mock Response', configurable: true });
+            Object.defineProperty(xhr, 'readyState', { get: () => 4, configurable: true });
+            Object.defineProperty(xhr, 'responseText', { get: () => responseText, configurable: true });
+            Object.defineProperty(xhr, 'response', { get: () => respVal, configurable: true });
 
             xhr.getAllResponseHeaders = function() {
               return 'content-type: application/json; charset=utf-8\r\n';
