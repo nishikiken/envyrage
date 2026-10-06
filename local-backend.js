@@ -272,7 +272,6 @@
     } // end if (isGH)
 
     // Dynamic Asset Path Interceptor for GitHub Pages (/envyrage/ prefix)
-    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
     if (isGH) {
       const origSetAttr = Element.prototype.setAttribute;
       Element.prototype.setAttribute = function(name, val) {
