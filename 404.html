@@ -14,6 +14,8 @@
     
     var target = 'ru';
     if (segment.includes('profile')) target = 'profile';
+    else if (segment.includes('battles')) target = 'battles';
+    else if (segment.includes('vip')) target = 'vip';
     else if (segment.includes('settings')) target = 'settings';
     else if (segment.includes('en')) target = 'en';
     else if (segment.includes('portfolio')) target = 'portfolio';

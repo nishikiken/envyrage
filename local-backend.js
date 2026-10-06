@@ -151,6 +151,7 @@
 
       let screen = '';
       if (url.includes('profile')) screen = 'profile';
+      else if (url.includes('battles')) screen = 'battles';
       else if (url.includes('vip')) screen = 'vip';
       else if (url.includes('settings')) screen = 'settings';
       else if (url.includes('admin')) screen = 'admin';
@@ -202,6 +203,7 @@
         if (href.startsWith('/') || href.startsWith('./') || href.startsWith('../') || href.startsWith('#')) {
           let screen = '';
           if (href.includes('profile')) screen = 'profile';
+          else if (href.includes('battles')) screen = 'battles';
           else if (href.includes('vip')) screen = 'vip';
           else if (href.includes('settings')) screen = 'settings';
           else if (href.includes('admin')) screen = 'admin';
@@ -243,6 +245,7 @@
 
         let screen = '';
         if (s.includes('profile')) screen = 'profile';
+        else if (s.includes('battles')) screen = 'battles';
         else if (s.includes('vip')) screen = 'vip';
         else if (s.includes('settings')) screen = 'settings';
         else if (s.includes('admin')) screen = 'admin';
@@ -267,6 +270,36 @@
     handleHashChange();
     window.addEventListener('hashchange', handleHashChange);
     } // end if (isGH)
+
+    // Dynamic Asset Path Interceptor for GitHub Pages (/envyrage/ prefix)
+    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+    if (isGH) {
+      const origSetAttr = Element.prototype.setAttribute;
+      Element.prototype.setAttribute = function(name, val) {
+        if ((name === 'src' || name === 'href') && typeof val === 'string' && val.startsWith('/assets/')) {
+          val = '/envyrage' + val;
+        }
+        return origSetAttr.call(this, name, val);
+      };
+
+      ['HTMLImageElement', 'HTMLMediaElement', 'HTMLAudioElement', 'HTMLVideoElement', 'HTMLSourceElement'].forEach(clsName => {
+        if (window[clsName]) {
+          const desc = Object.getOwnPropertyDescriptor(window[clsName].prototype, 'src');
+          if (desc && desc.set) {
+            Object.defineProperty(window[clsName].prototype, 'src', {
+              set: function(v) {
+                if (typeof v === 'string' && v.startsWith('/assets/')) {
+                  v = '/envyrage' + v;
+                }
+                return desc.set.call(this, v);
+              },
+              get: desc.get,
+              configurable: true
+            });
+          }
+        }
+      });
+    }
   } catch(e) {}
 
   // Helper to dynamically update the Angular odometer balance display
@@ -4858,7 +4891,6 @@
   // 7. MOCK REST API HANDLER
   function handleMockApi(method, path, body, params) {
     const activeUser = LocalDB.getActiveUser();
-    console.log('[handleMockApi]', method, path, body);
 
     // -------------------------------------------------------------
     // VIP SYSTEM ENDPOINTS
@@ -6238,8 +6270,13 @@
     const originalOpen = xhr.open;
     xhr.open = function(m, u, async, user, password) {
       method = (m || 'GET').toUpperCase();
+      const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+      if (isGH && typeof u === 'string') {
+        if (u.startsWith('/assets/')) u = '/envyrage' + u;
+        else if (u === '/skins.json' || u === './skins.json') u = '/envyrage/skins.json';
+      }
       url = u;
-      return originalOpen.apply(xhr, arguments);
+      return originalOpen.call(xhr, m, u, async, user, password);
     };
 
     const originalSetRequestHeader = xhr.setRequestHeader;
@@ -6317,6 +6354,11 @@
   // 9. INTERCEPT FETCH
   const originalFetch = window.fetch;
   window.fetch = function(resource, init) {
+    const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+    if (isGH && typeof resource === 'string') {
+      if (resource.startsWith('/assets/')) resource = '/envyrage' + resource;
+      else if (resource === '/skins.json' || resource === './skins.json') resource = '/envyrage/skins.json';
+    }
     let url = typeof resource === 'string' ? resource : (resource.url || '');
     let method = (init && init.method) ? init.method.toUpperCase() : 'GET';
     let body = {};

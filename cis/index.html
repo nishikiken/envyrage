@@ -1,4 +1,10 @@
-<!doctype html><html lang="ru" class="scrollbar-thin" dir="ltr"><head><base href="/">
+<!doctype html><html lang="ru" class="scrollbar-thin" dir="ltr"><head>
+    <script>
+      (function() {
+        var isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+        document.write('<base href="' + (isGH ? '/envyrage/' : '/') + '">');
+      })();
+    </script>
     <meta charset="utf-8">
     <meta name="referrer" content="no-referrer">
     <title>Апгрейдер предметов CS2 | Официальный Сайт UPGRADER</title>
@@ -10,82 +16,31 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
 
-    <link rel="icon" type="image/x-icon" sizes="32x32" href="../favicon.ico">
-
-    <link rel="canonical" href="index.html">
-
-    <link rel="alternate" href="../_ext/upgrader.best/ru/index.html" hreflang="ru-RU">
-    <link rel="alternate" href="../_ext/upgrader.life/uk/index.html" hreflang="uk">
-    <link rel="alternate" href="index.html" hreflang="ru">
-
-    <link rel="alternate" href="../en/index.html" hreflang="en">
-    <link rel="alternate" href="../ka/index.html" hreflang="ka">
-    <link rel="alternate" href="../kk/index.html" hreflang="kk">
-    <link rel="alternate" href="../uz/index.html" hreflang="uz">
-    <link rel="alternate" href="../ro/index.html" hreflang="ro">
-    <link rel="alternate" href="../hu/index.html" hreflang="hu">
-    <link rel="alternate" href="../tr/index.html" hreflang="tr">
-    <link rel="alternate" href="../pl/index.html" hreflang="pl">
-    <link rel="alternate" href="../pt/index.html" hreflang="pt">
-    <link rel="alternate" href="../es/index.html" hreflang="es">
-    <link rel="alternate" href="../mn/index.html" hreflang="mn">
-    <link rel="alternate" href="../vi/index.html" hreflang="vi">
-    <link rel="alternate" href="../id/index.html" hreflang="id">
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="./favicon.ico">
 
     <script>
-      (function (w, d, s, l, i) {
-        w[l] = w[l] || [];
-        w[l].push({ "gtm.start": new Date().getTime(), event: "gtm.js" });
-        var f = d.getElementsByTagName(s)[0],
-          j = d.createElement(s),
-          dl = l != "dataLayer" ? "&l=" + l : "";
-        j.async = true;
-        j.src = "https://www.googletagmanager.com/gtm.js?id=" + i + dl;
-        f.parentNode.insertBefore(j, f);
-      })(window, document, "script", "dataLayer", "GTM-K696X2MH");
-    </script>
-
-    <script type="text/javascript">
-      (function (m, e, t, r, i, k, a) {
-        m[i] =
-          m[i] ||
-          function () {
-            (m[i].a = m[i].a || []).push(arguments);
-          };
-        m[i].l = 1 * new Date();
-        for (var j = 0; j < document.scripts.length; j++) {
-          if (document.scripts[j].src === r) {
-            return;
-          }
+      // Очистка возможных старых Service Worker и кэшей от других локальных проектов
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (var reg of regs) {
+              reg.unregister();
+            }
+          });
         }
-        ((k = e.createElement(t)),
-          (a = e.getElementsByTagName(t)[0]),
-          (k.async = 1),
-          (k.src = r),
-          a.parentNode.insertBefore(k, a));
-      })(window, document, "script", "https://mc.yandex.ru/metrika/tag.js?id=105203095", "ym");
-
-      ym(105203095, "init", {
-        ssr: true,
-        webvisor: true,
-        clickmap: true,
-        ecommerce: "dataLayer",
-        accurateTrackBounce: true,
-        trackLinks: true,
-      });
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (var name of names) {
+              caches.delete(name);
+            }
+          });
+        }
+      } catch(e) {}
     </script>
-  <link rel="stylesheet" href="../styles-4J2VUQS4.css">
-  <script src="../local-backend.js"></script>
+    <link rel="stylesheet" href="./styles-4J2VUQS4.css">
+    <script src="./local-backend.js"></script>
 </head>
-  <body>
-    <noscript>
-      <iframe src="../_ext/www.googletagmanager.com/ns_1k0v3w2.html" height="0" width="0" style="display: none; visibility: hidden"></iframe>
-    </noscript>
-    <noscript>
-      <div><img src="../_ext/mc.yandex.ru/watch/105203095/1/index_uc3jzw.html" style="position: absolute; left: -9999px" alt=""></div>
-    </noscript>
-
+<body>
     <up-app-root></up-app-root>
-  <link rel="modulepreload" href="../chunk-JKIZUH2G.js"><link rel="modulepreload" href="../chunk-L47RTWUF.js"><link rel="modulepreload" href="../chunk-2WPDENUZ.js"><link rel="modulepreload" href="../chunk-WMXPIAMD.js"><link rel="modulepreload" href="../chunk-BBBF7XDG.js"><link rel="modulepreload" href="../chunk-LK2HDU6E.js"><link rel="modulepreload" href="../chunk-LKECZ7UF.js"><link rel="modulepreload" href="../chunk-DIZI7EYI.js"><link rel="modulepreload" href="../chunk-W7DXVDV2.js"><link rel="modulepreload" href="../chunk-E7PWR6HN.js"><script src="../polyfills-HZTA6SHH.js" type="module"></script><script src="../main-TDKS65R6.js" type="module"></script>
-
+    <link rel="modulepreload" href="./chunk-JKIZUH2G.js"><link rel="modulepreload" href="./chunk-L47RTWUF.js"><link rel="modulepreload" href="./chunk-2WPDENUZ.js"><link rel="modulepreload" href="./chunk-WMXPIAMD.js"><link rel="modulepreload" href="./chunk-BBBF7XDG.js"><link rel="modulepreload" href="./chunk-LK2HDU6E.js"><link rel="modulepreload" href="./chunk-LKECZ7UF.js"><link rel="modulepreload" href="./chunk-DIZI7EYI.js"><link rel="modulepreload" href="./chunk-W7DXVDV2.js"><link rel="modulepreload" href="./chunk-E7PWR6HN.js"><script src="./polyfills-HZTA6SHH.js" type="module"></script><script src="./main-TDKS65R6.js" type="module"></script>
 </body></html>
