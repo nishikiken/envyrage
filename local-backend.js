@@ -1649,9 +1649,32 @@
 
   // 2. LOAD EXTENSIVE SKINS CATALOG FROM skins.json (15,800+ skins synced from upgrader.best)
   let catalogData = [];
+  function naturalizeSkinPrice(priceStr, seedStr) {
+    let p = parseFloat(priceStr);
+    if (isNaN(p) || p <= 0) return priceStr;
+    const cents = Math.round((p * 100) % 100);
+    if (cents % 10 === 0) {
+      let h = 0;
+      const str = String(seedStr || p);
+      for (let i = 0; i < str.length; i++) {
+        h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+      }
+      let delta = (Math.abs(h) % 39) + 1;
+      if ((h & 1) === 0) delta = -delta;
+      let newP = Math.max(1.0, p + (delta / 100.0));
+      let newCents = Math.round((newP * 100) % 100);
+      if (newCents % 10 === 0) newP += 0.03;
+      return newP.toFixed(2);
+    }
+    return p.toFixed(2);
+  }
+
   function populateCatalog(data) {
     if (!data || !Array.isArray(data) || data.length === 0) return;
-    catalogData = data;
+    catalogData = data.map(s => ({
+      ...s,
+      price: naturalizeSkinPrice(s.price, (s.id || '') + (s.marketName || ''))
+    }));
     if (window.UPGRADER_CONFIG) {
       window.UPGRADER_CONFIG.catalog = catalogData;
     }
@@ -4504,103 +4527,93 @@ function getOrGenerateUserProfile(userId) {
       registerKnownBot(bot);
       return bot;
     },
-    getSkinsForAmount(targetAmount, ownerId) {
-      const skins = [];
+    getOpponentSkins(targetStake, ownerId) {
       let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
-      targetAmount = parseFloat(targetAmount) || 100;
+      targetStake = parseFloat(targetStake) || 100;
 
-      // Filter pool to valid items with positive price <= targetAmount
+      // Strict 49.00% to 51.00% odds window:
+      // S1 * (49/51) <= S2 <= S1 * (51/49) => 0.9608 * S1 <= S2 <= 1.0408 * S1
+      const minS2 = targetStake * 0.963;
+      const maxS2 = targetStake * 1.037;
+
       const validItems = pool.filter(it => {
         const p = parseFloat(it.price) || 0;
-        return p > 10 && p <= targetAmount;
+        return p > 5;
       });
 
-      // Strategy 1: Find 1 single skin worth 82% to 98% of targetAmount
-      const singleCandidates = validItems.filter(it => {
+      // 50% probability: 2 skins (1 main skin + 1 small filler skin to top up without balance!)
+      if (Math.random() < 0.50) {
+        const mainMin = targetStake * 0.78;
+        const mainMax = targetStake * 0.92;
+        const mains = validItems.filter(it => {
+          const p = parseFloat(it.price) || 0;
+          return p >= mainMin && p <= mainMax;
+        });
+        if (mains.length > 0) {
+          const pick1 = mains[Math.floor(Math.random() * mains.length)];
+          const p1 = parseFloat(pick1.price);
+          const fMin = minS2 - p1;
+          const fMax = maxS2 - p1;
+          const fillers = validItems.filter(it => {
+            const p = parseFloat(it.price) || 0;
+            return p >= fMin && p <= fMax;
+          });
+          if (fillers.length > 0) {
+            const pick2 = fillers[Math.floor(Math.random() * fillers.length)];
+            return [
+              {
+                id: String(pick1.id || Date.now() + '_1_' + Math.random().toString(36).substr(2, 5)),
+                marketName: pick1.marketName || pick1.name || 'CS2 Skin',
+                imageUrl: pick1.image || pick1.imageUrl || '/assets/images/default-avatar-small.webp',
+                price: Number(pick1.price).toFixed(2),
+                extra: pick1.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+                userId: String(ownerId)
+              },
+              {
+                id: String(pick2.id || Date.now() + '_2_' + Math.random().toString(36).substr(2, 5)),
+                marketName: pick2.marketName || pick2.name || 'CS2 Skin',
+                imageUrl: pick2.image || pick2.imageUrl || '/assets/images/default-avatar-small.webp',
+                price: Number(pick2.price).toFixed(2),
+                extra: pick2.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+                userId: String(ownerId)
+              }
+            ];
+          }
+        }
+      }
+
+      // 1 single skin within [minS2, maxS2]
+      const singles = validItems.filter(it => {
         const p = parseFloat(it.price) || 0;
-        return p >= targetAmount * 0.82 && p <= targetAmount * 0.98;
+        return p >= minS2 && p <= maxS2;
       });
-
-      if (singleCandidates.length > 0) {
-        const pick = singleCandidates[Math.floor(Math.random() * singleCandidates.length)];
-        skins.push({
+      if (singles.length > 0) {
+        const pick = singles[Math.floor(Math.random() * singles.length)];
+        return [{
           id: String(pick.id || Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
           marketName: pick.marketName || pick.name || 'CS2 Skin',
           imageUrl: pick.image || pick.imageUrl || '/assets/images/default-avatar-small.webp',
-          price: Number(pick.price).toFixed(3),
+          price: Number(pick.price).toFixed(2),
           extra: pick.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
           userId: String(ownerId)
-        });
-        return skins;
+        }];
       }
 
-      // Strategy 2: Find 2 skins summing to 85% to 98% of targetAmount
-      const firstCandidates = validItems.filter(it => {
-        const p = parseFloat(it.price) || 0;
-        return p >= targetAmount * 0.40 && p <= targetAmount * 0.75;
-      });
-
-      if (firstCandidates.length > 0) {
-        const pick1 = firstCandidates[Math.floor(Math.random() * firstCandidates.length)];
-        const p1 = parseFloat(pick1.price);
-        const rem = targetAmount - p1;
-        const secondCandidates = validItems.filter(it => {
-          const p = parseFloat(it.price) || 0;
-          return p >= rem * 0.70 && p <= rem * 0.98;
-        });
-        if (secondCandidates.length > 0) {
-          const pick2 = secondCandidates[Math.floor(Math.random() * secondCandidates.length)];
-          skins.push({
-            id: String(pick1.id || Date.now() + '_1_' + Math.random().toString(36).substr(2, 5)),
-            marketName: pick1.marketName || pick1.name || 'CS2 Skin',
-            imageUrl: pick1.image || pick1.imageUrl || '/assets/images/default-avatar-small.webp',
-            price: Number(pick1.price).toFixed(3),
-            extra: pick1.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
-            userId: String(ownerId)
-          });
-          skins.push({
-            id: String(pick2.id || Date.now() + '_2_' + Math.random().toString(36).substr(2, 5)),
-            marketName: pick2.marketName || pick2.name || 'CS2 Skin',
-            imageUrl: pick2.image || pick2.imageUrl || '/assets/images/default-avatar-small.webp',
-            price: Number(pick2.price).toFixed(3),
-            extra: pick2.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
-            userId: String(ownerId)
-          });
-          return skins;
-        }
-      }
-
-      // Strategy 3: Greedy accumulation from descending sorted pool
-      const sortedPool = [...validItems].sort((a, b) => (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0));
-      let currentRemaining = targetAmount;
-      for (const item of sortedPool) {
-        const p = parseFloat(item.price) || 0;
-        if (p <= currentRemaining && (skins.length === 0 || p >= currentRemaining * 0.5 || currentRemaining <= targetAmount * 0.2)) {
-          skins.push({
-            id: String(item.id || Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
-            marketName: item.marketName || item.name || 'CS2 Skin',
-            imageUrl: item.image || item.imageUrl || '/assets/images/default-avatar-small.webp',
-            price: Number(p).toFixed(3),
-            extra: item.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
-            userId: String(ownerId)
-          });
-          currentRemaining -= p;
-          if (currentRemaining <= targetAmount * 0.15 || skins.length >= 3) break;
-        }
-      }
-
-      if (skins.length === 0) {
-        const fallback = this.fallbackSkins[0];
-        skins.push({
-          id: String(Date.now()),
-          marketName: fallback.marketName,
-          imageUrl: fallback.image,
-          price: Number(targetAmount * 0.92).toFixed(3),
-          extra: fallback.extra,
-          userId: String(ownerId)
-        });
-      }
-      return skins;
+      // Safe fallback if catalog doesn't have exact match
+      const fallback = pool[0] || this.fallbackSkins[0];
+      const ratio = 0.97 + (Math.random() * 0.05);
+      let fallbackPrice = Math.round(targetStake * ratio * 100) / 100;
+      return [{
+        id: String(Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+        marketName: fallback.marketName || 'CS2 Skin',
+        imageUrl: fallback.image || fallback.imageUrl || '/assets/images/default-avatar-small.webp',
+        price: fallbackPrice.toFixed(2),
+        extra: fallback.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+        userId: String(ownerId)
+      }];
+    },
+    getSkinsForAmount(targetAmount, ownerId) {
+      return this.getOpponentSkins(targetAmount, ownerId);
     },
     generateToken() {
       return Array.from({length: 32}, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -4608,9 +4621,22 @@ function getOrGenerateUserProfile(userId) {
     init() {
       if (this.initialized) return;
       this.initialized = true;
-      const initialAmounts = [142.10, 200.33, 350.00, 680.50, 1200.00, 2450.00, 4800.00, 9500.00];
-      for (const amt of initialAmounts) {
-        this.createBotLobby(amt);
+      try {
+        const saved = localStorage.getItem('upgrader_user_lobbies');
+        if (saved) {
+          const arr = JSON.parse(saved);
+          for (const lob of arr) {
+            if (lob && lob.shareToken && !this.allLobbies.has(lob.shareToken)) {
+              this.allLobbies.set(lob.shareToken, lob);
+              this.allLobbies.set(lob.id, lob);
+              this.userLobbies.push(lob);
+            }
+          }
+        }
+      } catch(e) {}
+      const initialTierTargets = [120, 280, 520, 850, 1400, 2600, 4800, 9500];
+      for (const tAmt of initialTierTargets) {
+        this.createBotLobby(tAmt);
       }
       setInterval(() => {
         this.tickBots();
@@ -4623,8 +4649,8 @@ function getOrGenerateUserProfile(userId) {
       const userInv = Array.isArray(activeUser && activeUser.inventory)
         ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
         : [];
-      const minTol = targetAmt * 0.85;
-      const maxTol = targetAmt * 1.15;
+      const minTol = targetAmt * (49.00 / 51.00);
+      const maxTol = targetAmt * (51.00 / 49.00);
       const validItems = userInv.filter(it => {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
         return p > 0;
@@ -4642,28 +4668,66 @@ function getOrGenerateUserProfile(userId) {
           if (sum >= minTol) return true;
         }
       }
-      if (userBal === 0 && validItems.length > 0) {
-        if (validItems.some(it => {
-          const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-          return p >= targetAmt * 0.70 && p <= targetAmt * 1.30;
-        })) return true;
-      }
       return false;
     },
     createBotLobby(targetAmount) {
       const bot = this.getRandomBot();
       const id = String(Date.now() + Math.floor(Math.random() * 1000));
       const shareToken = this.generateToken();
-      const skins = this.getSkinsForAmount(targetAmount, bot.id);
-      const skinsSum = skins.reduce((acc, s) => acc + parseFloat(s.price), 0);
-      const itemsAmt = Math.min(skinsSum, targetAmount);
-      const balAmt = Math.max(0, targetAmount - itemsAmt);
+
+      let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
+      const validPool = pool.filter(s => (parseFloat(s.price) || 0) >= 50 && (parseFloat(s.price) || 0) <= 30000);
+
+      let pickedSkins = [];
+      let finalAmount = 0;
+
+      if (targetAmount && typeof targetAmount === 'number' && targetAmount > 0) {
+        const candidates = validPool.filter(s => {
+          const p = parseFloat(s.price) || 0;
+          return p >= targetAmount * 0.95 && p <= targetAmount * 1.05;
+        });
+        if (candidates.length > 0) {
+          const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          pickedSkins = [pick];
+          finalAmount = parseFloat(pick.price);
+        }
+      }
+
+      if (pickedSkins.length === 0) {
+        // Diverse natural price tiers for CS2 battles
+        const tiers = [
+          [70, 250],
+          [250, 650],
+          [650, 1600],
+          [1600, 3800],
+          [3800, 8500],
+          [8500, 25000]
+        ];
+        const tier = tiers[Math.floor(Math.random() * tiers.length)];
+        const inTier = validPool.filter(s => {
+          const p = parseFloat(s.price) || 0;
+          return p >= tier[0] && p <= tier[1];
+        });
+        const pick = (inTier.length > 0 ? inTier : validPool)[Math.floor(Math.random() * (inTier.length > 0 ? inTier.length : validPool.length))];
+        pickedSkins = [pick];
+        finalAmount = parseFloat(pick.price);
+      }
+
+      const skins = pickedSkins.map(pick => ({
+        id: String(pick.id || Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+        marketName: pick.marketName || pick.name || 'CS2 Skin',
+        imageUrl: pick.image || pick.imageUrl || '/assets/images/default-avatar-small.webp',
+        price: Number(pick.price).toFixed(2),
+        extra: pick.extra || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
+        userId: String(bot.id)
+      }));
+
       const lobby = {
         id: id,
         status: 'waiting',
         shareToken: shareToken,
         isPrivate: false,
-        targetAmount: targetAmount.toFixed(2),
+        targetAmount: finalAmount.toFixed(2),
         tolerancePercent: '1.00',
         feePercent: '0.00',
         maxStake: '100000.00',
@@ -4674,7 +4738,7 @@ function getOrGenerateUserProfile(userId) {
         round: {
           id: id,
           status: 'waiting',
-          bank: targetAmount.toFixed(2),
+          bank: finalAmount.toFixed(2),
           roll: null,
           maxRoll: 100000,
           winnerId: null,
@@ -4684,9 +4748,9 @@ function getOrGenerateUserProfile(userId) {
           stakes: [
             {
               user: bot,
-              amount: targetAmount.toFixed(2),
-              itemsAmount: itemsAmt.toFixed(2),
-              balanceAmount: balAmt.toFixed(2),
+              amount: finalAmount.toFixed(2),
+              itemsAmount: finalAmount.toFixed(2),
+              balanceAmount: '0.00',
               rangeFrom: null,
               rangeTo: null,
               chance: null,
@@ -4694,7 +4758,7 @@ function getOrGenerateUserProfile(userId) {
             }
           ]
         },
-        canAfford: this.isAffordableForUser(targetAmount),
+        canAfford: this.isAffordableForUser(finalAmount),
         isMine: false,
         createdAtTime: Date.now()
       };
@@ -4723,40 +4787,42 @@ function getOrGenerateUserProfile(userId) {
       while (opponentBot.id === target.createdBy.id) {
         opponentBot.id = String(Math.floor(100000 + Math.random() * 899999));
       }
-      const amt = parseFloat(target.targetAmount);
-      const opponentSkins = this.getSkinsForAmount(amt, opponentBot.id);
-      const oppItemsSum = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
-      const oppActualItems = Math.min(oppItemsSum, amt);
-      const oppBalAmt = Math.max(0, amt - oppActualItems);
 
-      // Calibrate P1 and P2 stakes to strictly 50/50 odds!
-      const p1SkinsSum = (target.round.stakes[0].items || []).reduce((a, s) => a + parseFloat(s.price), 0);
-      const p1ActualItems = Math.min(p1SkinsSum, amt);
-      const p1BalAmt = Math.max(0, amt - p1ActualItems);
+      const p1Stake = parseFloat(target.round.stakes[0].amount);
+      const opponentSkins = this.getOpponentSkins(p1Stake, opponentBot.id);
+      const p2Stake = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      const totalBank = p1Stake + p2Stake;
 
-      target.round.stakes[0].amount = amt.toFixed(2);
-      target.round.stakes[0].itemsAmount = p1ActualItems.toFixed(2);
-      target.round.stakes[0].balanceAmount = p1BalAmt.toFixed(2);
+      // Exact chances calculation: strictly 49.00% to 51.00%!
+      let p1Chance = Math.round((p1Stake / totalBank) * 10000) / 100;
+      if (p1Chance < 49.00) p1Chance = 49.00;
+      if (p1Chance > 51.00) p1Chance = 51.00;
+      let p2Chance = Number((100.00 - p1Chance).toFixed(2));
+
+      const p1MaxRoll = Math.round(p1Chance * 1000);
+
+      target.round.stakes[0].amount = p1Stake.toFixed(2);
+      target.round.stakes[0].itemsAmount = p1Stake.toFixed(2);
+      target.round.stakes[0].balanceAmount = '0.00';
       target.round.stakes[0].rangeFrom = 0;
-      target.round.stakes[0].rangeTo = 50000;
-      target.round.stakes[0].chance = 50.00;
+      target.round.stakes[0].rangeTo = p1MaxRoll;
+      target.round.stakes[0].chance = p1Chance;
 
       target.round.stakes.push({
         user: opponentBot,
-        amount: amt.toFixed(2),
-        itemsAmount: oppActualItems.toFixed(2),
-        balanceAmount: oppBalAmt.toFixed(2),
-        rangeFrom: 50001,
+        amount: p2Stake.toFixed(2),
+        itemsAmount: p2Stake.toFixed(2),
+        balanceAmount: '0.00',
+        rangeFrom: p1MaxRoll + 1,
         rangeTo: 100000,
-        chance: 50.00,
+        chance: p2Chance,
         items: opponentSkins
       });
 
-      const totalBank = amt * 2;
-      const roll = Math.floor(Math.random() * 100000);
-      const winnerId = (roll <= 50000) ? target.createdBy.id : opponentBot.id;
-
       target.round.bank = totalBank.toFixed(2);
+      const roll = Math.floor(Math.random() * 100000);
+      const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
+
       target.round.roll = roll;
       target.round.maxRoll = 100000;
       target.round.winnerId = winnerId;
@@ -4820,27 +4886,10 @@ function getOrGenerateUserProfile(userId) {
         this.matchBotVsBot(target);
       }
 
-      // 3. Keep bot lobby feed fresh with diverse stakes (maintain 8-10 waiting lobbies)
+      // 3. Keep bot lobby feed fresh with diverse natural stakes across tiers (maintain 8-10 waiting lobbies)
       const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
       if (currentWaitingCount < 8) {
-        let newAmt = 0;
-        const activeUser = LocalDB.getActiveUser();
-        const userInv = Array.isArray(activeUser && activeUser.inventory)
-          ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
-          : [];
-        // If user has inventory skins, with 70% probability spawn a lobby matching one of user's skins!
-        if (userInv.length > 0 && Math.random() < 0.7) {
-          const randInvItem = userInv[Math.floor(Math.random() * userInv.length)];
-          const ip = parseFloat(randInvItem.price || (randInvItem.item && randInvItem.item.price) || 0);
-          if (ip >= 50 && ip <= 50000) {
-            newAmt = Math.round(ip * 100) / 100;
-          }
-        }
-        if (!newAmt) {
-          const amounts = [115.42, 182.15, 248.80, 421.30, 680.50, 954.20, 1480.00, 2410.50, 4850.00, 8520.00];
-          newAmt = amounts[Math.floor(Math.random() * amounts.length)];
-        }
-        const fresh = this.createBotLobby(newAmt);
+        const fresh = this.createBotLobby();
         WsMock.broadcast({
           event: 'battle.lobby_created',
           data: fresh
@@ -4926,6 +4975,15 @@ function getOrGenerateUserProfile(userId) {
           }
         }, 2500);
       }
+      // When user enters their waiting lobby, guarantee bot joins within 2.5s
+      if (lob && lob.status === 'waiting' && lob.isMine && !lob._botJoinScheduled) {
+        lob._botJoinScheduled = true;
+        setTimeout(() => {
+          if (lob.status === 'waiting') {
+            this.botJoinUserLobby(lob.shareToken);
+          }
+        }, 2500);
+      }
       return lob;
     },
     createLobby(user, body) {
@@ -4936,6 +4994,7 @@ function getOrGenerateUserProfile(userId) {
       let stakedItems = [];
       let balanceStake = 0;
 
+      user = user || LocalDB.getActiveUser() || {};
       const userInv = Array.isArray(user.inventory) ? user.inventory : [];
       if (Array.isArray(body.inventoryItemIds) && body.inventoryItemIds.length > 0) {
         const idSet = new Set(body.inventoryItemIds.map(String));
@@ -4948,7 +5007,7 @@ function getOrGenerateUserProfile(userId) {
               id: String(item.id),
               marketName: item.marketName || (item.item && item.item.marketName) || 'CS2 Item',
               imageUrl: item.image || item.imageUrl || (item.item && (item.item.image || item.item.imageUrl)) || '',
-              price: Number(p).toFixed(3),
+              price: Number(p).toFixed(2),
               extra: item.extra || (item.item && item.item.extra) || { e: 2, g: 18, n: ['Skin'], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
               userId: String(user.id)
             });
@@ -4967,7 +5026,7 @@ function getOrGenerateUserProfile(userId) {
               id: String(Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
               marketName: skin.marketName,
               imageUrl: skin.image || skin.imageUrl,
-              price: Number(p).toFixed(3),
+              price: Number(p).toFixed(2),
               extra: skin.extra,
               userId: String(user.id)
             });
@@ -4975,14 +5034,14 @@ function getOrGenerateUserProfile(userId) {
         });
       }
 
-      if (totalAmount < 100) {
-        const diff = 100 - totalAmount;
+      if (stakedItems.length === 0 && totalAmount < 50) {
+        const diff = 50 - totalAmount;
         if (Number(user.balance || 0) >= diff) {
           user.balance = Math.round((user.balance - diff) * 100) / 100;
-          totalAmount = 100;
+          totalAmount = 50;
           balanceStake += diff;
         } else {
-          totalAmount = Math.max(100, totalAmount);
+          totalAmount = Math.max(50, totalAmount);
         }
       }
 
@@ -5047,6 +5106,9 @@ function getOrGenerateUserProfile(userId) {
       this.allLobbies.set(shareToken, lobby);
       this.allLobbies.set(id, lobby);
       this.userLobbies.unshift(lobby);
+      try {
+        localStorage.setItem('upgrader_user_lobbies', JSON.stringify(this.userLobbies.slice(0, 10)));
+      } catch(e) {}
       WsMock.broadcast({
         event: 'battle.lobby_created',
         data: lobby
@@ -5065,26 +5127,30 @@ function getOrGenerateUserProfile(userId) {
 
       const bot = this.getRandomBot();
       const userStake = parseFloat(lobby.round.stakes[0].amount);
-      const botSkins = this.getSkinsForAmount(userStake, bot.id);
-      const botItemsSum = botSkins.reduce((a, s) => a + parseFloat(s.price), 0);
-      const botActualItems = Math.min(botItemsSum, userStake);
-      const botBalAmt = Math.max(0, userStake - botActualItems);
-      const totalBank = userStake * 2;
+      const botSkins = this.getOpponentSkins(userStake, bot.id);
+      const botStake = botSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      const totalBank = userStake + botStake;
 
-      const userMaxRoll = 50000;
+      // Calculate user chance: strictly between 49.00% and 51.00%!
+      let userChance = Math.round((userStake / totalBank) * 10000) / 100;
+      if (userChance < 49.00) userChance = 49.00;
+      if (userChance > 51.00) userChance = 51.00;
+      let botChance = Number((100.00 - userChance).toFixed(2));
+
+      const userMaxRoll = Math.round(userChance * 1000);
 
       lobby.round.stakes[0].rangeFrom = 0;
       lobby.round.stakes[0].rangeTo = userMaxRoll;
-      lobby.round.stakes[0].chance = 50.00;
+      lobby.round.stakes[0].chance = userChance;
 
       lobby.round.stakes.push({
         user: bot,
-        amount: userStake.toFixed(2),
-        itemsAmount: botActualItems.toFixed(2),
-        balanceAmount: botBalAmt.toFixed(2),
+        amount: botStake.toFixed(2),
+        itemsAmount: botStake.toFixed(2),
+        balanceAmount: '0.00',
         rangeFrom: userMaxRoll + 1,
         rangeTo: 100000,
-        chance: 50.00,
+        chance: botChance,
         items: botSkins
       });
 
@@ -5219,6 +5285,10 @@ function getOrGenerateUserProfile(userId) {
         }
       }
 
+      try {
+        localStorage.setItem('upgrader_user_lobbies', JSON.stringify(this.userLobbies.slice(0, 10)));
+      } catch(e) {}
+
       WsMock.broadcast({
         event: 'battle.round_finished',
         data: lobby
@@ -5246,8 +5316,9 @@ function getOrGenerateUserProfile(userId) {
       let scenario = 'shop';
 
       // 1. Prioritize user inventory skins to cover the stake without forcing site balance
-      const minTol = reqAmt * 0.85;
-      const maxTol = reqAmt * 1.15;
+      // Strict 49.00% to 51.00% odds window:
+      const minTol = Math.ceil(reqAmt * (49.00 / 51.00) * 100) / 100;
+      const maxTol = Math.floor(reqAmt * (51.00 / 49.00) * 100) / 100;
 
       // Filter only inventory items that have positive price
       const validItems = userInv.filter(it => {
@@ -5283,25 +5354,13 @@ function getOrGenerateUserProfile(userId) {
             if (p > 0 && (currentSum + p <= maxTol)) {
               combo.push(item);
               currentSum += p;
-              if (currentSum >= minTol || combo.length >= 4) break;
+              if (currentSum >= minTol || combo.length >= 3) break;
             }
           }
 
           if (currentSum >= minTol && currentSum <= maxTol) {
             matchedItems = combo;
             itemsTotal = currentSum;
-          } else if (userBal === 0 && validItems.length > 0) {
-            // Fallback when balance is 0: select closest single item within 30% tolerance
-            const closest = [...validItems].sort((a, b) => {
-              const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
-              const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
-              return Math.abs(pa - reqAmt) - Math.abs(pb - reqAmt);
-            })[0];
-            const cp = parseFloat(closest.price || (closest.item && closest.item.price) || 0);
-            if (cp >= reqAmt * 0.70 && cp <= reqAmt * 1.30) {
-              matchedItems = [closest];
-              itemsTotal = cp;
-            }
           }
         }
       }
@@ -5436,13 +5495,15 @@ function getOrGenerateUserProfile(userId) {
 
       const p1Stake = parseFloat(lobby.round.stakes[0].amount);
       const totalBank = p1Stake + userTotalStake;
-      const p1Share = p1Stake / totalBank;
-      const userShare = userTotalStake / totalBank;
-      const p1MaxRoll = Math.floor(p1Share * 100000);
+      let p1Chance = Math.round((p1Stake / totalBank) * 10000) / 100;
+      if (p1Chance < 49.00) p1Chance = 49.00;
+      if (p1Chance > 51.00) p1Chance = 51.00;
+      let userChance = Number((100.00 - p1Chance).toFixed(2));
+      const p1MaxRoll = Math.round(p1Chance * 1000);
 
       lobby.round.stakes[0].rangeFrom = 0;
       lobby.round.stakes[0].rangeTo = p1MaxRoll;
-      lobby.round.stakes[0].chance = Number((p1Share * 100).toFixed(2));
+      lobby.round.stakes[0].chance = p1Chance;
 
       lobby.round.stakes.push({
         user: player2,
@@ -5451,7 +5512,7 @@ function getOrGenerateUserProfile(userId) {
         balanceAmount: (stakedSkins.length > 0 ? 0 : balanceStake).toFixed(2),
         rangeFrom: p1MaxRoll + 1,
         rangeTo: 100000,
-        chance: Number((userShare * 100).toFixed(2)),
+        chance: userChance,
         items: stakedSkins
       });
 
