@@ -792,7 +792,10 @@
 
               if (accounts[uname]) {
                 accounts[uname].id = u.id;
-                accounts[uname].balance = Number(u.balance !== undefined ? u.balance : accounts[uname].balance);
+                const timeSinceBalUpdate = Date.now() - (accounts[uname]._lastBalanceUpdate || 0);
+                if (u.balance !== undefined && timeSinceBalUpdate > 15000) {
+                  accounts[uname].balance = Number(u.balance);
+                }
                 if (u.nickname) accounts[uname].nickname = u.nickname;
                 if (u.avatar) {
                   accounts[uname].avatar = u.avatar;
@@ -1283,10 +1286,13 @@
 
             // 4. Sync Balance from cloud (strictly from users table)
             const cloudBal = cloudUser.balance !== undefined ? Number(cloudUser.balance) : undefined;
+            const timeSinceBalUpdate = Date.now() - (activeUser._lastBalanceUpdate || 0);
             if (cloudBal !== undefined && !isNaN(cloudBal) && Math.abs(cloudBal - activeUser.balance) > 0.001) {
-              activeUser.balance = cloudBal;
-              userChanged = true;
-              WsMock.broadcastBalance(cloudBal);
+              if (timeSinceBalUpdate > 15000) {
+                activeUser.balance = cloudBal;
+                userChanged = true;
+                WsMock.broadcastBalance(cloudBal);
+              }
             }
 
             // 5. Sync Upgrades count from cloud (strictly from users table)
@@ -1949,6 +1955,9 @@
     static saveUser(user) {
       if (!user || !user.username) return;
       const accounts = this.getAccounts();
+      if (!user._lastBalanceUpdate || (accounts[user.username] && accounts[user.username].balance !== user.balance)) {
+        user._lastBalanceUpdate = Date.now();
+      }
       accounts[user.username] = user;
       this.saveAccounts(accounts);
     }
@@ -3697,32 +3706,375 @@ function getOrGenerateUserProfile(userId) {
     botWithdrawnCount = 6 + (numId % 9);
   }
 
-  // Realistic best drops per tier (proportional to inventory, never absurd half-million items)
+  // Realistic best drops per tier (verified 200 OK Steam CDN images with complete extra metadata)
   const BUDGET_BEST = [
-    { id: '12101', marketName: 'M4A4 | Evil Daimyo (Factory New)', price: '480.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhz2v_Nfz5H_uO1gb-Gw_alIITBhGJf_NZlmOzA-LP5gVO8v11sY277cYScewA3Y1DX_1e4xLy9hp-7uJzMy3E37igk53zfyAv3308a0d0vQQ/360fx360f' },
-    { id: '12102', marketName: 'AK-47 | Phantom Disruptor (Field-Tested)', price: '850.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV19m5h5SEguPLPr7Vn35cpsB03-rE892m21Xs-0FsN2umIdfAcg9vNVHQ-Fm9k-rtgJa_tcvXiSw06H7P3gE/360fx360f' },
-    { id: '12103', marketName: 'AWP | Mortis (Factory New)', price: '620.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FABz7PLfYQJS5NO0m5O0m_7zO6-fzj9V7cAl2eyVpIrz2FKx_0FtNW-mLY-TdwM3N12Frle7k-u905W8upvXiSw05Zz6W4w/360fx360f' },
-    { id: '12104', marketName: 'Glock-18 | Vogue (Field-Tested)', price: '980.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposbaqKAxf0Ob3djFN79eJg4GYg_L4MrXug1Rc7cF4n-SPotug2Q2y-0FrNmz7I4edJwU4NVzU_gK8ybi6h5-_vZrJm3Q1vCQk5SrenBfhn1gSOaI2G3_B/360fx360f' },
-    { id: '12105', marketName: 'USP-S | Cyrex (Factory New)', price: '1450.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpoo6m1FBRp3_bGcjhQ09-jq5WYh8j_OrrcmW5D18p5j-jX-rX3jgXs-xJqYmH1I4fEd1Q4aQzTqVO3yLq80MPouprPzHZh6CMgsXffyxe0hxkeaOBqjPKACQLJ_i4W83k/360fx360f' },
-    { id: '12106', marketName: 'M4A1-S | Leaded Glass (Field-Tested)', price: '1120.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhz2v_Nfz5H_uO1gb-Gw_alIITBhGJf_NZlmOzA-LP5gVO8v11sY277cYScewA3Y1DX_1e4xLy9hp-7uJzMy3E37igk53zfyAv3308a0d0vQQ/360fx360f' }
-  ];
+  {
+    "id": "23140",
+    "marketName": "AWP | Exothermic (Well-Worn)",
+    "price": "300.01",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf9Tte0PSneqF6L-KYMXeR1e1-tfJWQiy3nAgq_WSBnNmheXrFbwAlX5F1TLZfu0OxkYWzYruz7wGKjdlCmXmqhi5M5yp1o7FVA8u90TM/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": 3,
+      "n": [
+        "AWP",
+        "Exothermic",
+        "Well-Worn"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": false
+    }
+  },
+  {
+    "id": "27135",
+    "marketName": "AWP | Black Box (Well-Worn)",
+    "price": "300.01",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_DVL0PCiaadmH_KcFlidxOp_pewnTnHglksjtm_Vw9b9JXuUb1UlA5VyQ7QKuxa_xNznYu_q4gWLj95NmzK-0H2NwEnKVA/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": 3,
+      "n": [
+        "AWP",
+        "Black Box",
+        "Well-Worn"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": false
+    }
+  },
+  {
+    "id": "9877",
+    "marketName": "StatTrak\u2122 USP-S | Flashback (Factory New)",
+    "price": "300.85",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSI-WsG3SA_uh6sfJhTSiwniIrujqNjsH6dnKfbAdxAsF3ELQCu0Hsmty1N76z71GIit4RySX_2CJI6yk9tucLT-N7rUYlhjC0/360fx360f",
+    "extra": {
+      "e": 2,
+      "g": 33,
+      "n": [
+        "USP-S",
+        "Flashback",
+        "Factory New"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": true
+    }
+  },
+  {
+    "id": "15657",
+    "marketName": "AK-47 | Midnight Laminate (Well-Worn)",
+    "price": "301.68",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wjFU6s2neq1pJeOQC2mE_v5jovFlSha-kBkupjDLntqod3OSbAMjWJByELIOthe7moDgPuKw5QKL34tGzi-o3Xwbvy1v6_FCD_QOiqc-9g/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": 1,
+      "n": [
+        "AK-47",
+        "Midnight Laminate",
+        "Well-Worn"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": false
+    }
+  },
+  {
+    "id": "2454",
+    "marketName": "Souvenir AWP | Acheron (Field-Tested)",
+    "price": "305.04",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf9Ttk4eetZKFsMs-ABXKczf1JouRtTSWmkCIqtjmMj4K3eH-QPw4gW5shRu5csxS_moGxMr7h4w3f390Unn7823xLu3o-4rlQV71lpPPqq3txRw/360fx360f",
+    "extra": {
+      "e": 3,
+      "g": 3,
+      "n": [
+        "Souvenir AWP",
+        "Acheron",
+        "Field-Tested"
+      ],
+      "r": 15,
+      "s": false,
+      "t": 16,
+      "ch": "4b69ff",
+      "st": false
+    }
+  },
+  {
+    "id": "2320",
+    "marketName": "StatTrak\u2122 M4A4 | Choppa (Factory New)",
+    "price": "305.87",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwi8P7qaRb7ZoJf6sDWadztF6ueZhW2fjl05-6mzVmdmgcHOTZgIhXpJ1RO5c4Bjql9DjMunhsgOL34gUnnr-kGoXuTonsfJ3/360fx360f",
+    "extra": {
+      "e": 2,
+      "g": 14,
+      "n": [
+        "M4A4",
+        "Choppa",
+        "Factory New"
+      ],
+      "r": 15,
+      "s": false,
+      "t": 16,
+      "ch": "4b69ff",
+      "st": true
+    }
+  }
+];
 
   const MEDIUM_BEST = [
-    { id: '2970', marketName: 'AK-47 | Redline (Field-Tested)', price: '2815.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f' },
-    { id: '12201', marketName: 'AWP | Hyper Beast (Field-Tested)', price: '4350.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FAR17PLfYQJU5cyzhr-GkvP9Jrafw2lU6ccp0rqVpNmh3wXk-UVkNW77INfAcVU4aArW-Ae6yLrvhsW-u5nIm3E37ig8pGB8sj-s5Xp3/360fx360f' },
-    { id: '3085', marketName: 'M4A4 | The Emperor (Field-Tested)', price: '5208.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiVI0P_6afBSJf2DC3Wf09F7teVgWiT9kEtxsW_dntepcn2SZgF1CcN3RORe4RTtlN2yYenh7wPXiYxDmS_22jQJsHjOUN0CaQ/360fx360f' },
-    { id: '12202', marketName: 'Desert Eagle | Printstream (Field-Tested)', price: '5800.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposr-kLAtl7PDdTjlH_9mkgL-OlvD4NoTck29Y_cg_2-yW896s0QLs_0ZsN2D0LI6ccwVsY1DX-VO_l-zq0pS56svXiSw06H75bI0/360fx360f' },
-    { id: '12203', marketName: 'AK-47 | Frontside Misty (Factory New)', price: '3450.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV08y5nY6fqPP9ILrDhGpI18h0juDU-MKt0QLgqEdtZzyncNeTdwc4NFmEqVG7w7rqg5W76Z_LyXVqv3Ym7C3VyxCzhklearM9m7XAHqM-RfcU/360fx360f' },
-    { id: '12204', marketName: 'USP-S | Kill Confirmed (Field-Tested)', price: '4900.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpoo6m1FBRp3_bGcjhQ09-jq5WYh8j3KqnUjlRd4cJ5nqeWp9StjgTj_kZkYGHzd9SSdVdsYlGErAPqwuvx05S5u5yayiM17nRw4yqIyhK11htFaONnhvGACQLJVv2bX60/360fx360f' }
-  ];
+  {
+    "id": "12142",
+    "marketName": "USP-S | Orange Anolis (Minimal Wear)",
+    "price": "2501.47",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSIf2sAm6KwPxyj_NsSxa_nBovp3OHn4qqcX3FbQMgD5okQeFYtBbsktLmMeux5leLjIIXxXn4i3wdvC9s_a9cBikK0tGN/360fx360f",
+    "extra": {
+      "e": 4,
+      "g": 33,
+      "n": [
+        "USP-S",
+        "Orange Anolis",
+        "Minimal Wear"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": false
+    }
+  },
+  {
+    "id": "2988",
+    "marketName": "AWP | Electric Hive (Field-Tested)",
+    "price": "2509.85",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf9Ttk5_u4bZtgJfSaG2rex7l04LJtSS22xRhztT-EyN2uc3ORbwIhDcR5Qe8PsEOxwYHnZLyz4Rue1dzPPom09Q/360fx360f",
+    "extra": {
+      "e": 3,
+      "g": 3,
+      "n": [
+        "AWP",
+        "Electric Hive",
+        "Field-Tested"
+      ],
+      "r": 12,
+      "s": false,
+      "t": 16,
+      "ch": "d32ce6",
+      "st": false
+    }
+  },
+  {
+    "id": "21283",
+    "marketName": "Souvenir AK-47 | Green Laminate (Well-Worn)",
+    "price": "2509.85",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wipC0POlPPNhIf2sCXWVxOBJveRtRjy-2x5z5j-Gy93_IHrFOAV0X5t4R-UNtkKwld3mZejq7wbaiYkUzSqq3yNXrnE8D-mYqFg/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": 1,
+      "n": [
+        "Souvenir AK-47",
+        "Green Laminate",
+        "Well-Worn"
+      ],
+      "r": 15,
+      "s": false,
+      "t": 16,
+      "ch": "4b69ff",
+      "st": false
+    }
+  },
+  {
+    "id": "17872",
+    "marketName": "M4A4 | Zirka (Well-Worn)",
+    "price": "2514.04",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwjFL0OG6abZSIuKSGGivzOtyufRkASywwht1sj6Gwo6gd33Db1d1XJMlTLMO50a5l9bmNunj5wTW3dhGyingznQeObgUISE/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": 14,
+      "n": [
+        "M4A4",
+        "Zirka",
+        "Well-Worn"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": false
+    }
+  },
+  {
+    "id": "2933",
+    "marketName": "M4A4 | Temukau (Battle-Scarred)",
+    "price": "2518.23",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afBSNPWeG2yR1NF-teB_Vmfrl0Ql5j6AntegIinGbQ51A8MmTe4MukLplYflZbnn5ATe3d5GmH73kGoXuZku8dEc/360fx360f",
+    "extra": {
+      "e": 1,
+      "g": 14,
+      "n": [
+        "M4A4",
+        "Temukau",
+        "Battle-Scarred"
+      ],
+      "r": 10,
+      "s": false,
+      "t": 16,
+      "ch": "eb4b4b",
+      "st": false
+    }
+  },
+  {
+    "id": "12862",
+    "marketName": "Souvenir USP-S | Orange Anolis (Minimal Wear)",
+    "price": "2524.09",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSIf2sAm6KwPxyj_NsSxa_nBovp3OHn4qqcX3FbQMgD5okQeFYtBbsktLmMeux5leLjIIXxXn4i3wdvC9s_a9cBikK0tGN/360fx360f",
+    "extra": {
+      "e": 4,
+      "g": 33,
+      "n": [
+        "Souvenir USP-S",
+        "Orange Anolis",
+        "Minimal Wear"
+      ],
+      "r": 16,
+      "s": false,
+      "t": 16,
+      "ch": "8847ff",
+      "st": false
+    }
+  }
+];
 
   const VIP_BEST = [
-    { id: '12301', marketName: '★ Navaja Knife | Doppler (Factory New)', price: '14500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Q7uCvZaZkNM-SA1iSze91u_FsTju_qhAmoT-Jn4bjJC_4Ml93UtZuRLQPsBawkNfiMbnl5AKMiopCnin7iCJBv31j4rkBBKEg-6zUjV3GY6p9v8dpLWT3Fg/360fx360f' },
-    { id: '12302', marketName: '★ Gut Knife | Tiger Tooth (Factory New)', price: '12800.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfxuHbZC597c2Jm4mKmfPLPr7Vn35cpsB03-vA89jw0VXs_EVkYWzwIY7AclI7MgnZ-lS8wue7g8C-vM6byyRj7nN27X2Pnke300oecKU81vE1B3k/360fx360f' },
-    { id: '12303', marketName: '★ Shadow Daggers | Marble Fade (Factory New)', price: '16200.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfwOfBfUEv7dK7kZOfm_7mDLPUl31IpsN13uuQrdmjiw2wr0BsMTryLYSXIA42ZF7UqVPqk7rvjcO46cjPyic26Cch-z-DyG220A8r/360fx360f' },
-    { id: '12304', marketName: '★ Bowie Knife | Damascus Steel (Factory New)', price: '15600.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfxuHbZC597dGJmYGZk-79Pb_um25V4dB8xOzAptv0ilbkqkU9MT3wJo-UIQI9YQzSq1e8yee9hMW5vZmanXQypGB8srk4x5wG/360fx360f' },
-    { id: '12305', marketName: '★ Survival Knife | Case Hardened (Field-Tested)', price: '19800.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfwObaZzRU7dCJlo-HnvD8J_WAwjlU6ccp0rmTrduti1Cy-kI5ZWH7LI-VIwRtYQuG-lW4x-vphZTv78rNzHExuyJ2-z-DyI7f2sA1/360fx360f' }
-  ];
+  {
+    "id": "3638",
+    "marketName": "\u2605 Bowie Knife | Lore (Well-Worn)",
+    "price": "8005.53",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1I-uC4YbJsLM-RAXCZxNF1pd5rQD66kCIrvC-ApYL8JSLSMxhyCMchQLFbthe4wNK0P7vislPcjItMxH2qjn5P6iZtteZQUPYi8_WGkUifZt4J9khU/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": null,
+      "n": [
+        "\u2605 Bowie Knife",
+        "Lore",
+        "Well-Worn"
+      ],
+      "r": 11,
+      "s": false,
+      "t": 9,
+      "ch": "ffae39",
+      "st": false
+    }
+  },
+  {
+    "id": "8354",
+    "marketName": "\u2605 StatTrak\u2122 Bowie Knife | Rust Coat (Well-Worn)",
+    "price": "8009.72",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1I-uC4YbJsLM-RAXCZxNF3od56Wyy2mSIsvTSDn7D0JC_OK1s-C5F1RO4Ktka_kofuMevjtgWMjI8QmSj7iStM7itv6-hXUfEnqKHQ2xaBb-ObX0d6iA/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": null,
+      "n": [
+        "\u2605 Bowie Knife",
+        "Rust Coat",
+        "Well-Worn"
+      ],
+      "r": 11,
+      "s": false,
+      "t": 9,
+      "ch": "ffae39",
+      "st": true
+    }
+  },
+  {
+    "id": "3649",
+    "marketName": "\u2605 Paracord Knife | Crimson Web (Field-Tested)",
+    "price": "8010.56",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Y4OCqV6x0H-eWDHSvzOtyufRkAX_klkQm5WTTztisdCmWOg8lX8NzTeBc4BC-lIHkMe624FeKjo9Ey3jgznQesZVzO3U/360fx360f",
+    "extra": {
+      "e": 3,
+      "g": null,
+      "n": [
+        "\u2605 Paracord Knife",
+        "Crimson Web",
+        "Field-Tested"
+      ],
+      "r": 11,
+      "s": false,
+      "t": 9,
+      "ch": "ffae39",
+      "st": false
+    }
+  },
+  {
+    "id": "25620",
+    "marketName": "\u2605 StatTrak\u2122 Ursus Knife | Forest DDPAT (Well-Worn)",
+    "price": "8026.48",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1O_eG7e5tlOc-XCneR1dF7teVgWiT9lx4ht2jTwtr9dnqXOAQhC5MiReRetROxkYe2P-i3sQyNjYwUyCisjzQJsHhIL_I8rA/360fx360f",
+    "extra": {
+      "e": 5,
+      "g": null,
+      "n": [
+        "\u2605 Ursus Knife",
+        "Forest DDPAT",
+        "Well-Worn"
+      ],
+      "r": 11,
+      "s": false,
+      "t": 9,
+      "ch": "ffae39",
+      "st": true
+    }
+  },
+  {
+    "id": "3486",
+    "marketName": "\u2605 Navaja Knife | Marble Fade (Factory New)",
+    "price": "8030.67",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1c9uK9cZtnIfOYBWmZx-tJsexWQiihlxEijDuEnorGLSLANkI-DpolR7Vf5hK5kdTlNbiwsg3YiNlCm3mq3Cgd6iZusetRUPJx-qTT2xaBb-MDauzVhA/360fx360f",
+    "extra": {
+      "e": 2,
+      "g": null,
+      "n": [
+        "\u2605 Navaja Knife",
+        "Marble Fade",
+        "Factory New"
+      ],
+      "r": 11,
+      "s": false,
+      "t": 9,
+      "ch": "ffae39",
+      "st": false
+    }
+  },
+  {
+    "id": "3660",
+    "marketName": "\u2605 Falchion Knife | Freehand (Minimal Wear)",
+    "price": "8034.86",
+    "image": "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1d7v6tYK1iLs-SA1idwPx9teVWWjmMzE0YvzSCkpu3eX6RbVN0D5t5F-MCtRjpl9DgYerq7lHb2t1Nynj_3C5I6ik5tr5TB71lpPOmEPqDwA/360fx360f",
+    "extra": {
+      "e": 4,
+      "g": null,
+      "n": [
+        "\u2605 Falchion Knife",
+        "Freehand",
+        "Minimal Wear"
+      ],
+      "r": 11,
+      "s": false,
+      "t": 9,
+      "ch": "ffae39",
+      "st": false
+    }
+  }
+];
 
   const bestPool = (botTier === 'vip') ? VIP_BEST : (botTier === 'medium' ? MEDIUM_BEST : BUDGET_BEST);
   const bestSkin = bestPool[numId % bestPool.length];
@@ -3762,6 +4114,7 @@ function getOrGenerateUserProfile(userId) {
       marketName: bestSkin.marketName,
       price: Number(bestSkin.price).toFixed(2),
       image: bestSkin.image,
+      imageUrl: bestSkin.image,
       imageNew: bestSkin.image,
       extra: bestSkin.extra || {
         r: 16,
@@ -4200,46 +4553,9 @@ function getOrGenerateUserProfile(userId) {
       for (const amt of initialAmounts) {
         this.createBotLobby(amt);
       }
-      this.syncLiveLobbies();
-      setInterval(() => {
-        this.syncLiveLobbies();
-      }, 3500);
       setInterval(() => {
         this.tickBots();
-      }, 1800);
-    },
-    syncLiveLobbies() {
-      try {
-        fetch('/api/game/battle/lobbies')
-          .then(r => r.json())
-          .then(data => {
-            if (data && Array.isArray(data.items)) {
-              const activeUser = LocalDB.getActiveUser();
-              const clean = data.items.map(l => {
-                const copy = JSON.parse(JSON.stringify(l));
-                if (activeUser && String(copy.createdBy?.id) === String(activeUser.id)) {
-                  copy.createdBy.id = 'ub_' + copy.createdBy.id;
-                  if (copy.round && Array.isArray(copy.round.stakes)) {
-                    copy.round.stakes.forEach(st => {
-                      if (String(st.user?.id) === String(activeUser.id)) {
-                        st.user.id = 'ub_' + st.user.id;
-                      }
-                    });
-                  }
-                }
-                copy.isMine = false;
-                copy.canAfford = true;
-                return copy;
-              });
-              this.liveLobbies = clean;
-              clean.forEach(l => {
-                if (l && l.shareToken) this.allLobbies.set(l.shareToken, l);
-                if (l && l.id) this.allLobbies.set(l.id, l);
-              });
-            }
-          })
-          .catch(() => {});
-      } catch(e) {}
+      }, 15000);
     },
     createBotLobby(targetAmount) {
       const bot = this.getRandomBot();
@@ -4291,10 +4607,9 @@ function getOrGenerateUserProfile(userId) {
       this.allLobbies.set(shareToken, lobby);
       this.allLobbies.set(id, lobby);
       this.botLobbies.unshift(lobby);
-      // Disappear oldest battle from the end of the list when new battle is created
-      if (this.botLobbies.length > 14) {
+      if (this.botLobbies.length > 12) {
         const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
-        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 12) {
+        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 9) {
           const [removed] = this.botLobbies.splice(oldestWaitingIdx, 1);
           if (removed) {
             WsMock.broadcast({
@@ -4356,7 +4671,6 @@ function getOrGenerateUserProfile(userId) {
       this.allLobbies.set(target.id, target);
 
       // Immediately notify battles list that lobby closed and matched!
-      // This makes Angular's battles list start the 6-second countdown on the battle card!
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -4377,32 +4691,27 @@ function getOrGenerateUserProfile(userId) {
       return target;
     },
     tickBots() {
-      // 1. Purge finished lobbies older than 8 seconds so completed battles disappear quickly from the lobby list!
+      // 1. Purge finished lobbies older than 12 seconds so completed battles disappear cleanly
       const now = Date.now();
       const purgeFilter = l => {
-        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 8000)) {
-          WsMock.broadcast({
-            event: 'battle.lobby_closed',
-            data: { id: l.id, shareToken: l.shareToken }
-          });
+        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 12000)) {
           return false;
         }
         return true;
       };
       this.botLobbies = this.botLobbies.filter(purgeFilter);
       this.userLobbies = this.userLobbies.filter(purgeFilter);
-      this.liveLobbies = this.liveLobbies.filter(purgeFilter);
 
-      // 2. Bot vs Bot: pick a waiting bot lobby and simulate another bot joining!
+      // 2. Bot vs Bot: occasionally simulate duel between bots
       const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
-      if (waiting.length > 0 && Math.random() < 0.65) {
+      if (waiting.length > 5 && Math.random() < 0.25) {
         const target = waiting[Math.floor(Math.random() * waiting.length)];
         this.matchBotVsBot(target);
       }
 
-      // 3. Keep bot lobby feed fresh with new diverse stakes
+      // 3. Keep bot lobby feed fresh with new diverse stakes (maintain 7-8 waiting lobbies)
       const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
-      if (currentWaitingCount < 8) {
+      if (currentWaitingCount < 7) {
         const amounts = [115, 230, 480, 890, 1400, 2600, 5200, 9500, 14000];
         const newAmt = amounts[Math.floor(Math.random() * amounts.length)];
         const fresh = this.createBotLobby(newAmt);
@@ -4416,14 +4725,11 @@ function getOrGenerateUserProfile(userId) {
       this.init();
       const activeUser = LocalDB.getActiveUser();
 
-      // Merge: User created lobbies (on top) + Live lobbies from upgrader.best + Bot lobbies
       const userLobs = [...this.userLobbies];
-      const liveLobs = [...this.liveLobbies];
       const botLobs = [...this.botLobbies];
 
-      // Deduplicate by shareToken or id and omit lobbies finished older than 8s
       const now = Date.now();
-      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 8000));
+      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 12000));
       const seen = new Set();
       let res = [];
 
@@ -4436,25 +4742,10 @@ function getOrGenerateUserProfile(userId) {
         }
       }
 
-      // 2. Real live lobbies next
-      for (const l of liveLobs) {
-        if (!seen.has(l.shareToken) && isFresh(l)) {
-          seen.add(l.shareToken);
-          if (activeUser && String(l.createdBy?.id) === String(activeUser.id)) {
-            l.createdBy.id = 'ub_' + l.createdBy.id;
-          }
-          l.isMine = false;
-          res.push(l);
-        }
-      }
-
-      // 3. Bot lobbies
+      // 2. Bot lobbies
       for (const l of botLobs) {
         if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
-          if (activeUser && String(l.createdBy?.id) === String(activeUser.id)) {
-            l.createdBy.id = 'bot_' + l.createdBy.id;
-          }
           l.isMine = false;
           res.push(l);
         }
@@ -4622,10 +4913,10 @@ function getOrGenerateUserProfile(userId) {
         data: lobby
       });
 
-      // Bot automatically joins user lobby after 3.8 seconds
+      // Bot automatically joins user lobby after 9 seconds
       setTimeout(() => {
         this.botJoinUserLobby(lobby.shareToken);
-      }, 3800);
+      }, 9000);
 
       return lobby;
     },
@@ -4726,6 +5017,21 @@ function getOrGenerateUserProfile(userId) {
               SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
             }
           });
+          const userBalStake = parseFloat(lobby.round.stakes[0].balanceAmount || '0');
+          if (userBalStake > 0) {
+            setTimeout(() => {
+              const u = LocalDB.getActiveUser();
+              if (u) {
+                u.balance = Math.round((u.balance + userBalStake) * 100) / 100;
+                u._lastBalanceUpdate = Date.now();
+                LocalDB.saveUser(u);
+                WsMock.broadcastBalance(u.balance);
+                if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                  SupabaseDB.updateUser(u.id || u.username, { balance: u.balance }).catch(() => {});
+                }
+              }
+            }, 12000);
+          }
           freshUser.userStats = freshUser.userStats || {};
           freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
           freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + botAmt) * 100) / 100;
@@ -4955,6 +5261,8 @@ function getOrGenerateUserProfile(userId) {
           throw new Error('Недостаточно средств на балансе');
         }
         user.balance = Math.round((user.balance - balanceStake) * 100) / 100;
+        user._lastBalanceUpdate = Date.now();
+        LocalDB.saveUser(user);
         WsMock.broadcastBalance(user.balance);
       }
 
@@ -5042,8 +5350,18 @@ function getOrGenerateUserProfile(userId) {
 
       if (userWon) {
         if (balanceStake > 0) {
-          freshUser.balance = Math.round((freshUser.balance + balanceStake) * 100) / 100;
-          WsMock.broadcastBalance(freshUser.balance);
+          setTimeout(() => {
+            const u = LocalDB.getActiveUser();
+            if (u) {
+              u.balance = Math.round((u.balance + balanceStake) * 100) / 100;
+              u._lastBalanceUpdate = Date.now();
+              LocalDB.saveUser(u);
+              WsMock.broadcastBalance(u.balance);
+              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                SupabaseDB.updateUser(u.id || u.username, { balance: u.balance }).catch(() => {});
+              }
+            }
+          }, 12000);
         }
         const oppSkins = lobby.round.stakes[0].items || [];
         oppSkins.forEach(bs => {
@@ -5131,22 +5449,6 @@ function getOrGenerateUserProfile(userId) {
           secondsLeft: 6
         }
       });
-      setTimeout(() => {
-        WsMock.broadcast({
-          event: 'battle.round_finished',
-          data: lobby
-        });
-        WsMock.broadcast({
-          event: 'battle.lobby_closed',
-          data: {
-            id: lobby.id,
-            shareToken: lobby.shareToken,
-            opponent: player2,
-            winnerId: winnerId,
-            secondsLeft: 6
-          }
-        });
-      }, 700);
 
       return lobby;
     },
