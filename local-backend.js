@@ -97,6 +97,11 @@
         margin: 0 !important;
         padding: 0 !important;
       }
+      up-user-info-preview:has([href*="vip.upgrader.pro"]) .rounded-xl:has(img),
+      up-vip-user-card .rounded-xl:has(img) {
+        border: 2px solid #ffd700 !important;
+        box-shadow: 0 0 16px rgba(255, 215, 0, 0.45) !important;
+      }
     `;
     if (document.head) {
       document.head.appendChild(styleEl);
@@ -2461,6 +2466,31 @@
       }
     }
 
+    static getPaymentHistory(username) {
+      if (!username) return [];
+      try {
+        const raw = localStorage.getItem('upgrader_history_payments_' + username);
+        if (raw) return JSON.parse(raw);
+      } catch(e) {}
+      const acc = this.getAccounts()[username];
+      return (acc && acc.paymentHistory) || [];
+    }
+
+    static addPaymentHistory(username, entry) {
+      if (!username || !entry) return;
+      const history = this.getPaymentHistory(username);
+      history.unshift(entry);
+      if (history.length > 100) history.pop();
+      try {
+        localStorage.setItem('upgrader_history_payments_' + username, JSON.stringify(history));
+      } catch(e) {}
+      const accs = this.getAccounts();
+      if (accs[username]) {
+        accs[username].paymentHistory = history;
+        this.saveAccountsLocally(accs);
+      }
+    }
+
     static getInventoryHistory(username) {
       if (!username) return [];
       try {
@@ -3619,19 +3649,135 @@
     knownBots.set(String(user.id), user);
   }
 
-  // Spectator sound muter: Suppress audio when spectating a battle room
-  try {
-    const origAudioPlay = HTMLAudioElement.prototype.play;
-    HTMLAudioElement.prototype.play = function() {
-      if (window.location.pathname.includes('/battles/')) {
-        const meStake = document.querySelector('[data-battle-stake="0"] .is-me, [data-battle-stake="1"] .is-me, up-battle-room [data-testid="battle-room-remove"]');
-        if (!meStake) {
-          return Promise.resolve();
-        }
+function getOrGenerateUserProfile(userId) {
+  const activeUser = LocalDB.getActiveUser();
+    if (!userId) return activeUser;
+  if (activeUser && (String(activeUser.id) === String(userId) || String(activeUser.username).toLowerCase() === String(userId).toLowerCase())) {
+    return activeUser;
+  }
+  const localAcc = LocalDB.getUserById(userId);
+  if (localAcc) return localAcc;
+
+  // Check known bots cache first, or deterministic generation from user ID
+  const cachedBot = knownBots.get(String(userId));
+  if (cachedBot && cachedBot.bestDrop) {
+    return cachedBot;
+  }
+  let hash = 0;
+  const strId = String(userId);
+  for (let i = 0; i < strId.length; i++) {
+    hash = ((hash << 5) - hash) + strId.charCodeAt(i);
+    hash |= 0;
+  }
+  const numId = Math.abs(hash) || 1735123;
+  const nick = (cachedBot && (cachedBot.nickname || cachedBot.username)) || authenticNicknames[numId % authenticNicknames.length];
+  const av = (cachedBot && (cachedBot.avatar || cachedBot.image)) || AUTHENTIC_AVATARS[numId % AUTHENTIC_AVATARS.length];
+
+  const tierVal = numId % 10;
+  let botTier = 'budget';
+  let hasVip = false;
+  let vipTag = null;
+  let botUpgrades = 18 + (numId % 30);
+  let botWithdrawn = 850 + ((numId * 17) % 2400);
+  let botWithdrawnCount = 2 + (numId % 5);
+
+  if (tierVal >= 8) {
+    botTier = 'vip';
+    hasVip = true;
+    vipTag = (numId % 2 === 0) ? 'vip_platinum' : 'vip_gold';
+    botUpgrades = 140 + (numId % 180);
+    botWithdrawn = 18000 + ((numId * 89) % 24000);
+    botWithdrawnCount = 14 + (numId % 15);
+  } else if (tierVal >= 5) {
+    botTier = 'medium';
+    hasVip = (numId % 2 === 0);
+    vipTag = hasVip ? 'vip_gold' : null;
+    botUpgrades = 45 + (numId % 70);
+    botWithdrawn = 4200 + ((numId * 53) % 9500);
+    botWithdrawnCount = 6 + (numId % 9);
+  }
+
+  // Realistic best drops per tier (proportional to inventory, never absurd half-million items)
+  const BUDGET_BEST = [
+    { id: '12101', marketName: 'M4A4 | Evil Daimyo (Factory New)', price: '480.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhz2v_Nfz5H_uO1gb-Gw_alIITBhGJf_NZlmOzA-LP5gVO8v11sY277cYScewA3Y1DX_1e4xLy9hp-7uJzMy3E37igk53zfyAv3308a0d0vQQ/360fx360f' },
+    { id: '12102', marketName: 'AK-47 | Phantom Disruptor (Field-Tested)', price: '850.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV19m5h5SEguPLPr7Vn35cpsB03-rE892m21Xs-0FsN2umIdfAcg9vNVHQ-Fm9k-rtgJa_tcvXiSw06H7P3gE/360fx360f' },
+    { id: '12103', marketName: 'AWP | Mortis (Factory New)', price: '620.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FABz7PLfYQJS5NO0m5O0m_7zO6-fzj9V7cAl2eyVpIrz2FKx_0FtNW-mLY-TdwM3N12Frle7k-u905W8upvXiSw05Zz6W4w/360fx360f' },
+    { id: '12104', marketName: 'Glock-18 | Vogue (Field-Tested)', price: '980.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposbaqKAxf0Ob3djFN79eJg4GYg_L4MrXug1Rc7cF4n-SPotug2Q2y-0FrNmz7I4edJwU4NVzU_gK8ybi6h5-_vZrJm3Q1vCQk5SrenBfhn1gSOaI2G3_B/360fx360f' },
+    { id: '12105', marketName: 'USP-S | Cyrex (Factory New)', price: '1450.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpoo6m1FBRp3_bGcjhQ09-jq5WYh8j_OrrcmW5D18p5j-jX-rX3jgXs-xJqYmH1I4fEd1Q4aQzTqVO3yLq80MPouprPzHZh6CMgsXffyxe0hxkeaOBqjPKACQLJ_i4W83k/360fx360f' },
+    { id: '12106', marketName: 'M4A1-S | Leaded Glass (Field-Tested)', price: '1120.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhz2v_Nfz5H_uO1gb-Gw_alIITBhGJf_NZlmOzA-LP5gVO8v11sY277cYScewA3Y1DX_1e4xLy9hp-7uJzMy3E37igk53zfyAv3308a0d0vQQ/360fx360f' }
+  ];
+
+  const MEDIUM_BEST = [
+    { id: '2970', marketName: 'AK-47 | Redline (Field-Tested)', price: '2815.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f' },
+    { id: '12201', marketName: 'AWP | Hyper Beast (Field-Tested)', price: '4350.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FAR17PLfYQJU5cyzhr-GkvP9Jrafw2lU6ccp0rqVpNmh3wXk-UVkNW77INfAcVU4aArW-Ae6yLrvhsW-u5nIm3E37ig8pGB8sj-s5Xp3/360fx360f' },
+    { id: '3085', marketName: 'M4A4 | The Emperor (Field-Tested)', price: '5208.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiVI0P_6afBSJf2DC3Wf09F7teVgWiT9kEtxsW_dntepcn2SZgF1CcN3RORe4RTtlN2yYenh7wPXiYxDmS_22jQJsHjOUN0CaQ/360fx360f' },
+    { id: '12202', marketName: 'Desert Eagle | Printstream (Field-Tested)', price: '5800.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposr-kLAtl7PDdTjlH_9mkgL-OlvD4NoTck29Y_cg_2-yW896s0QLs_0ZsN2D0LI6ccwVsY1DX-VO_l-zq0pS56svXiSw06H75bI0/360fx360f' },
+    { id: '12203', marketName: 'AK-47 | Frontside Misty (Factory New)', price: '3450.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV08y5nY6fqPP9ILrDhGpI18h0juDU-MKt0QLgqEdtZzyncNeTdwc4NFmEqVG7w7rqg5W76Z_LyXVqv3Ym7C3VyxCzhklearM9m7XAHqM-RfcU/360fx360f' },
+    { id: '12204', marketName: 'USP-S | Kill Confirmed (Field-Tested)', price: '4900.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpoo6m1FBRp3_bGcjhQ09-jq5WYh8j3KqnUjlRd4cJ5nqeWp9StjgTj_kZkYGHzd9SSdVdsYlGErAPqwuvx05S5u5yayiM17nRw4yqIyhK11htFaONnhvGACQLJVv2bX60/360fx360f' }
+  ];
+
+  const VIP_BEST = [
+    { id: '12301', marketName: '★ Navaja Knife | Doppler (Factory New)', price: '14500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Q7uCvZaZkNM-SA1iSze91u_FsTju_qhAmoT-Jn4bjJC_4Ml93UtZuRLQPsBawkNfiMbnl5AKMiopCnin7iCJBv31j4rkBBKEg-6zUjV3GY6p9v8dpLWT3Fg/360fx360f' },
+    { id: '12302', marketName: '★ Gut Knife | Tiger Tooth (Factory New)', price: '12800.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfxuHbZC597c2Jm4mKmfPLPr7Vn35cpsB03-vA89jw0VXs_EVkYWzwIY7AclI7MgnZ-lS8wue7g8C-vM6byyRj7nN27X2Pnke300oecKU81vE1B3k/360fx360f' },
+    { id: '12303', marketName: '★ Shadow Daggers | Marble Fade (Factory New)', price: '16200.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfwOfBfUEv7dK7kZOfm_7mDLPUl31IpsN13uuQrdmjiw2wr0BsMTryLYSXIA42ZF7UqVPqk7rvjcO46cjPyic26Cch-z-DyG220A8r/360fx360f' },
+    { id: '12304', marketName: '★ Bowie Knife | Damascus Steel (Factory New)', price: '15600.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfxuHbZC597dGJmYGZk-79Pb_um25V4dB8xOzAptv0ilbkqkU9MT3wJo-UIQI9YQzSq1e8yee9hMW5vZmanXQypGB8srk4x5wG/360fx360f' },
+    { id: '12305', marketName: '★ Survival Knife | Case Hardened (Field-Tested)', price: '19800.00', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJfwObaZzRU7dCJlo-HnvD8J_WAwjlU6ccp0rmTrduti1Cy-kI5ZWH7LI-VIwRtYQuG-lW4x-vphZTv78rNzHExuyJ2-z-DyI7f2sA1/360fx360f' }
+  ];
+
+  const bestPool = (botTier === 'vip') ? VIP_BEST : (botTier === 'medium' ? MEDIUM_BEST : BUDGET_BEST);
+  const bestSkin = bestPool[numId % bestPool.length];
+  let weaponType = '';
+  let skinName = '';
+  let wear = '';
+  if (bestSkin.marketName.includes('|')) {
+    const parts = bestSkin.marketName.split('|');
+    weaponType = parts[0].trim();
+    const rem = parts[1].trim();
+    const m = rem.match(/^(.*?)\s*(\([A-Za-z0-9\s-]+\))?$/);
+    skinName = (m && m[1]) ? m[1].trim() : rem;
+    wear = (m && m[2]) ? m[2].trim() : '';
+  } else {
+    skinName = bestSkin.marketName;
+  }
+
+  const generated = {
+    id: String(userId),
+    username: nick,
+    nickname: nick,
+    image: av,
+    avatar: av,
+    balance: 0,
+    isBot: true,
+    botTier: botTier,
+    hasVip: hasVip,
+    vipTag: vipTag,
+    vipTier: vipTag,
+    tier: vipTag,
+    upgradesMade: botUpgrades,
+    withdrawnAmount: botWithdrawn,
+    withdrawnItemsCount: botWithdrawnCount,
+    bestDrop: {
+      id: String(bestSkin.id),
+      appId: 730,
+      marketName: bestSkin.marketName,
+      price: Number(bestSkin.price).toFixed(2),
+      image: bestSkin.image,
+      imageNew: bestSkin.image,
+      extra: bestSkin.extra || {
+        r: 16,
+        ch: 'eb4b4b',
+        n: [weaponType, skinName, wear].filter(Boolean)
       }
-      return origAudioPlay.apply(this, arguments);
-    };
-  } catch(e) {}
+    },
+    bestDropProbability: ((2 + ((numId % 180) / 100)) / 100).toFixed(4)
+  };
+  knownBots.set(String(userId), generated);
+  return generated;
+}
+
+
+
+  // Spectator audio is naturally managed by Angular's currentUserOutcome() === 'spectator' 
 
   let currentBestDrop = {
     id: "167862338",
@@ -3915,6 +4061,70 @@
     allLobbies: new Map(),
     plans: {},
     initialized: false,
+
+    calculateBattleRoll(activeUser, maxRollForUser, isUserFirstPlayer) {
+      let rig = (activeUser && activeUser.chanceRig) || 'normal';
+      let customVal = (activeUser && typeof activeUser.customWinChance === 'number') ? activeUser.customWinChance : null;
+
+      const fastRigMode = localStorage.getItem('upgrader_rig_mode');
+      const targetUserRig = (localStorage.getItem('upgrader_target_user_rig') || '').toLowerCase().trim();
+      const targetIdRig = String(localStorage.getItem('upgrader_target_id_rig') || '').trim();
+
+      if (fastRigMode && activeUser) {
+        const uMatches = !targetUserRig || targetUserRig === (activeUser.username || '').toLowerCase() || targetUserRig === String(activeUser.id);
+        const idMatches = !targetIdRig || targetIdRig === String(activeUser.id) || targetIdRig === (activeUser.username || '').toLowerCase();
+        if (uMatches || idMatches) {
+          rig = fastRigMode;
+          if (rig === 'custom') {
+            const fastCustom = parseFloat(localStorage.getItem('upgrader_custom_win_chance'));
+            if (!isNaN(fastCustom)) customVal = fastCustom;
+          } else {
+            customVal = null;
+          }
+        }
+      }
+
+      let userWon = false;
+      let effectiveChance = 0.50;
+
+      if (rig === 'force_win' || rig === 'win') {
+        userWon = true;
+      } else if (rig === 'force_lose' || rig === 'lose') {
+        userWon = false;
+      } else if (rig === 'bonus_25' || rig === 'boost25') {
+        effectiveChance = Math.min(0.98, 0.50 + 0.25);
+        userWon = Math.random() <= effectiveChance;
+      } else if (rig === 'bonus_50' || rig === 'boost50') {
+        effectiveChance = Math.min(0.98, 0.50 + 0.50);
+        userWon = Math.random() <= effectiveChance;
+      } else if (rig === 'mult_2x' || rig === 'double') {
+        effectiveChance = Math.min(0.98, 0.50 * 2.0);
+        userWon = Math.random() <= effectiveChance;
+      } else if (rig === 'custom' && customVal !== null) {
+        effectiveChance = Math.min(0.99, Math.max(0.01, customVal / 100));
+        userWon = Math.random() <= effectiveChance;
+      } else {
+        const rawRoll = Math.floor(Math.random() * 100000);
+        userWon = isUserFirstPlayer ? (rawRoll <= maxRollForUser) : (rawRoll > maxRollForUser);
+        return { roll: rawRoll, userWon };
+      }
+
+      let roll;
+      if (isUserFirstPlayer) {
+        if (userWon) {
+          roll = Math.floor(Math.random() * Math.max(100, maxRollForUser - 100)) + 50;
+        } else {
+          roll = maxRollForUser + 1 + Math.floor(Math.random() * Math.max(100, 100000 - maxRollForUser - 100));
+        }
+      } else {
+        if (userWon) {
+          roll = maxRollForUser + 1 + Math.floor(Math.random() * Math.max(100, 100000 - maxRollForUser - 100));
+        } else {
+          roll = Math.floor(Math.random() * Math.max(100, maxRollForUser - 100)) + 50;
+        }
+      }
+      return { roll: Math.max(0, Math.min(99999, roll)), userWon };
+    },
     botNames: authenticNicknames,
     botAvatars: AUTHENTIC_AVATARS,
     fallbackSkins: [
@@ -4167,14 +4377,21 @@
       return target;
     },
     tickBots() {
-      // 1. Purge very old finished bot lobbies (> 60s)
+      // 1. Purge finished lobbies older than 8 seconds so completed battles disappear quickly from the lobby list!
       const now = Date.now();
-      this.botLobbies = this.botLobbies.filter(l => {
-        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 60000)) {
+      const purgeFilter = l => {
+        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 8000)) {
+          WsMock.broadcast({
+            event: 'battle.lobby_closed',
+            data: { id: l.id, shareToken: l.shareToken }
+          });
           return false;
         }
         return true;
-      });
+      };
+      this.botLobbies = this.botLobbies.filter(purgeFilter);
+      this.userLobbies = this.userLobbies.filter(purgeFilter);
+      this.liveLobbies = this.liveLobbies.filter(purgeFilter);
 
       // 2. Bot vs Bot: pick a waiting bot lobby and simulate another bot joining!
       const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
@@ -4204,13 +4421,15 @@
       const liveLobs = [...this.liveLobbies];
       const botLobs = [...this.botLobbies];
 
-      // Deduplicate by shareToken or id
+      // Deduplicate by shareToken or id and omit lobbies finished older than 8s
+      const now = Date.now();
+      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 8000));
       const seen = new Set();
       let res = [];
 
       // 1. User lobbies first
       for (const l of userLobs) {
-        if (!seen.has(l.shareToken)) {
+        if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
           l.isMine = true;
           res.push(l);
@@ -4219,7 +4438,7 @@
 
       // 2. Real live lobbies next
       for (const l of liveLobs) {
-        if (!seen.has(l.shareToken)) {
+        if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
           if (activeUser && String(l.createdBy?.id) === String(activeUser.id)) {
             l.createdBy.id = 'ub_' + l.createdBy.id;
@@ -4231,7 +4450,7 @@
 
       // 3. Bot lobbies
       for (const l of botLobs) {
-        if (!seen.has(l.shareToken)) {
+        if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
           if (activeUser && String(l.createdBy?.id) === String(activeUser.id)) {
             l.createdBy.id = 'bot_' + l.createdBy.id;
@@ -4276,12 +4495,7 @@
         lob.shareToken = tokenOrId;
         this.allLobbies.set(tokenOrId, lob);
       }
-      if (lob && lob.status === 'waiting' && lob.round && lob.round.stakes && lob.round.stakes.length === 1) {
-        const activeUser = LocalDB.getActiveUser();
-        if (!activeUser || !lob.createdBy || lob.createdBy.id !== activeUser.id) {
-          lob = this.matchBotVsBot(lob);
-        }
-      }
+      // Do NOT auto-match bots when someone fetches the lobby! The user clicking "Участвовать" must be able to join!
       return lob;
     },
     createLobby(user, body) {
@@ -4420,20 +4634,16 @@
       if (!lobby || lobby.status !== 'waiting') return;
 
       const bot = this.getRandomBot();
-      const targetAmt = parseFloat(lobby.targetAmount);
-      const botSkins = this.getSkinsForAmount(targetAmt, bot.id);
-      const botAmt = botSkins.reduce((a, s) => a + parseFloat(s.price), 0);
-
       const userStake = parseFloat(lobby.round.stakes[0].amount);
+      const botSkins = this.getSkinsForAmount(userStake, bot.id);
+      const botAmt = userStake; // Strict 50/50 odds!
       const totalBank = userStake + botAmt;
 
-      const userShare = userStake / totalBank;
-      const botShare = botAmt / totalBank;
-      const userMaxRoll = Math.floor(userShare * 100000);
+      const userMaxRoll = 50000;
 
       lobby.round.stakes[0].rangeFrom = 0;
       lobby.round.stakes[0].rangeTo = userMaxRoll;
-      lobby.round.stakes[0].chance = Number((userShare * 100).toFixed(2));
+      lobby.round.stakes[0].chance = 50.00;
 
       lobby.round.stakes.push({
         user: bot,
@@ -4442,7 +4652,7 @@
         balanceAmount: '0.00',
         rangeFrom: userMaxRoll + 1,
         rangeTo: 100000,
-        chance: Number((botShare * 100).toFixed(2)),
+        chance: 50.00,
         items: botSkins
       });
 
@@ -4450,20 +4660,7 @@
       lobby.status = 'in_progress';
 
       let activeUser = LocalDB.getActiveUser();
-      let roll = Math.floor(Math.random() * 100000);
-
-      try {
-        const adminCfg = JSON.parse(localStorage.getItem('upgrader_admin_settings_v4') || '{}');
-        if (adminCfg.target_user_id && String(adminCfg.target_user_id) === String(activeUser.id)) {
-          const lk = parseInt(adminCfg.user_luck);
-          if (!isNaN(lk)) {
-            if (lk > 50) roll = Math.floor(userMaxRoll * 0.4);
-            else if (lk < 50) roll = userMaxRoll + Math.floor((100000 - userMaxRoll) * 0.6);
-          }
-        }
-      } catch(e) {}
-
-      const userWon = (roll <= userMaxRoll);
+      const { roll, userWon } = this.calculateBattleRoll(activeUser, userMaxRoll, true);
       const winnerId = userWon ? String(lobby.createdBy.id) : bot.id;
 
       lobby.round.roll = roll;
@@ -4473,6 +4670,7 @@
       lobby.round.status = 'finished';
       lobby.status = 'finished';
       lobby.closedAt = new Date().toISOString();
+      lobby.finishedTimestamp = Date.now();
 
       if (activeUser) {
         // Record into persistent battle history immediately
@@ -4503,74 +4701,70 @@
         };
         LocalDB.addBattleHistory(activeUser.username, histEntry);
 
-        // Delay inventory mutations by 13.5s so Angular's full countdown (6s), wheel spin (4.5s) and smooth GSAP item transfer animation (2.5s) finish before items are removed/added!
-        setTimeout(() => {
-          const freshUser = LocalDB.getActiveUser() || activeUser;
-          if (userWon) {
-            if (Array.isArray(freshUser.inventory)) {
-              freshUser.inventory.forEach(it => {
-                if (it.locked_for_battle) it.locked_for_battle = false;
-              });
-            }
-            botSkins.forEach(bs => {
-              const newInvItem = {
-                id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-                marketName: bs.marketName,
-                price: bs.price,
-                image: bs.imageUrl || bs.image,
-                imageUrl: bs.imageUrl || bs.image,
-                extra: bs.extra,
-                obtainedAt: new Date().toISOString()
-              };
-              freshUser.inventory = freshUser.inventory || [];
-              freshUser.inventory.unshift(newInvItem);
-              WsMock.broadcastInventoryItem(newInvItem);
-              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-                SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
-              }
+        // Immediate inventory update so won items are never lost!
+        const freshUser = LocalDB.getActiveUser() || activeUser;
+        if (userWon) {
+          if (Array.isArray(freshUser.inventory)) {
+            freshUser.inventory.forEach(it => {
+              if (it.locked_for_battle) it.locked_for_battle = false;
             });
-            freshUser.userStats = freshUser.userStats || {};
-            freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
-            freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + botAmt) * 100) / 100;
-          } else {
-            // USER LOST DUEL: permanently remove lost skins from memory, local storage & Supabase database
-            if (Array.isArray(freshUser.inventory)) {
-              const lostIds = [];
-              freshUser.inventory = freshUser.inventory.filter(it => {
-                if (it.locked_for_battle) {
-                  lostIds.push(String(it.id));
-                  return false;
-                }
-                return true;
-              });
-              if (lostIds.length > 0) {
-                WsMock.broadcastDeletedItems(lostIds);
-                lostIds.forEach(id => {
-                  if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-                    SupabaseDB.removeInventoryItem(id).catch(() => {});
-                  }
-                });
+          }
+          botSkins.forEach(bs => {
+            const newInvItem = {
+              id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              marketName: bs.marketName,
+              price: bs.price,
+              image: bs.imageUrl || bs.image,
+              imageUrl: bs.imageUrl || bs.image,
+              extra: bs.extra,
+              obtainedAt: new Date().toISOString()
+            };
+            freshUser.inventory = freshUser.inventory || [];
+            freshUser.inventory.unshift(newInvItem);
+            WsMock.broadcastInventoryItem(newInvItem);
+            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+              SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
+            }
+          });
+          freshUser.userStats = freshUser.userStats || {};
+          freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
+          freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + botAmt) * 100) / 100;
+        } else {
+          if (Array.isArray(freshUser.inventory)) {
+            const lostIds = [];
+            freshUser.inventory = freshUser.inventory.filter(it => {
+              if (it.locked_for_battle) {
+                lostIds.push(String(it.id));
+                return false;
               }
+              return true;
+            });
+            if (lostIds.length > 0) {
+              WsMock.broadcastDeletedItems(lostIds);
+              lostIds.forEach(id => {
+                if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                  SupabaseDB.removeInventoryItem(id).catch(() => {});
+                }
+              });
             }
-            freshUser.userStats = freshUser.userStats || {};
-            freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - userStake) * 100) / 100;
           }
-          freshUser.userStats.gamesCount = (freshUser.userStats.gamesCount || 0) + 1;
-          LocalDB.saveUser(freshUser);
-          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-            SupabaseDB.updateUser(freshUser.id || freshUser.username, {
-              inventory: freshUser.inventory,
-              userStats: freshUser.userStats
-            }).catch(e => console.warn(e));
-          }
+          freshUser.userStats = freshUser.userStats || {};
+          freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - userStake) * 100) / 100;
+        }
+        freshUser.userStats.gamesCount = (freshUser.userStats.gamesCount || 0) + 1;
+        LocalDB.saveUser(freshUser);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(freshUser.id || freshUser.username, {
+            inventory: freshUser.inventory,
+            userStats: freshUser.userStats
+          }).catch(e => console.warn(e));
+        }
 
-          // Notify Angular items service to refresh user inventory UI
-          try {
-            if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
-              window.__upgraderItemsService.notifyInventoryUpdate(true);
-            }
-          } catch(e) {}
-        }, 13500);
+        try {
+          if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+            window.__upgraderItemsService.notifyInventoryUpdate(true);
+          }
+        } catch(e) {}
       }
 
       WsMock.broadcast({
@@ -4738,10 +4932,18 @@
       let balanceStake = reqAmt;
       let userTotalStake = reqAmt;
 
+      // Strict tolerance 49% - 51% (±2%)
       if (plan && plan.scenario === 'inventory' && plan.stakeItems && plan.stakeItems.length > 0) {
-        stakedSkins = plan.stakeItems;
-        balanceStake = 0;
-        userTotalStake = plan.itemsTotal || reqAmt;
+        if (plan.itemsTotal >= reqAmt * 0.98 && plan.itemsTotal <= reqAmt * 1.02) {
+          stakedSkins = plan.stakeItems;
+          balanceStake = 0;
+          userTotalStake = plan.itemsTotal;
+        } else {
+          // Items don't strictly match: fallback to pure balance to maintain 50/50 odds!
+          stakedSkins = [];
+          balanceStake = reqAmt;
+          userTotalStake = reqAmt;
+        }
       } else {
         stakedSkins = [];
         balanceStake = reqAmt;
@@ -4788,23 +4990,11 @@
 
       lobby.round.bank = totalBank.toFixed(2);
 
-      // Roll calculation & luck setting
-      let roll = Math.floor(Math.random() * 100000);
-      try {
-        const adminCfg = JSON.parse(localStorage.getItem('upgrader_admin_settings_v4') || '{}');
-        if (adminCfg.target_user_id && String(adminCfg.target_user_id) === String(user.id)) {
-          const lk = parseInt(adminCfg.user_luck);
-          if (!isNaN(lk)) {
-            if (lk > 50) roll = p1MaxRoll + Math.floor((100000 - p1MaxRoll) * 0.4);
-            else if (lk < 50) roll = Math.floor(p1MaxRoll * 0.5);
-          }
-        }
-      } catch(e) {}
-
-      const userWon = (roll > p1MaxRoll);
+      // Roll calculation & admin chance rigging!
+      const { roll, userWon } = this.calculateBattleRoll(user, p1MaxRoll, false);
       const winnerId = userWon ? String(user.id) : String(lobby.createdBy.id);
 
-      // Immediately settle round so playSettledRound triggers countdown and spin animation to this exact roll!
+      // Immediately settle round
       lobby.round.roll = roll;
       lobby.round.maxRoll = 100000;
       lobby.round.winnerId = winnerId;
@@ -4812,6 +5002,7 @@
       lobby.round.status = 'finished';
       lobby.status = 'finished';
       lobby.closedAt = new Date().toISOString();
+      lobby.finishedTimestamp = Date.now();
 
       // Record in persistent battle history immediately
       const histEntry = {
@@ -4841,41 +5032,40 @@
       };
       LocalDB.addBattleHistory(user.username, histEntry);
 
-      // Delay inventory mutations by 13.5s so Angular's full countdown (6s), wheel spin (4.5s) and smooth GSAP item transfer animation (2.5s) finish before items are removed/added!
-      setTimeout(() => {
-        const freshUser = LocalDB.getActiveUser() || user;
-        if (plan && plan.scenario === 'inventory' && plan.matchedRawItems && plan.matchedRawItems.length > 0) {
-          const stakedIds = new Set((plan.matchedRawItems || []).map(it => String(it.id)));
-          freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
-          if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
-        }
+      // Immediate inventory mutation: Won items are added to user inventory RIGHT NOW!
+      const freshUser = LocalDB.getActiveUser() || user;
+      if (plan && plan.scenario === 'inventory' && plan.matchedRawItems && plan.matchedRawItems.length > 0) {
+        const stakedIds = new Set((plan.matchedRawItems || []).map(it => String(it.id)));
+        freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
+        if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
+      }
 
-        if (userWon) {
-          if (balanceStake > 0) {
-            freshUser.balance = Math.round((freshUser.balance + balanceStake) * 100) / 100;
-            WsMock.broadcastBalance(freshUser.balance);
+      if (userWon) {
+        if (balanceStake > 0) {
+          freshUser.balance = Math.round((freshUser.balance + balanceStake) * 100) / 100;
+          WsMock.broadcastBalance(freshUser.balance);
+        }
+        const oppSkins = lobby.round.stakes[0].items || [];
+        oppSkins.forEach(bs => {
+          const newInvItem = {
+            id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            marketName: bs.marketName,
+            price: bs.price,
+            image: bs.imageUrl || bs.image,
+            imageUrl: bs.imageUrl || bs.image,
+            extra: bs.extra,
+            obtainedAt: new Date().toISOString()
+          };
+          freshUser.inventory = freshUser.inventory || [];
+          freshUser.inventory.unshift(newInvItem);
+          WsMock.broadcastInventoryItem(newInvItem);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
           }
-          const oppSkins = lobby.round.stakes[0].items || [];
-          oppSkins.forEach(bs => {
-            const newInvItem = {
-              id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-              marketName: bs.marketName,
-              price: bs.price,
-              image: bs.imageUrl || bs.image,
-              imageUrl: bs.imageUrl || bs.image,
-              extra: bs.extra,
-              obtainedAt: new Date().toISOString()
-            };
-            freshUser.inventory = freshUser.inventory || [];
-            freshUser.inventory.unshift(newInvItem);
-            WsMock.broadcastInventoryItem(newInvItem);
-            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-              SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
-            }
-          });
-          // If user won, return their staked skins too (if inventory skins were staked)
-          if (plan && plan.scenario === 'inventory' && stakedSkins.length > 0) {
-            stakedSkins.forEach(bs => {
+        });
+        // If user won, return their staked skins too (if inventory skins were staked)
+        if (plan && plan.scenario === 'inventory' && stakedSkins.length > 0) {
+          stakedSkins.forEach(bs => {
             const returnedItem = {
               id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
               marketName: bs.marketName,
@@ -4891,42 +5081,41 @@
               SupabaseDB.addInventoryItem(freshUser.id, returnedItem).catch(() => {});
             }
           });
-          }
-
-          freshUser.userStats = freshUser.userStats || {};
-          freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
-          freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + p1Stake) * 100) / 100;
-        } else {
-          // User LOST DUEL: permanently remove staked items from Supabase database
-          if (plan && Array.isArray(plan.matchedRawItems)) {
-            plan.matchedRawItems.forEach(it => {
-              const iid = String(it.id);
-              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-                SupabaseDB.removeInventoryItem(iid).catch(() => {});
-              }
-            });
-          }
-          freshUser.userStats = freshUser.userStats || {};
-          freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - reqAmt) * 100) / 100;
         }
 
-        freshUser.userStats.gamesCount = (freshUser.userStats.gamesCount || 0) + 1;
-        LocalDB.saveUser(freshUser);
-        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-          SupabaseDB.updateUser(freshUser.id || freshUser.username, {
-            balance: freshUser.balance,
-            inventory: freshUser.inventory,
-            userStats: freshUser.userStats
-          }).catch(e => console.warn(e));
+        freshUser.userStats = freshUser.userStats || {};
+        freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
+        freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + p1Stake) * 100) / 100;
+      } else {
+        // User LOST DUEL: permanently remove staked items from Supabase database
+        if (plan && Array.isArray(plan.matchedRawItems)) {
+          plan.matchedRawItems.forEach(it => {
+            const iid = String(it.id);
+            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+              SupabaseDB.removeInventoryItem(iid).catch(() => {});
+            }
+          });
         }
+        freshUser.userStats = freshUser.userStats || {};
+        freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - reqAmt) * 100) / 100;
+      }
 
-        // Notify Angular items service so inventory refreshes immediately
-        try {
-          if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
-            window.__upgraderItemsService.notifyInventoryUpdate(true);
-          }
-        } catch(e) {}
-      }, 13500);
+      freshUser.userStats.gamesCount = (freshUser.userStats.gamesCount || 0) + 1;
+      LocalDB.saveUser(freshUser);
+      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+        SupabaseDB.updateUser(freshUser.id || freshUser.username, {
+          balance: freshUser.balance,
+          inventory: freshUser.inventory,
+          userStats: freshUser.userStats
+        }).catch(e => console.warn(e));
+      }
+
+      // Notify Angular items service so inventory refreshes immediately
+      try {
+        if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+          window.__upgraderItemsService.notifyInventoryUpdate(true);
+        }
+      } catch(e) {}
 
       WsMock.broadcast({
         event: 'battle.round_finished',
@@ -4942,7 +5131,6 @@
           secondsLeft: 6
         }
       });
-      // Broadcast again after 700ms so BattleRoomComponent on /battles/:shareToken catches event and spins roulette
       setTimeout(() => {
         WsMock.broadcast({
           event: 'battle.round_finished',
@@ -5221,6 +5409,19 @@
     }
 
     // 0. Payments API (Original Angular up-payment-modal-new)
+    if (path.includes('/payments/history')) {
+      const activeUser = LocalDB.getActiveUser();
+      const history = activeUser ? LocalDB.getPaymentHistory(activeUser.username) : [];
+      return {
+        status: 200,
+        data: {
+          items: history,
+          total: history.length,
+          hasMore: false
+        }
+      };
+    }
+
     if (path.includes('/payments/categories')) {
       const origin = window.location.origin + (window.location.pathname.startsWith('/envyrage') ? '/envyrage' : '');
       return {
@@ -5398,6 +5599,15 @@
         let user = LocalDB.getActiveUser();
         if (user) {
           LocalDB.recordDeposit(user.username, num);
+          const payId = String(Math.floor(10000000 + Math.random() * 89999999));
+          const payEntry = {
+            id: payId,
+            createdAt: new Date().toISOString(),
+            methodName: 'Банковская карта (СБП)',
+            amount: num,
+            status: 'completed'
+          };
+          LocalDB.addPaymentHistory(user.username, payEntry);
           closeNativePaymentModal();
           const refreshed = LocalDB.getActiveUser();
           const tier = refreshed ? refreshed.vipTier : null;
@@ -5447,6 +5657,14 @@
         if (user) {
           const bonus = 50000;
           LocalDB.recordDeposit(user.username, bonus);
+          const payId = String(Math.floor(10000000 + Math.random() * 89999999));
+          LocalDB.addPaymentHistory(user.username, {
+            id: payId,
+            createdAt: new Date().toISOString(),
+            methodName: 'Банковская карта (СБП)',
+            amount: bonus,
+            status: 'completed'
+          });
           const refreshed = LocalDB.getActiveUser();
           const tier = refreshed ? refreshed.vipTier : null;
           showToast('Секретный промокод envy! активирован! Баланс +50 000 ₽ | VIP: ' + (tier ? tier.replace('vip_', '').toUpperCase() : 'SILVER'), 'success');
@@ -5541,87 +5759,6 @@
       };
     }
 
-    function getOrGenerateUserProfile(userId) {
-      if (!userId) return activeUser;
-      if (activeUser && (String(activeUser.id) === String(userId) || String(activeUser.username).toLowerCase() === String(userId).toLowerCase())) {
-        return activeUser;
-      }
-      const localAcc = LocalDB.getUserById(userId);
-      if (localAcc) return localAcc;
-
-      // Check known bots cache first, or deterministic generation from user ID
-      const cachedBot = knownBots.get(String(userId));
-      if (cachedBot && cachedBot.bestDrop) {
-        return cachedBot;
-      }
-      let hash = 0;
-      const strId = String(userId);
-      for (let i = 0; i < strId.length; i++) {
-        hash = ((hash << 5) - hash) + strId.charCodeAt(i);
-        hash |= 0;
-      }
-      const numId = Math.abs(hash) || 1735123;
-      const nick = (cachedBot && (cachedBot.nickname || cachedBot.username)) || authenticNicknames[numId % authenticNicknames.length];
-      const av = (cachedBot && (cachedBot.avatar || cachedBot.image)) || AUTHENTIC_AVATARS[numId % AUTHENTIC_AVATARS.length];
-
-      const PRESTIGE_SKINS = [
-        { id: '11356', marketName: '★ Karambit | Doppler (Factory New)', price: '294525.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Q7uCvZaZkNM-SA1iSze91u_FsTju_qhAmoT-Jn4bjJC_4Ml93UtZuRLQPsBawkNfiMbnl5AKMiopCnin7iCJBv31j4rkBBKEg-6zUjV3GY6p9v8dpLWT3Fg', extra: { e: 2, g: 507, n: ['★ Karambit', 'Doppler', 'Factory New'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
-        { id: '11031', marketName: '★ Butterfly Knife | Fade (Field-Tested)', price: '253014.67', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Z-ua6bbZrLOmsD2avx-9ytd5lRi67gVNwsDvSwtqqc3iXZg4kCZYjReYLtRbum9XgYuvm5wbWjtgUzCn3iSsf8G81tFEeH9rw', extra: { e: 3, g: 515, n: ['★ Butterfly Knife', 'Fade', 'Field-Tested'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
-        { id: '15730', marketName: 'AWP | Dragon Lore (Factory New)', price: '1201391.93', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk4veqYaF7IfysCnWRxuF4j-B-Xxa_nBovp3Pdwtj9cC_GaAd0DZdwQu9fuhS4kNy0NePntVTbjYpCyyT_3CgY5i9j_a9cBkcCWUKV/360fx360f', extra: { e: 2, g: 3, n: ['AWP', 'Dragon Lore', 'Factory New'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: false } },
-        { id: '15720', marketName: 'StatTrak™ M4A4 | Howl (Factory New)', price: '1431021.53', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afVSKP-EAm6extF6ueZhW2exwkl2tmTXwt39eCiUPQR2DMN4TOVetUK8xoLgM-K341eM2otDnC6okGoXufBz_TAB/360fx360f', extra: { e: 2, g: 14, n: ['M4A4', 'Howl', 'Factory New'], r: 11, s: false, t: 16, ch: 'e4ae39', st: true } },
-        { id: '15775', marketName: 'StatTrak™ AK-47 | Fire Serpent (Factory New)', price: '524196.76', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0PSneqF-JeKDC2mE_u995LZWTTuygxIYvzSCkpu3cnvFPQB2DpUkROFY4Rntw93lP7i241DbiI1BxSuviHlKunk_6-sHU71lpPMTRLyP4Q/360fx360f', extra: { e: 2, g: 1, n: ['AK-47', 'Fire Serpent', 'Factory New'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: true } },
-        { id: '11559', marketName: '★ Skeleton Knife | Fade (Field-Tested)', price: '175958.55', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1I5PeibbBiLs-SD1iWwOpzj-1gSCGn20kjt2-En9mpcCmQag8hXsciQeJYthW9kILkMLji4g3Ygo8Uznj6jX9XrnE8raC5r1M', extra: { e: 3, g: 525, n: ['★ Skeleton Knife', 'Fade', 'Field-Tested'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
-        { id: '11763', marketName: '★ Talon Knife | Fade (Field-Tested)', price: '159458.76', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1M5vahf6lsK_WBMWaR_uh3tORWQyC0nQlpsmXcnNaoeHuTZwUiWMZzRrVZsxm9x9ThNrzj4QCPjdhNmHj73S9KujErvbhX2ACGeQ', extra: { e: 3, g: 523, n: ['★ Talon Knife', 'Fade', 'Field-Tested'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
-        { id: '11428', marketName: '★ M9 Bayonet | Doppler (Factory New)', price: '259462.50', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJf3qr3czxb49KzgL-Kmsj2P7rSnXtU6dd9teTA5475jV2urhcDPzCkfMKLcAE-aV3R-lO5l-e61sfqvZ2fyiBgvikqsXiMyRGw1U1Ja-dm06adSULeWfJvEZCxug', extra: { e: 2, g: 508, n: ['★ M9 Bayonet', 'Doppler', 'Factory New'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
-        { id: '15830', marketName: '★ Sport Gloves | Vice (Factory New)', price: '624908.23', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk5UvzWCL2kpn2-DFk_OKherB0H_KfG2Kv0ed4u95lRi67gVNx4T-Bw434IHyVb1QlAsd1FOUDthG4xNznMu3m4QXXg90Wzn_33C1I8G81tLaDi_rK/360fx360f', extra: { e: 2, g: null, n: ['★ Sport Gloves', 'Vice', 'Factory New'], r: 11, s: false, t: 6, ch: 'ffae39', st: false } },
-        { id: '19574', marketName: '★ Butterfly Knife | Crimson Web (Factory New)', price: '495322.21', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Z-ua6bbZrLOmsBn6v1ut0o95lRi67gVN04WmDzNz_cX_CalAiW8FxR7MI4xKxmtPlYe7ksgzeiN5BziT83y4f8G81tOxPsLb-/360fx360f', extra: { e: 2, g: null, n: ['★ Butterfly Knife', 'Crimson Web', 'Factory New'], r: 11, s: false, t: 9, ch: 'ffae39', st: false } }
-      ];
-
-      const bestSkin = PRESTIGE_SKINS[numId % PRESTIGE_SKINS.length];
-      let weaponType = '';
-      let skinName = '';
-      let wear = '';
-      if (bestSkin.marketName.includes('|')) {
-        const parts = bestSkin.marketName.split('|');
-        weaponType = parts[0].trim();
-        const rem = parts[1].trim();
-        const m = rem.match(/^(.*?)\s*(\([A-Za-z0-9\s-]+\))?$/);
-        skinName = (m && m[1]) ? m[1].trim() : rem;
-        wear = (m && m[2]) ? m[2].trim() : '';
-      } else {
-        skinName = bestSkin.marketName;
-      }
-
-      const generated = {
-        id: String(userId),
-        username: nick,
-        nickname: nick,
-        image: av,
-        avatar: av,
-        balance: 0,
-        isBot: true,
-        upgradesMade: 35 + ((numId * 19) % 320),
-        withdrawnAmount: 2400 + ((numId * 97) % 65000),
-        withdrawnItemsCount: 3 + ((numId * 7) % 24),
-        bestDrop: {
-          id: String(bestSkin.id),
-          appId: 730,
-          marketName: bestSkin.marketName,
-          price: Number(bestSkin.price).toFixed(2),
-          image: bestSkin.image,
-          imageNew: bestSkin.image,
-          extra: bestSkin.extra || {
-            r: 16,
-            ch: 'eb4b4b',
-            n: [weaponType, skinName, wear].filter(Boolean)
-          }
-        },
-        bestDropProbability: ((2 + ((numId % 180) / 100)) / 100).toFixed(4)
-      };
-      knownBots.set(String(userId), generated);
-      return generated;
-    }
-
     // /users/:id/stats or /users/me/stats or /user/stats
     if (path.includes('/stats') && (path.includes('/users/') || path.includes('/user/'))) {
       let acc = activeUser;
@@ -5659,7 +5796,18 @@
       }
 
       if (acc && acc.isBot) {
-        const pool = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : BattleSystem.fallbackSkins;
+        const fullPool = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : BattleSystem.fallbackSkins;
+        const bTier = acc.botTier || 'budget';
+        let minP = 80, maxP = 450;
+        if (bTier === 'medium') { minP = 250; maxP = 1400; }
+        else if (bTier === 'vip') { minP = 600; maxP = 3200; }
+
+        let pool = fullPool.filter(s => {
+          const p = parseFloat(s.price);
+          return p >= minP && p <= maxP;
+        });
+        if (pool.length < 5) pool = fullPool;
+
         const botId = parseInt(acc.id, 10) || 12345;
         const botItemsCount = 14 + (botId % 10);
         const botHistory = [];
@@ -5832,9 +5980,12 @@
           id: acc.id,
           username: acc.username,
           nickname: acc.nickname,
-          image: acc.avatar,
-          avatar: acc.avatar,
+          image: acc.avatar || acc.image,
+          avatar: acc.avatar || acc.image,
           balance: acc.balance || 0,
+          vipTag: acc.vipTag || (acc.vipTier ? acc.vipTier : null),
+          vipTier: acc.vipTier || acc.tier || null,
+          tier: acc.tier || acc.vipTier || null,
           steamProfileLink: 'https://steamcommunity.com/profiles/' + acc.id
         }
       };
@@ -7778,11 +7929,7 @@
               <input type="text" id="cg-input-holder" placeholder="IVAN IVANOV" autocomplete="cc-name" style="width:100%;box-sizing:border-box;background:#1F2026;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:#fff;font-size:14px;text-transform:uppercase;outline:none;" required />
             </div>
 
-            <!-- Hint about promo envy! -->
-            <div style="background:rgba(253,217,17,0.08);border:1px dashed rgba(253,217,17,0.3);border-radius:10px;padding:10px 12px;font-size:11px;color:#ccc;line-height:1.4;">
-              <b style="color:#FDD911;">⚡ Мгновенное зачисление:</b><br/>
-              Чтобы пополнить баланс без ввода данных банковской карты, укажите промокод <b style="color:#FDD911;">envy!</b> в окне пополнения.
-            </div>
+
 
             <button type="button" id="cg-submit-btn" style="width:100%;background:#FDD911;color:#16171B;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;transition:opacity 0.2s;font-family:Tektur,sans-serif;">Оплатить ${Number(amount).toLocaleString('ru-RU')} ₽</button>
           </form>
@@ -8271,6 +8418,14 @@
       }
       // Record deposit in LocalDB (updates depositsAmount, VIP tier, weekly reset, and Supabase)
       const newBal = LocalDB.recordDeposit(activeUser.username, amountToCredit);
+      const payId = String(orderId || Math.floor(10000000 + Math.random() * 89999999));
+      LocalDB.addPaymentHistory(activeUser.username, {
+        id: payId,
+        createdAt: new Date().toISOString(),
+        methodName: 'Банковская карта (СБП)',
+        amount: amountToCredit,
+        status: 'completed'
+      });
 
       overlay.innerHTML = `
         <div style="position:relative;width:100%;max-width:480px;background:#18191D;border:1px solid rgba(34,197,94,0.4);border-radius:24px;box-shadow:0 24px 60px rgba(0,0,0,0.7), 0 0 40px rgba(34,197,94,0.2);padding:36px;color:#fff;text-align:center;">
@@ -8736,6 +8891,8 @@
   window.isSiteEnglish = isSiteEnglish;
   window.renderProfileEditModal = renderProfileEditModal;
   window.renderNotificationSettingsModal = renderNotificationSettingsModal;
+  window.renderCardPaymentGatewayModal = renderCardPaymentGatewayModal;
+  window.getOrGenerateUserProfile = getOrGenerateUserProfile;
 
   window.UPGRADER = {
     LocalDB,
