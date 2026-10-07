@@ -3681,24 +3681,25 @@ function getOrGenerateUserProfile(userId) {
   let botTier = 'budget';
   let hasVip = false;
   let vipTag = null;
-  let botUpgrades = 18 + (numId % 30);
-  let botWithdrawn = 850 + ((numId * 17) % 2400);
-  let botWithdrawnCount = 2 + (numId % 5);
+  const cents = Number((((numId * 37) % 99 + 1) / 100).toFixed(2));
+  let botWithdrawn = Math.round((850 + ((numId * 17) % 2400) + cents) * 100) / 100;
+  let botUpgrades = 19 + (numId % 47);
+  let botWithdrawnCount = 3 + (numId % 9);
 
   if (tierVal >= 8) {
     botTier = 'vip';
     hasVip = true;
     vipTag = (numId % 2 === 0) ? 'vip_platinum' : 'vip_gold';
-    botUpgrades = 140 + (numId % 180);
-    botWithdrawn = 18000 + ((numId * 89) % 24000);
-    botWithdrawnCount = 14 + (numId % 15);
+    botUpgrades = 143 + (numId % 181);
+    botWithdrawn = Math.round((18000 + ((numId * 89) % 24000) + cents) * 100) / 100;
+    botWithdrawnCount = 15 + (numId % 17);
   } else if (tierVal >= 5) {
     botTier = 'medium';
     hasVip = (numId % 2 === 0);
     vipTag = hasVip ? 'vip_gold' : null;
-    botUpgrades = 45 + (numId % 70);
-    botWithdrawn = 4200 + ((numId * 53) % 9500);
-    botWithdrawnCount = 6 + (numId % 9);
+    botUpgrades = 47 + (numId % 73);
+    botWithdrawn = Math.round((4200 + ((numId * 53) % 9500) + cents) * 100) / 100;
+    botWithdrawnCount = 7 + (numId % 11);
   }
 
   // Realistic best drops per tier (verified 200 OK Steam CDN images with complete extra metadata)
@@ -4093,7 +4094,7 @@ function getOrGenerateUserProfile(userId) {
     nickname: nick,
     image: av,
     avatar: av,
-    balance: 0,
+    balance: Math.round((((numId * 29) % 780 + 35) + cents) * 100) / 100,
     isBot: true,
     botTier: botTier,
     hasVip: hasVip,
@@ -4550,7 +4551,7 @@ function getOrGenerateUserProfile(userId) {
       }
       setInterval(() => {
         this.tickBots();
-      }, 3500);
+      }, 2000);
     },
     isAffordableForUser(targetAmt) {
       const activeUser = LocalDB.getActiveUser();
@@ -4585,14 +4586,15 @@ function getOrGenerateUserProfile(userId) {
       const id = String(Date.now() + Math.floor(Math.random() * 1000));
       const shareToken = this.generateToken();
       const skins = this.getSkinsForAmount(targetAmount, bot.id);
-      const sum = skins.reduce((acc, s) => acc + parseFloat(s.price), 0);
-      const finalAmt = sum > 0 ? sum : targetAmount;
+      const skinsSum = skins.reduce((acc, s) => acc + parseFloat(s.price), 0);
+      const itemsAmt = Math.min(skinsSum, targetAmount);
+      const balAmt = Math.max(0, targetAmount - itemsAmt);
       const lobby = {
         id: id,
         status: 'waiting',
         shareToken: shareToken,
         isPrivate: false,
-        targetAmount: finalAmt.toFixed(2),
+        targetAmount: targetAmount.toFixed(2),
         tolerancePercent: '1.00',
         feePercent: '0.00',
         maxStake: '100000.00',
@@ -4603,7 +4605,7 @@ function getOrGenerateUserProfile(userId) {
         round: {
           id: id,
           status: 'waiting',
-          bank: finalAmt.toFixed(2),
+          bank: targetAmount.toFixed(2),
           roll: null,
           maxRoll: 100000,
           winnerId: null,
@@ -4613,9 +4615,9 @@ function getOrGenerateUserProfile(userId) {
           stakes: [
             {
               user: bot,
-              amount: finalAmt.toFixed(2),
-              itemsAmount: finalAmt.toFixed(2),
-              balanceAmount: '0.00',
+              amount: targetAmount.toFixed(2),
+              itemsAmount: itemsAmt.toFixed(2),
+              balanceAmount: balAmt.toFixed(2),
               rangeFrom: null,
               rangeTo: null,
               chance: null,
@@ -4623,7 +4625,7 @@ function getOrGenerateUserProfile(userId) {
             }
           ]
         },
-        canAfford: this.isAffordableForUser(finalAmt),
+        canAfford: this.isAffordableForUser(targetAmount),
         isMine: false,
         createdAtTime: Date.now()
       };
@@ -4654,37 +4656,36 @@ function getOrGenerateUserProfile(userId) {
       }
       const amt = parseFloat(target.targetAmount);
       const opponentSkins = this.getSkinsForAmount(amt, opponentBot.id);
-      let oppAmt = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      const oppItemsSum = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      const oppActualItems = Math.min(oppItemsSum, amt);
+      const oppBalAmt = Math.max(0, amt - oppActualItems);
 
-      // Calibrate so bot vs bot duel is strictly 50/50 (49.5% - 50.5%)
-      if (opponentSkins.length > 0 && Math.abs(oppAmt - amt) > amt * 0.02) {
-        opponentSkins[0].price = Number(amt).toFixed(3);
-        oppAmt = amt;
-      }
+      // Calibrate P1 and P2 stakes to strictly 50/50 odds!
+      const p1SkinsSum = (target.round.stakes[0].items || []).reduce((a, s) => a + parseFloat(s.price), 0);
+      const p1ActualItems = Math.min(p1SkinsSum, amt);
+      const p1BalAmt = Math.max(0, amt - p1ActualItems);
 
-      const totalBank = amt + oppAmt;
-
-      const p1Share = amt / totalBank;
-      const p2Share = oppAmt / totalBank;
-      const p1MaxRoll = Math.floor(p1Share * 100000);
-
+      target.round.stakes[0].amount = amt.toFixed(2);
+      target.round.stakes[0].itemsAmount = p1ActualItems.toFixed(2);
+      target.round.stakes[0].balanceAmount = p1BalAmt.toFixed(2);
       target.round.stakes[0].rangeFrom = 0;
-      target.round.stakes[0].rangeTo = p1MaxRoll;
-      target.round.stakes[0].chance = Number((p1Share * 100).toFixed(2));
+      target.round.stakes[0].rangeTo = 50000;
+      target.round.stakes[0].chance = 50.00;
 
       target.round.stakes.push({
         user: opponentBot,
-        amount: oppAmt.toFixed(2),
-        itemsAmount: oppAmt.toFixed(2),
-        balanceAmount: '0.00',
-        rangeFrom: p1MaxRoll + 1,
+        amount: amt.toFixed(2),
+        itemsAmount: oppActualItems.toFixed(2),
+        balanceAmount: oppBalAmt.toFixed(2),
+        rangeFrom: 50001,
         rangeTo: 100000,
-        chance: Number((p2Share * 100).toFixed(2)),
+        chance: 50.00,
         items: opponentSkins
       });
 
+      const totalBank = amt * 2;
       const roll = Math.floor(Math.random() * 100000);
-      const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
+      const winnerId = (roll <= 50000) ? target.createdBy.id : opponentBot.id;
 
       target.round.bank = totalBank.toFixed(2);
       target.round.roll = roll;
@@ -4721,10 +4722,13 @@ function getOrGenerateUserProfile(userId) {
       return target;
     },
     tickBots() {
-      // 1. Purge finished lobbies older than 18 seconds so completed battles disappear cleanly
       const now = Date.now();
+
+      // 1. Purge finished lobbies older than 6 seconds and notify so cards immediately disappear
+      const purged = [];
       const purgeFilter = l => {
-        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 18000)) {
+        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 6000)) {
+          purged.push(l);
           return false;
         }
         return true;
@@ -4732,14 +4736,21 @@ function getOrGenerateUserProfile(userId) {
       this.botLobbies = this.botLobbies.filter(purgeFilter);
       this.userLobbies = this.userLobbies.filter(purgeFilter);
 
-      // 2. Bot vs Bot: simulate duels between bots regularly!
-      const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
-      if (waiting.length >= 3 && Math.random() < 0.45) {
-        const target = waiting[Math.floor(Math.random() * waiting.length)];
+      for (const p of purged) {
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: { id: p.id, shareToken: p.shareToken }
+        });
+      }
+
+      // 2. Bot vs Bot: any bot lobby waiting for >= 4 seconds gets matched with a companion bot!
+      const matureWaiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine && (now - (l.createdAtTime || 0) >= 4000));
+      if (matureWaiting.length > 0) {
+        const target = matureWaiting[Math.floor(Math.random() * matureWaiting.length)];
         this.matchBotVsBot(target);
       }
 
-      // 3. Keep bot lobby feed fresh with new diverse stakes (maintain 8-10 waiting lobbies)
+      // 3. Keep bot lobby feed fresh with diverse stakes (maintain 8-10 waiting lobbies)
       const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
       if (currentWaitingCount < 8) {
         let newAmt = 0;
@@ -4747,8 +4758,8 @@ function getOrGenerateUserProfile(userId) {
         const userInv = Array.isArray(activeUser && activeUser.inventory)
           ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
           : [];
-        // If user has inventory skins, with 40% probability spawn a lobby matching one of user's skins!
-        if (userInv.length > 0 && Math.random() < 0.4) {
+        // If user has inventory skins, with 70% probability spawn a lobby matching one of user's skins!
+        if (userInv.length > 0 && Math.random() < 0.7) {
           const randInvItem = userInv[Math.floor(Math.random() * userInv.length)];
           const ip = parseFloat(randInvItem.price || (randInvItem.item && randInvItem.item.price) || 0);
           if (ip >= 50 && ip <= 50000) {
@@ -4756,7 +4767,7 @@ function getOrGenerateUserProfile(userId) {
           }
         }
         if (!newAmt) {
-          const amounts = [115, 180, 250, 420, 680, 950, 1500, 2400, 4800, 8500, 15000];
+          const amounts = [115.42, 182.15, 248.80, 421.30, 680.50, 954.20, 1480.00, 2410.50, 4850.00, 8520.00];
           newAmt = amounts[Math.floor(Math.random() * amounts.length)];
         }
         const fresh = this.createBotLobby(newAmt);
@@ -4772,7 +4783,7 @@ function getOrGenerateUserProfile(userId) {
       const botLobs = [...this.botLobbies];
 
       const now = Date.now();
-      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 18000));
+      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 6000));
       const seen = new Set();
       let res = [];
 
@@ -4977,8 +4988,10 @@ function getOrGenerateUserProfile(userId) {
       const bot = this.getRandomBot();
       const userStake = parseFloat(lobby.round.stakes[0].amount);
       const botSkins = this.getSkinsForAmount(userStake, bot.id);
-      const botAmt = userStake; // Strict 50/50 odds!
-      const totalBank = userStake + botAmt;
+      const botItemsSum = botSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      const botActualItems = Math.min(botItemsSum, userStake);
+      const botBalAmt = Math.max(0, userStake - botActualItems);
+      const totalBank = userStake * 2;
 
       const userMaxRoll = 50000;
 
@@ -4988,9 +5001,9 @@ function getOrGenerateUserProfile(userId) {
 
       lobby.round.stakes.push({
         user: bot,
-        amount: botAmt.toFixed(2),
-        itemsAmount: botAmt.toFixed(2),
-        balanceAmount: '0.00',
+        amount: userStake.toFixed(2),
+        itemsAmount: botActualItems.toFixed(2),
+        balanceAmount: botBalAmt.toFixed(2),
         rangeFrom: userMaxRoll + 1,
         rangeTo: 100000,
         chance: 50.00,
