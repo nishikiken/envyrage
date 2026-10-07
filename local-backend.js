@@ -4655,19 +4655,40 @@ function getOrGenerateUserProfile(userId) {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
         return p > 0;
       });
+      if (validItems.length === 0) return false;
+
+      // 1. Single items
       if (validItems.some(it => {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
         return p >= minTol && p <= maxTol;
       })) return true;
-      const sorted = [...validItems].sort((a,b) => (parseFloat(b.price || (b.item && b.item.price) || 0)) - (parseFloat(a.price || (a.item && a.item.price) || 0)));
-      let sum = 0;
-      for (const it of sorted) {
-        const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-        if (sum + p <= maxTol) {
-          sum += p;
-          if (sum >= minTol) return true;
+
+      // 2. Pairs
+      for (let i = 0; i < validItems.length; i++) {
+        const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
+        if (pi > maxTol) continue;
+        for (let j = i + 1; j < validItems.length; j++) {
+          const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
+          const sum2 = pi + pj;
+          if (sum2 >= minTol && sum2 <= maxTol) return true;
         }
       }
+
+      // 3. Triplets
+      if (validItems.length >= 3 && validItems.length <= 30) {
+        for (let i = 0; i < validItems.length; i++) {
+          const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
+          for (let j = i + 1; j < validItems.length; j++) {
+            const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
+            for (let k = j + 1; k < validItems.length; k++) {
+              const pk = parseFloat(validItems[k].price || (validItems[k].item && validItems[k].item.price) || 0);
+              const sum3 = pi + pj + pk;
+              if (sum3 >= minTol && sum3 <= maxTol) return true;
+            }
+          }
+        }
+      }
+
       return false;
     },
     createBotLobby(targetAmount) {
@@ -4880,7 +4901,8 @@ function getOrGenerateUserProfile(userId) {
       }
 
       // 2. Bot vs Bot: any bot lobby waiting for >= 3 seconds gets matched with a companion bot!
-      const matureWaiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine && (now - (l.createdAtTime || 0) >= 3000));
+      // NEVER match a lobby that the user is currently viewing in the join modal!
+      const matureWaiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine && (!l._reservedForUser || now > l._reservedForUser) && (now - (l.createdAtTime || 0) >= 3000));
       if (matureWaiting.length > 0) {
         const target = matureWaiting[Math.floor(Math.random() * matureWaiting.length)];
         this.matchBotVsBot(target);
@@ -5304,21 +5326,63 @@ function getOrGenerateUserProfile(userId) {
         }
       });
     },
+    findShopSkinForStake(targetStake, maxBudget) {
+      let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
+      const budget = (typeof maxBudget === 'number' && maxBudget > 0) ? maxBudget : targetStake * 1.05;
+      const target = parseFloat(targetStake) || 100;
+
+      const affordable = pool.filter(s => {
+        const p = parseFloat(s.price) || 0;
+        return p > 10 && p <= budget;
+      });
+
+      if (affordable.length > 0) {
+        affordable.sort((a, b) => {
+          const pa = parseFloat(a.price) || 0;
+          const pb = parseFloat(b.price) || 0;
+          return Math.abs(pa - target) - Math.abs(pb - target);
+        });
+        const pick = affordable[0];
+        const pStr = Number(pick.price).toFixed(2);
+        const mName = pick.marketName || pick.name || 'CS2 Item';
+        const img = pick.image || pick.imageUrl || '/assets/images/default-avatar-small.webp';
+        const ex = pick.extra || { e: 2, g: 18, n: [mName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
+        return {
+          id: String(pick.id || 'shop_' + Date.now()),
+          marketName: mName,
+          price: pStr,
+          image: img,
+          imageUrl: img,
+          extra: ex
+        };
+      }
+
+      const fb = pool[0] || this.fallbackSkins[0];
+      const pStr = Number(Math.min(target, budget)).toFixed(2);
+      return {
+        id: String(fb.id || 'shop_' + Date.now()),
+        marketName: fb.marketName || fb.name || 'CS2 Item',
+        price: pStr,
+        image: fb.image || fb.imageUrl || '/assets/images/default-avatar-small.webp',
+        imageUrl: fb.image || fb.imageUrl || '/assets/images/default-avatar-small.webp',
+        extra: fb.extra || { e: 2, g: 18, n: ['CS2 Item'], r: 15, s: false, t: 16, ch: '4b69ff', st: false }
+      };
+    },
     previewJoin(user, shareToken) {
       this.init();
       const lobby = this.getLobby(shareToken);
+      if (lobby && !lobby.isMine) {
+        lobby._reservedForUser = Date.now() + 60000;
+      }
       const reqAmt = lobby ? parseFloat(lobby.targetAmount) : 100;
       const userBal = Number((user && user.balance) || 0);
       const userInv = Array.isArray(user && user.inventory) ? user.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((user && user.username), (i.id || (i.item && i.item.id)))) : [];
 
       let matchedItems = [];
       let itemsTotal = 0;
-      let scenario = 'shop';
-
-      // 1. Prioritize user inventory skins to cover the stake without forcing site balance
-      // Strict 49.00% to 51.00% odds window:
-      const minTol = Math.ceil(reqAmt * (49.00 / 51.00) * 100) / 100;
-      const maxTol = Math.floor(reqAmt * (51.00 / 49.00) * 100) / 100;
+      let scenario = 'inventory';
+      let boughtShopItem = null;
+      let candidateOptions = [];
 
       // Filter only inventory items that have positive price
       const validItems = userInv.filter(it => {
@@ -5327,87 +5391,178 @@ function getOrGenerateUserProfile(userId) {
       });
 
       if (validItems.length > 0) {
-        const singleCandidates = validItems.filter(it => {
+        // User has inventory skins! Find candidate options and combinations
+        const candidates = [];
+        validItems.forEach(it => {
           const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-          return p >= minTol && p <= maxTol;
+          candidates.push({ items: [it], total: p });
         });
 
-        if (singleCandidates.length > 0) {
-          singleCandidates.sort((a, b) => {
-            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
-            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
-            return Math.abs(pa - reqAmt) - Math.abs(pb - reqAmt);
-          });
-          matchedItems = [singleCandidates[0]];
-          itemsTotal = parseFloat(singleCandidates[0].price || (singleCandidates[0].item && singleCandidates[0].item.price) || 0);
-        } else {
-          const sorted = [...validItems].sort((a, b) => {
-            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
-            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
-            return pb - pa;
-          });
-
-          let currentSum = 0;
-          let combo = [];
-          for (const item of sorted) {
-            const p = parseFloat(item.price || (item.item && item.item.price) || 0);
-            if (p > 0 && (currentSum + p <= maxTol)) {
-              combo.push(item);
-              currentSum += p;
-              if (currentSum >= minTol || combo.length >= 3) break;
+        // Pairs
+        if (validItems.length >= 2 && validItems.length <= 40) {
+          for (let i = 0; i < validItems.length; i++) {
+            const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
+            for (let j = i + 1; j < validItems.length; j++) {
+              const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
+              candidates.push({ items: [validItems[i], validItems[j]], total: pi + pj });
             }
           }
+        }
 
-          if (currentSum >= minTol && currentSum <= maxTol) {
-            matchedItems = combo;
-            itemsTotal = currentSum;
+        // Triplets
+        if (validItems.length >= 3 && validItems.length <= 25) {
+          for (let i = 0; i < validItems.length; i++) {
+            const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
+            for (let j = i + 1; j < validItems.length; j++) {
+              const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
+              for (let k = j + 1; k < validItems.length; k++) {
+                const pk = parseFloat(validItems[k].price || (validItems[k].item && validItems[k].item.price) || 0);
+                candidates.push({ items: [validItems[i], validItems[j], validItems[k]], total: pi + pj + pk });
+              }
+            }
           }
         }
-      }
 
-      const planToken = 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        // 4-items combo if needed
+        if (validItems.length >= 4 && validItems.length <= 15) {
+          for (let i = 0; i < validItems.length; i++) {
+            const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
+            for (let j = i + 1; j < validItems.length; j++) {
+              const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
+              for (let k = j + 1; k < validItems.length; k++) {
+                const pk = parseFloat(validItems[k].price || (validItems[k].item && validItems[k].item.price) || 0);
+                for (let l = k + 1; l < validItems.length; l++) {
+                  const pl = parseFloat(validItems[l].price || (validItems[l].item && validItems[l].item.price) || 0);
+                  candidates.push({ items: [validItems[i], validItems[j], validItems[k], validItems[l]], total: pi + pj + pk + pl });
+                }
+              }
+            }
+          }
+        }
 
-      // If matched skins cover the stake, use inventory with 0 balance!
-      // Otherwise, use site balance with 0 inventory skins touched!
-      let balanceNeeded = 0;
-      if (matchedItems.length > 0) {
-        balanceNeeded = 0;
+        // Sort candidates by closeness to reqAmt
+        candidates.sort((a, b) => Math.abs(a.total - reqAmt) - Math.abs(b.total - reqAmt));
+
+        // Strict 49.00% to 51.00% odds window
+        const minTol = reqAmt * (49.00 / 51.00);
+        const maxTol = reqAmt * (51.00 / 49.00);
+        const inTol = candidates.filter(c => c.total >= minTol && c.total <= maxTol);
+
+        let selectedCand = null;
+        if (inTol.length > 0) {
+          selectedCand = inTol[0];
+        } else {
+          // If none within tight tolerance, pick the single closest candidate from user inventory!
+          selectedCand = candidates[0];
+        }
+
+        matchedItems = selectedCand.items;
+        itemsTotal = selectedCand.total;
         scenario = 'inventory';
-      } else if (userBal >= reqAmt) {
+
+        // Prepare distinct candidate options for the UI switcher
+        const seenTotals = new Set();
+        validItems.forEach(it => {
+          const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+          const pKey = p.toFixed(2);
+          if (!seenTotals.has(pKey)) {
+            seenTotals.add(pKey);
+            candidateOptions.push({
+              id: String(it.id || (it.item && it.item.id)),
+              marketName: it.marketName || (it.item && it.item.marketName) || 'CS2 Item',
+              price: pKey,
+              image: it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '',
+              items: [it],
+              total: p
+            });
+          }
+        });
+        candidates.filter(c => c.items.length > 1).slice(0, 3).forEach(c => {
+          const pKey = c.total.toFixed(2);
+          if (!seenTotals.has(pKey)) {
+            seenTotals.add(pKey);
+            candidateOptions.push({
+              id: 'combo_' + pKey,
+              marketName: `${c.items.length} предм. (${c.items.map(x => (x.marketName || (x.item && x.item.marketName) || '').split('|')[0].trim()).slice(0, 2).join(' + ')})`,
+              price: pKey,
+              image: c.items[0].image || c.items[0].imageUrl || (c.items[0].item && (c.items[0].item.image || c.items[0].item.imageUrl)) || '',
+              items: c.items,
+              total: c.total
+            });
+          }
+        });
+        // Sort candidateOptions so the selected candidate is first
+        candidateOptions.sort((a, b) => Math.abs(a.total - itemsTotal) - Math.abs(b.total - itemsTotal));
+      } else if (userBal >= 20) {
+        // User has NO skins, but has cash balance!
+        // In battles, raw balance can NEVER be staked directly; auto-buy a matching skin from shop!
+        const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
+        const shopPrice = parseFloat(shopSkin.price);
         matchedItems = [];
         itemsTotal = 0;
-        balanceNeeded = reqAmt;
         scenario = 'shop';
+        boughtShopItem = shopSkin;
       } else {
         throw new Error('Недостаточно средств для участия в битве');
       }
 
-      // Construct stakeItems with both flat properties and nested .item for mapInventoryItemToDisplayData
-      const stakeItems = matchedItems.map(it => {
-        const pStr = Number(it.price || (it.item && it.item.price) || 0).toFixed(2);
-        const mName = it.marketName || (it.item && it.item.marketName) || 'CS2 Item';
-        const img = it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '';
-        const ex = it.extra || (it.item && it.item.extra) || { e: 2, g: 18, n: [mName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
-        const innerItem = {
-          id: String(it.id),
-          marketName: mName,
-          price: pStr,
-          image: img,
-          imageUrl: img,
-          extra: ex
-        };
-        return {
-          id: String(it.id),
-          price: pStr,
+      const planToken = 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+      let stakeItems = [];
+      let buyItems = [];
+      let finalStakeAmount = reqAmt;
+
+      if (scenario === 'inventory') {
+        finalStakeAmount = itemsTotal;
+        stakeItems = matchedItems.map(it => {
+          const pStr = Number(it.price || (it.item && it.item.price) || 0).toFixed(2);
+          const mName = it.marketName || (it.item && it.item.marketName) || 'CS2 Item';
+          const img = it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '';
+          const ex = it.extra || (it.item && it.item.extra) || { e: 2, g: 18, n: [mName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
+          const innerItem = {
+            id: String(it.id),
+            marketName: mName,
+            price: pStr,
+            image: img,
+            imageUrl: img,
+            extra: ex
+          };
+          return {
+            id: String(it.id),
+            price: pStr,
+            status: 'available',
+            marketName: mName,
+            imageUrl: img,
+            image: img,
+            extra: ex,
+            userId: String(user ? user.id : ''),
+            item: innerItem
+          };
+        });
+        buyItems = [];
+      } else {
+        // Scenario 'shop': auto-buy real skin from shop using balance
+        const bPrice = parseFloat(boughtShopItem.price);
+        finalStakeAmount = bPrice;
+        const bItem = {
+          id: String(boughtShopItem.id),
+          price: boughtShopItem.price,
           status: 'available',
-          marketName: mName,
-          imageUrl: img,
-          image: img,
-          extra: ex,
+          marketName: boughtShopItem.marketName,
+          imageUrl: boughtShopItem.imageUrl || boughtShopItem.image,
+          image: boughtShopItem.imageUrl || boughtShopItem.image,
+          extra: boughtShopItem.extra,
           userId: String(user ? user.id : ''),
-          item: innerItem
+          item: boughtShopItem
         };
-      });
+        stakeItems = [bItem];
+        buyItems = [
+          {
+            item: boughtShopItem,
+            quantity: 1
+          }
+        ];
+      }
 
       const plan = {
         planToken: planToken,
@@ -5415,25 +5570,18 @@ function getOrGenerateUserProfile(userId) {
         scenario: scenario,
         stakeItems: stakeItems,
         matchedRawItems: matchedItems,
-        balanceStake: balanceNeeded,
-        totalStake: reqAmt,
-        itemsTotal: itemsTotal
+        balanceStake: scenario === 'shop' ? parseFloat(boughtShopItem.price) : 0,
+        totalStake: finalStakeAmount,
+        itemsTotal: itemsTotal,
+        options: candidateOptions || [],
+        selectedOptionIdx: 0,
+        boughtItem: boughtShopItem || null
       };
       this.plans[planToken] = plan;
+      this.activePreviewPlan = plan;
 
-      const buyItems = (balanceNeeded > 0 && scenario !== 'inventory') ? [
-        {
-          item: {
-            id: 'topup_bal',
-            marketName: 'Баланс',
-            price: balanceNeeded.toFixed(2),
-            image: '/assets/images/battles/balance-coins.png',
-            imageUrl: '/assets/images/battles/balance-coins.png',
-            extra: { n: ['Баланс'], g: 1, e: 1, r: 10, ch: 'fdd911' }
-          },
-          quantity: 1
-        }
-      ] : [];
+      const purchaseAmtStr = scenario === 'shop' && boughtShopItem ? boughtShopItem.price : '0.00';
+      const balanceAfterStr = scenario === 'shop' && boughtShopItem ? Math.max(0, userBal - parseFloat(boughtShopItem.price)).toFixed(2) : userBal.toFixed(2);
 
       return {
         planToken: planToken,
@@ -5442,11 +5590,11 @@ function getOrGenerateUserProfile(userId) {
         sell: [],
         buy: buyItems,
         totals: {
-          purchaseAmount: balanceNeeded > 0 ? balanceNeeded.toFixed(2) : '0.00',
+          purchaseAmount: purchaseAmtStr,
           saleProceeds: '0.00',
           balanceBefore: userBal.toFixed(2),
-          balanceAfter: Math.max(0, userBal - balanceNeeded).toFixed(2),
-          stakeAmount: reqAmt.toFixed(2)
+          balanceAfter: balanceAfterStr,
+          stakeAmount: finalStakeAmount.toFixed(2)
         }
       };
     },
@@ -5454,34 +5602,56 @@ function getOrGenerateUserProfile(userId) {
       this.init();
       let lobby = this.getLobby(shareToken);
       if (!lobby) throw new Error('Lobby not found');
+      lobby._reservedForUser = 0;
 
       const plan = (planToken && this.plans[planToken]) ? this.plans[planToken] : null;
       const reqAmt = parseFloat(lobby.targetAmount);
 
       let stakedSkins = [];
-      let balanceStake = reqAmt;
+      let balanceStake = 0;
       let userTotalStake = reqAmt;
-
-      const planItemsTotal = plan ? Number(plan.itemsTotal || (plan.stakeItems && plan.stakeItems.reduce((acc, it) => acc + parseFloat(it.price || (it.item && it.item.price) || 0), 0)) || 0) : 0;
 
       if (plan && plan.scenario === 'inventory' && plan.stakeItems && plan.stakeItems.length > 0) {
         stakedSkins = plan.stakeItems;
         balanceStake = 0;
-        userTotalStake = planItemsTotal > 0 ? planItemsTotal : reqAmt;
-      } else {
-        stakedSkins = [];
-        balanceStake = reqAmt;
-        userTotalStake = reqAmt;
-      }
-
-      if (balanceStake > 0) {
-        if (Number(user.balance || 0) < balanceStake) {
+        userTotalStake = plan.itemsTotal > 0 ? plan.itemsTotal : reqAmt;
+      } else if (plan && plan.scenario === 'shop' && (plan.boughtItem || (plan.stakeItems && plan.stakeItems.length > 0))) {
+        const itemToBuy = plan.boughtItem || (plan.stakeItems[0] && (plan.stakeItems[0].item || plan.stakeItems[0]));
+        const cost = parseFloat(itemToBuy.price);
+        if (Number(user.balance || 0) < cost) {
           throw new Error('Недостаточно средств на балансе');
         }
-        user.balance = Math.round((user.balance - balanceStake) * 100) / 100;
+        user.balance = Math.round((user.balance - cost) * 100) / 100;
         user._lastBalanceUpdate = Date.now();
         LocalDB.saveUser(user);
         WsMock.broadcastBalance(user.balance);
+
+        stakedSkins = plan.stakeItems;
+        balanceStake = 0; // 100% skin duel, no balance stake!
+        userTotalStake = cost;
+      } else {
+        // Fallback join
+        if (Number(user.balance || 0) < reqAmt) {
+          throw new Error('Недостаточно средств на балансе');
+        }
+        const fallbackShop = this.findShopSkinForStake(reqAmt, Number(user.balance || 0));
+        const cost = parseFloat(fallbackShop.price);
+        user.balance = Math.round((user.balance - cost) * 100) / 100;
+        LocalDB.saveUser(user);
+        WsMock.broadcastBalance(user.balance);
+        stakedSkins = [{
+          id: String(fallbackShop.id),
+          price: fallbackShop.price,
+          status: 'available',
+          marketName: fallbackShop.marketName,
+          imageUrl: fallbackShop.imageUrl,
+          image: fallbackShop.imageUrl,
+          extra: fallbackShop.extra,
+          userId: String(user.id),
+          item: fallbackShop
+        }];
+        balanceStake = 0;
+        userTotalStake = cost;
       }
 
       const player2 = {
@@ -5493,7 +5663,22 @@ function getOrGenerateUserProfile(userId) {
         avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
 
-      const p1Stake = parseFloat(lobby.round.stakes[0].amount);
+      // Ensure opponent bot's stake is strictly within [49.00%, 51.00%] odds of user's stake!
+      let p1Stake = parseFloat(lobby.round.stakes[0].amount);
+      const isOpponentBot = !lobby.isMine;
+      if (isOpponentBot) {
+        const totalB = p1Stake + userTotalStake;
+        let c1 = Math.round((p1Stake / totalB) * 10000) / 100;
+        if (c1 < 49.00 || c1 > 51.00) {
+          const newBotSkins = this.getOpponentSkins(userTotalStake, lobby.createdBy.id);
+          lobby.round.stakes[0].items = newBotSkins;
+          p1Stake = newBotSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+          lobby.round.stakes[0].amount = p1Stake.toFixed(2);
+          lobby.round.stakes[0].itemsAmount = p1Stake.toFixed(2);
+          lobby.round.stakes[0].balanceAmount = '0.00';
+        }
+      }
+
       const totalBank = p1Stake + userTotalStake;
       let p1Chance = Math.round((p1Stake / totalBank) * 10000) / 100;
       if (p1Chance < 49.00) p1Chance = 49.00;
@@ -5508,8 +5693,8 @@ function getOrGenerateUserProfile(userId) {
       lobby.round.stakes.push({
         user: player2,
         amount: userTotalStake.toFixed(2),
-        itemsAmount: (stakedSkins.length > 0 ? userTotalStake : 0).toFixed(2),
-        balanceAmount: (stakedSkins.length > 0 ? 0 : balanceStake).toFixed(2),
+        itemsAmount: userTotalStake.toFixed(2),
+        balanceAmount: '0.00', // 100% skin duel!
         rangeFrom: p1MaxRoll + 1,
         rangeTo: 100000,
         chance: userChance,
@@ -5536,7 +5721,7 @@ function getOrGenerateUserProfile(userId) {
       const histEntry = {
         roundId: String(lobby.id),
         shareToken: lobby.shareToken,
-        myStake: reqAmt.toFixed(2),
+        myStake: userTotalStake.toFixed(2),
         opponent: {
           id: String(lobby.createdBy.id),
           nickname: lobby.createdBy.nickname,
@@ -5548,9 +5733,7 @@ function getOrGenerateUserProfile(userId) {
           ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(lobby.createdBy.id) })),
           ...stakedSkins.map(it => ({ ...it, userId: String(user.id) }))
         ],
-        roundBalances: [
-          { userId: String(user.id), amount: balanceStake.toFixed(2) }
-        ],
+        roundBalances: [],
         wonBalance: userWon ? totalBank.toFixed(2) : '0.00',
         rangeFrom: p1MaxRoll + 1,
         rangeTo: 100000,
@@ -5604,7 +5787,7 @@ function getOrGenerateUserProfile(userId) {
           }
         });
         // If user won, return their staked skins too (if inventory skins were staked)
-        if (plan && plan.scenario === 'inventory' && stakedSkins.length > 0) {
+        if (plan && (plan.scenario === 'inventory' || plan.scenario === 'shop') && stakedSkins.length > 0) {
           stakedSkins.forEach(bs => {
             const returnedItem = {
               id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
@@ -5677,6 +5860,10 @@ function getOrGenerateUserProfile(userId) {
     leaveLobby(user, shareToken) {
       const lobby = this.getLobby(shareToken);
       if (!lobby || lobby.status !== 'waiting') return { success: false };
+      if (lobby && !lobby.isMine) {
+        lobby._reservedForUser = 0;
+        return { success: true };
+      }
       lobby.status = 'cancelled';
       lobby.round.status = 'cancelled';
       if (Array.isArray(user.inventory)) {
@@ -9300,7 +9487,106 @@ function getOrGenerateUserProfile(userId) {
 
       // 7. Ensure header icons remain authentic SVGs
       syncHeaderIcons();
+
+      // 8. Render interactive battle skin picker if multiple items available
+      syncBattleJoinSkinPicker();
     });
+
+    function syncBattleJoinSkinPicker() {
+      const modal = document.querySelector('[data-testid="battle-join-modal"]');
+      if (!modal) return;
+      const body = modal.querySelector('[data-testid="battle-join-body"]');
+      const tiles = modal.querySelector('[data-testid="battle-join-tiles"]');
+      if (!body || !tiles) return;
+
+      const plan = BattleSystem.activePreviewPlan;
+      if (!plan || !plan.options || plan.options.length <= 1) {
+        const existing = document.getElementById('upgrader-battle-skin-picker');
+        if (existing) existing.remove();
+        return;
+      }
+
+      let picker = document.getElementById('upgrader-battle-skin-picker');
+      if (!picker) {
+        picker = document.createElement('div');
+        picker.id = 'upgrader-battle-skin-picker';
+        picker.className = 'flex flex-col gap-2 w-full my-2 p-2.5 rounded-xl bg-[#1E1F23]/90 border border-white/5';
+        tiles.parentNode.insertBefore(picker, tiles);
+      }
+
+      if (picker.dataset.planToken === plan.planToken) {
+        return;
+      }
+      picker.dataset.planToken = plan.planToken;
+
+      let html = `
+        <div class="flex items-center justify-between px-1 mb-1">
+          <span class="font-exo text-xs text-white/70 font-medium">Варианты для ставки (${plan.options.length}):</span>
+          <span class="font-exo text-[0.625rem] text-[#FDD911] font-semibold">Выберите предмет</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 w-full">
+      `;
+
+      plan.options.forEach((opt, idx) => {
+        const isSel = idx === (plan.selectedOptionIdx || 0);
+        html += `
+          <button type="button" data-skin-opt-idx="${idx}" class="skin-opt-btn flex items-center gap-2 p-2 rounded-lg border ${isSel ? 'border-[#FDD911] bg-[#FDD911]/15 text-white' : 'border-white/10 bg-[#17181C] hover:border-white/20 text-white/70'} transition-all cursor-pointer">
+            <img src="${opt.image}" class="h-8 w-8 object-contain shrink-0" draggable="false" />
+            <div class="flex flex-col text-left min-w-0">
+              <span class="text-[0.6875rem] font-medium text-white truncate max-w-[100px]">${opt.marketName}</span>
+              <span class="text-xs font-tektur font-semibold text-[#FDD911]">${opt.price} ₽</span>
+            </div>
+          </button>
+        `;
+      });
+      html += `</div>`;
+      picker.innerHTML = html;
+
+      picker.querySelectorAll('.skin-opt-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-skin-opt-idx'), 10);
+          if (isNaN(idx) || !plan.options[idx]) return;
+          plan.selectedOptionIdx = idx;
+          const chosen = plan.options[idx];
+
+          const stakeItems = chosen.items.map(it => {
+            const pStr = Number(it.price || (it.item && it.item.price) || 0).toFixed(2);
+            const mName = it.marketName || (it.item && it.item.marketName) || 'CS2 Item';
+            const img = it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '';
+            const ex = it.extra || (it.item && it.item.extra) || { e: 2, g: 18, n: [mName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
+            const innerItem = { id: String(it.id), marketName: mName, price: pStr, image: img, imageUrl: img, extra: ex };
+            return { id: String(it.id), price: pStr, status: 'available', marketName: mName, imageUrl: img, image: img, extra: ex, userId: String(LocalDB.getActiveUser()?.id || ''), item: innerItem };
+          });
+          plan.stakeItems = stakeItems;
+          plan.matchedRawItems = chosen.items;
+          plan.itemsTotal = chosen.total;
+          plan.totalStake = chosen.total;
+
+          picker.querySelectorAll('.skin-opt-btn').forEach((b, i) => {
+            if (i === idx) {
+              b.className = 'skin-opt-btn flex items-center gap-2 p-2 rounded-lg border border-[#FDD911] bg-[#FDD911]/15 text-white transition-all cursor-pointer';
+            } else {
+              b.className = 'skin-opt-btn flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-[#17181C] hover:border-white/20 text-white/70 transition-all cursor-pointer';
+            }
+          });
+
+          const invTile = modal.querySelector('[data-testid="battle-join-tile-tile-from-inventory"]');
+          if (invTile) {
+            const priceEl = invTile.querySelector('up-battle-price span');
+            if (priceEl) priceEl.textContent = chosen.price;
+            const imgEl = invTile.querySelector('img');
+            if (imgEl && chosen.image) imgEl.src = chosen.image;
+          }
+          const stakeTile = modal.querySelector('[data-testid="battle-join-tile-tile-stake"]');
+          if (stakeTile) {
+            const priceEl = stakeTile.querySelector('up-battle-price span');
+            if (priceEl) priceEl.textContent = chosen.price;
+          }
+        });
+      });
+    }
 
     function syncDomAvatars() {
       const activeUser = LocalDB.getActiveUser();
