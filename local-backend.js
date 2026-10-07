@@ -317,10 +317,32 @@
   }
   window.updateDomId = updateDomId;
 
+  function isAvatarElement(img) {
+    if (!img) return false;
+    // Strictly forbid touching any non-avatar header elements
+    if (img.closest('[data-testid="profile-info-balance"], [data-testid="profile-info-currency-arrow"], [data-testid="profile-info-topup-button"], [data-testid="social-media-link-telegram"], [data-testid*="notification"], up-social-media, up-header-balance, up-button')) {
+      return false;
+    }
+    const btn = img.closest('button');
+    if (btn && btn.getAttribute('data-testid') !== 'profile-info-avatar-button') {
+      return false;
+    }
+    const s = (img.src || '').toLowerCase();
+    const a = (img.alt || '').toLowerCase();
+    if (s.includes('assets/icons') || s.includes('assets/images') || s.includes('.svg') || s.includes('coin') || s.includes('arrow') || s.includes('telegram')) {
+      return false;
+    }
+    if (a.includes('telegram') || a.includes('logo') || a.includes('online') || a.includes('arrow') || a.includes('top-up')) {
+      return false;
+    }
+    return !!img.closest('[data-testid="profile-info-avatar-button"], up-avatar-with-placeholder, .profile-avatar');
+  }
+
   function updateDomAvatar(avatarUrl) {
     if (!avatarUrl) return;
     // Strictly update ONLY the active user's header avatar and user-menu
-    document.querySelectorAll('up-header up-profile-info up-avatar-with-placeholder img, header up-profile-info img, [data-testid*="header-avatar"] img, up-header .profile-avatar').forEach(img => {
+    document.querySelectorAll('up-header [data-testid="profile-info-avatar-button"] img, up-header up-avatar-with-placeholder img, header [data-testid="profile-info-avatar-button"] img, header up-avatar-with-placeholder img, [data-testid*="header-avatar"] img, up-header .profile-avatar').forEach(img => {
+      if (!isAvatarElement(img)) return;
       img.src = avatarUrl;
       img.classList.remove('opacity-0');
       img.classList.add('opacity-100');
@@ -338,6 +360,7 @@
     if ((p.endsWith('/profile') || p.endsWith('/profile/')) && !p.includes('/users/') && !document.querySelector('up-profile-preview')) {
       document.querySelectorAll('up-profile:not(up-profile-preview) up-user-info img, up-profile:not(up-profile-preview) up-avatar-with-placeholder img, up-profile:not(up-profile-preview) .profile-avatar').forEach(img => {
         if (img.closest('up-item-card, up-user-item-card, up-drop-item, up-profile-preview, .items-container')) return;
+        if (!isAvatarElement(img)) return;
         img.src = avatarUrl;
         img.classList.remove('opacity-0');
         img.classList.add('opacity-100');
@@ -3906,10 +3929,10 @@
     botNames: authenticNicknames,
     botAvatars: AUTHENTIC_AVATARS,
     fallbackSkins: [
-      { id: '17441', marketName: 'AK-47 | Redline (Field-Tested)', price: '1450.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f', extra: { e: 5, g: 24, n: ['AK-47', 'Redline', 'Field-Tested'], r: 13, s: false, t: 16, ch: 'b0c3d9', st: false } },
-      { id: '17442', marketName: 'AWP | Atheris (Field-Tested)', price: '280.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f', extra: { e: 2, g: 18, n: ['AWP', 'Atheris', 'Field-Tested'], r: 15, s: false, t: 16, ch: '4b69ff', st: false } },
-      { id: '17443', marketName: 'M4A4 | The Emperor (Field-Tested)', price: '2400.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f', extra: { e: 5, g: 24, n: ['M4A4', 'The Emperor', 'Field-Tested'], r: 13, s: false, t: 16, ch: 'eb4b4b', st: false } },
-      { id: '17444', marketName: 'USP-S | Printstream (Field-Tested)', price: '5200.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f', extra: { e: 2, g: 18, n: ['USP-S', 'Printstream', 'Field-Tested'], r: 15, s: false, t: 16, ch: 'd32ce6', st: false } }
+      { id: '2970', marketName: 'AK-47 | Redline (Field-Tested)', price: '2815.72', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0POlPPNSI_-RHGavzOtyufRkASq2lkxx4W-HnNyqJC3FZwYoC5p0Q7FfthW6wdWxPu-371Pdit5HnyXgznQeHYY5wyA/360fx360f', extra: { e: 3, g: 1, n: ['AK-47', 'Redline', 'Field-Tested'], r: 12, s: false, t: 16, ch: 'd32ce6', st: false } },
+      { id: '2332', marketName: 'AWP | Atheris (Field-Tested)', price: '398.06', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk7uW-V7JkMPWBMWqVxedjva85Girklhl2sWuAmYusICqWbQJxCcclRe4C4Ba5ldOyYeri7gKLg95E02yg2f7FnVOo/360fx360f', extra: { e: 3, g: 3, n: ['AWP', 'Atheris', 'Field-Tested'], r: 16, s: false, t: 16, ch: '8847ff', st: false } },
+      { id: '3085', marketName: 'M4A4 | The Emperor (Field-Tested)', price: '5208.25', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiVI0P_6afBSJf2DC3Wf09F7teVgWiT9kEtxsW_dntepcn2SZgF1CcN3RORe4RTtlN2yYenh7wPXiYxDmS_22jQJsHjOUN0CaQ/360fx360f', extra: { e: 3, g: 14, n: ['M4A4', 'The Emperor', 'Field-Tested'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: false } },
+      { id: '3033', marketName: 'USP-S | Printstream (Field-Tested)', price: '3723.29', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSI-WsG3SA_v5kue99XD2hkBwqjDCAnobsLGXFOwQnCZQmE7MPu0G5l9HhNe7q7lOK2tgXmCn4jiofvCZisboKWfZw5OSJ2G1OXXQx/360fx360f', extra: { e: 3, g: 33, n: ['USP-S', 'Printstream', 'Field-Tested'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: false } }
     ],
     getRandomBot() {
       const activeUser = LocalDB.getActiveUser();
@@ -5494,6 +5517,9 @@
 
       // Check known bots cache first, or deterministic generation from user ID
       const cachedBot = knownBots.get(String(userId));
+      if (cachedBot && cachedBot.bestDrop) {
+        return cachedBot;
+      }
       let hash = 0;
       const strId = String(userId);
       for (let i = 0; i < strId.length; i++) {
@@ -5532,7 +5558,7 @@
         skinName = bestSkin.marketName;
       }
 
-      return {
+      const generated = {
         id: String(userId),
         username: nick,
         nickname: nick,
@@ -5558,6 +5584,8 @@
         },
         bestDropProbability: ((2 + ((numId % 180) / 100)) / 100).toFixed(4)
       };
+      knownBots.set(String(userId), generated);
+      return generated;
     }
 
     // /users/:id/stats or /users/me/stats or /user/stats
@@ -8533,13 +8561,62 @@
 
       // 6. Ensure user avatar is correctly synced in DOM
       syncDomAvatars();
+
+      // 7. Ensure header icons remain authentic SVGs
+      syncHeaderIcons();
     });
 
     function syncDomAvatars() {
       const activeUser = LocalDB.getActiveUser();
       if (!activeUser || !activeUser.avatar) return;
-      document.querySelectorAll('up-header up-profile-info img, header up-profile-info img').forEach(img => {
+      document.querySelectorAll('up-header [data-testid="profile-info-avatar-button"] img, up-header up-avatar-with-placeholder img, header [data-testid="profile-info-avatar-button"] img, header up-avatar-with-placeholder img').forEach(img => {
+        if (!isAvatarElement(img)) return;
         if (img.src !== activeUser.avatar) img.src = activeUser.avatar;
+      });
+    }
+
+    function syncHeaderIcons() {
+      const isGH = (typeof window !== 'undefined') && (window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage'));
+      const pfx = isGH ? '/envyrage' : '';
+
+      // Telegram
+      document.querySelectorAll('[data-testid="social-media-link-telegram"] img').forEach(img => {
+        const targetSrc = pfx + '/assets/images/socials/telegram.svg';
+        if (!img.src || !img.src.includes('telegram.svg')) {
+          img.src = targetSrc;
+          img.style.opacity = '1';
+          img.style.visibility = 'visible';
+        }
+      });
+
+      // Balance coin
+      document.querySelectorAll('[data-testid="profile-info-balance"] img, up-header-balance img').forEach(img => {
+        const targetSrc = pfx + '/assets/icons/coins.svg';
+        if (!img.src || !img.src.includes('coins.svg')) {
+          img.src = targetSrc;
+          img.style.opacity = '1';
+          img.style.visibility = 'visible';
+        }
+      });
+
+      // Currency dropdown arrow
+      document.querySelectorAll('[data-testid="profile-info-currency-arrow"] img').forEach(img => {
+        const targetSrc = pfx + '/assets/images/header/arrow-down.svg';
+        if (!img.src || !img.src.includes('arrow-down.svg')) {
+          img.src = targetSrc;
+          img.style.opacity = '1';
+          img.style.visibility = 'visible';
+        }
+      });
+
+      // Top-up button
+      document.querySelectorAll('[data-testid="profile-info-topup-button"] img, up-button[data-testid="top-up"] img').forEach(img => {
+        const targetSrc = pfx + '/assets/icons/coins-black.svg';
+        if (!img.src || (!img.src.includes('coins-black.svg') && !img.src.includes('top-up-mobile.svg'))) {
+          img.src = targetSrc;
+          img.style.opacity = '1';
+          img.style.visibility = 'visible';
+        }
       });
     }
 
@@ -8584,6 +8661,7 @@
       syncWithdrawingCards();
       syncPushSwitchState();
       syncDomAvatars();
+      syncHeaderIcons();
     }, 1000);
   }
 
