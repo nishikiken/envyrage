@@ -1701,18 +1701,18 @@
 
   // 4. GLOBAL STATS (Site-wide upgrades counter & online counter synced from upgrader.best)
   const GlobalStats = {
-    UPGRADES_KEY: 'upgrader_global_upgrades_v6',
-    displayedCount: 488710000,
-    targetCount: 488710000,
+    UPGRADES_KEY: 'upgrader_global_upgrades_v7',
+    displayedCount: 504000000,
+    targetCount: 504000000,
     getUpgradesCount() {
       try {
         const val = localStorage.getItem(this.UPGRADES_KEY);
         if (val) {
           const num = parseInt(val, 10);
-          if (num > 480000000) return num;
+          if (num > 500000000) return num;
         }
       } catch (e) {}
-      const initial = 488710000;
+      const initial = 504000000;
       this.setUpgradesCount(initial);
       return initial;
     },
@@ -1722,7 +1722,7 @@
       } catch (e) {}
     },
     setTargetCount(target) {
-      if (typeof target === 'number' && target > 480000000) {
+      if (typeof target === 'number' && target > 500000000) {
         if (target > this.targetCount) {
           this.targetCount = target;
         }
@@ -1891,6 +1891,16 @@
               if (isLegacyAccount(accs[k], k)) {
                 delete accs[k];
                 updated = true;
+              } else if (accs[k]) {
+                if (!accs[k].vipTier || !accs[k].tier) {
+                  accs[k].vipTier = 'vip_gold';
+                  accs[k].tier = 'vip_gold';
+                  updated = true;
+                }
+                if (!accs[k].depositsAmount || accs[k].depositsAmount < 25000) {
+                  accs[k].depositsAmount = 30000.0;
+                  updated = true;
+                }
               }
             }
             if (Object.keys(accs).length === 0 && Object.keys(DEFAULT_SEED_ACCOUNTS).length > 0) {
@@ -1961,12 +1971,12 @@
           }
         }
         if (acc) {
-          if (acc.username === 'envy!') {
-            if (!acc.depositsAmount || acc.depositsAmount < 25000) {
-              acc.depositsAmount = 30000.0;
-            }
+          if (!acc.vipTier || !acc.tier) {
             acc.vipTier = 'vip_gold';
             acc.tier = 'vip_gold';
+          }
+          if (!acc.depositsAmount || acc.depositsAmount < 25000) {
+            acc.depositsAmount = 30000.0;
           }
           const beforeDep = acc.depositsAmount;
           this.checkWeeklyVipReset(acc);
@@ -2251,33 +2261,12 @@
 
     static checkWeeklyVipReset(acc) {
       if (!acc) return;
-      if (acc.username === 'envy!') {
-        if (!acc.depositsAmount || acc.depositsAmount < 25000) {
-          acc.depositsAmount = 30000.0;
-        }
+      if (!acc.vipTier || !acc.tier) {
         acc.vipTier = 'vip_gold';
         acc.tier = 'vip_gold';
-        return;
       }
-      const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      if (!acc.vipWeekStart) {
-        acc.vipWeekStart = now;
-      } else {
-        const startTime = typeof acc.vipWeekStart === 'number' ? acc.vipWeekStart : new Date(acc.vipWeekStart).getTime();
-        if (!isNaN(startTime) && (now - startTime >= ONE_WEEK_MS)) {
-          // Reset weekly deposits and VIP tier without mentioning any reset timer on site
-          acc.depositsAmount = 0;
-          acc.vipTier = null;
-          acc.tier = null;
-          acc.vipWeekStart = now;
-          if (typeof WsMock !== 'undefined') {
-            WsMock.broadcast({
-              event: 'users.update_vip',
-              data: { tier: null, depositsAmount: 0 }
-            });
-          }
-        }
+      if (!acc.depositsAmount || acc.depositsAmount < 25000) {
+        acc.depositsAmount = 30000.0;
       }
     }
 
@@ -4107,6 +4096,76 @@
       }
       return lobby;
     },
+    matchBotVsBot(target) {
+      if (!target || target.status !== 'waiting' || (target.round && target.round.stakes && target.round.stakes.length > 1)) {
+        return target;
+      }
+      const opponentBot = this.getRandomBot();
+      while (opponentBot.id === target.createdBy.id) {
+        opponentBot.id = String(Math.floor(100000 + Math.random() * 899999));
+      }
+      const amt = parseFloat(target.targetAmount);
+      const opponentSkins = this.getSkinsForAmount(amt, opponentBot.id);
+      const oppAmt = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      const totalBank = amt + oppAmt;
+
+      const p1Share = amt / totalBank;
+      const p2Share = oppAmt / totalBank;
+      const p1MaxRoll = Math.floor(p1Share * 100000);
+
+      target.round.stakes[0].rangeFrom = 0;
+      target.round.stakes[0].rangeTo = p1MaxRoll;
+      target.round.stakes[0].chance = Number((p1Share * 100).toFixed(2));
+
+      target.round.stakes.push({
+        user: opponentBot,
+        amount: oppAmt.toFixed(2),
+        itemsAmount: oppAmt.toFixed(2),
+        balanceAmount: '0.00',
+        rangeFrom: p1MaxRoll + 1,
+        rangeTo: 100000,
+        chance: Number((p2Share * 100).toFixed(2)),
+        items: opponentSkins
+      });
+
+      const roll = Math.floor(Math.random() * 100000);
+      const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
+
+      target.round.bank = totalBank.toFixed(2);
+      target.round.roll = roll;
+      target.round.maxRoll = 100000;
+      target.round.winnerId = winnerId;
+      target.round.finishedAt = new Date().toISOString();
+      target.round.status = 'finished';
+      target.status = 'finished';
+      target.closedAt = new Date().toISOString();
+      target.finishedTimestamp = Date.now();
+
+      // Register in fast lookup map so room can always load it
+      this.allLobbies.set(target.shareToken, target);
+      this.allLobbies.set(target.id, target);
+
+      // Immediately notify battles list that lobby closed and matched!
+      // This makes Angular's battles list start the 6-second countdown on the battle card!
+      WsMock.broadcast({
+        event: 'battle.lobby_closed',
+        data: {
+          id: target.id,
+          shareToken: target.shareToken,
+          opponent: opponentBot,
+          winnerId: winnerId,
+          secondsLeft: 6
+        }
+      });
+
+      // Broadcast battle.round_finished for spectators
+      WsMock.broadcast({
+        event: 'battle.round_finished',
+        data: target
+      });
+
+      return target;
+    },
     tickBots() {
       // 1. Purge very old finished bot lobbies (> 60s)
       const now = Date.now();
@@ -4121,68 +4180,7 @@
       const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
       if (waiting.length > 0 && Math.random() < 0.65) {
         const target = waiting[Math.floor(Math.random() * waiting.length)];
-        const opponentBot = this.getRandomBot();
-        while (opponentBot.id === target.createdBy.id) {
-          opponentBot.id = String(Math.floor(100000 + Math.random() * 899999));
-        }
-        const amt = parseFloat(target.targetAmount);
-        const opponentSkins = this.getSkinsForAmount(amt, opponentBot.id);
-        const oppAmt = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
-        const totalBank = amt + oppAmt;
-
-        const p1Share = amt / totalBank;
-        const p2Share = oppAmt / totalBank;
-        const p1MaxRoll = Math.floor(p1Share * 100000);
-
-        target.round.stakes[0].rangeFrom = 0;
-        target.round.stakes[0].rangeTo = p1MaxRoll;
-        target.round.stakes[0].chance = Number((p1Share * 100).toFixed(2));
-
-        target.round.stakes.push({
-          user: opponentBot,
-          amount: oppAmt.toFixed(2),
-          itemsAmount: oppAmt.toFixed(2),
-          balanceAmount: '0.00',
-          rangeFrom: p1MaxRoll + 1,
-          rangeTo: 100000,
-          chance: Number((p2Share * 100).toFixed(2)),
-          items: opponentSkins
-        });
-
-        const roll = Math.floor(Math.random() * 100000);
-        const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
-
-        target.round.bank = totalBank.toFixed(2);
-        target.round.roll = roll;
-        target.round.maxRoll = 100000;
-        target.round.winnerId = winnerId;
-        target.round.finishedAt = new Date().toISOString();
-        target.round.status = 'finished';
-        target.status = 'finished';
-        target.closedAt = new Date().toISOString();
-        target.finishedTimestamp = Date.now();
-
-        // Register in fast lookup map so room can always load it
-        this.allLobbies.set(target.shareToken, target);
-        this.allLobbies.set(target.id, target);
-
-        // Immediately notify battles list that lobby closed and matched!
-        // This makes Angular's battles list start the 6-second countdown on the battle card!
-        WsMock.broadcast({
-          event: 'battle.lobby_closed',
-          data: {
-            id: target.id,
-            shareToken: target.shareToken,
-            opponent: opponentBot,
-            winnerId: winnerId
-          }
-        });
-
-        // Broadcast battle.round_finished for spectators
-        WsMock.broadcast({
-          event: 'battle.round_finished',
-          data: target
-        });
+        this.matchBotVsBot(target);
       }
 
       // 3. Keep bot lobby feed fresh with new diverse stakes
@@ -4263,13 +4261,28 @@
     getLobby(tokenOrId) {
       this.init();
       if (!tokenOrId) return null;
+      let lob = null;
       if (this.allLobbies.has(tokenOrId)) {
-        return this.allLobbies.get(tokenOrId);
+        lob = this.allLobbies.get(tokenOrId);
+      } else {
+        lob = this.userLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
+              this.liveLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
+              this.botLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
+              null;
       }
-      return this.userLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
-             this.liveLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
-             this.botLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
-             null;
+      if (!lob && typeof tokenOrId === 'string' && tokenOrId.length >= 10) {
+        // Dynamic fallback so direct link / page refresh never produces 404 "Lobby not found"!
+        lob = this.createBotLobby(1500.0);
+        lob.shareToken = tokenOrId;
+        this.allLobbies.set(tokenOrId, lob);
+      }
+      if (lob && lob.status === 'waiting' && lob.round && lob.round.stakes && lob.round.stakes.length === 1) {
+        const activeUser = LocalDB.getActiveUser();
+        if (!activeUser || !lob.createdBy || lob.createdBy.id !== activeUser.id) {
+          lob = this.matchBotVsBot(lob);
+        }
+      }
+      return lob;
     },
     createLobby(user, body) {
       this.init();
@@ -4570,7 +4583,8 @@
           id: lobby.id,
           shareToken: lobby.shareToken,
           opponent: bot,
-          winnerId: winnerId
+          winnerId: winnerId,
+          secondsLeft: 6
         }
       });
     },
@@ -4586,12 +4600,18 @@
       let scenario = 'shop';
 
       // 1. Prioritize user inventory skins to cover the stake without forcing site balance
-      const tol = (lobby && lobby.tolerancePercent) ? lobby.tolerancePercent : 10;
-      const minTol = reqAmt * (1 - tol / 100);
-      const maxTol = reqAmt * (1 + tol / 100);
+      // Strict tolerance 49% - 51% (±2% max, never allow exceeding maxTol)
+      const minTol = reqAmt * 0.98;
+      const maxTol = reqAmt * 1.02;
 
-      if (userInv.length > 0) {
-        const singleFit = userInv.find(it => {
+      // Filter only inventory items that strictly do NOT exceed maxTol
+      const validItems = userInv.filter(it => {
+        const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+        return p > 0 && p <= maxTol;
+      });
+
+      if (validItems.length > 0) {
+        const singleFit = validItems.find(it => {
           const p = parseFloat(it.price || (it.item && it.item.price) || 0);
           return p >= minTol && p <= maxTol;
         });
@@ -4600,7 +4620,7 @@
           matchedItems = [singleFit];
           itemsTotal = parseFloat(singleFit.price || (singleFit.item && singleFit.item.price) || 0);
         } else {
-          const sorted = [...userInv].sort((a, b) => {
+          const sorted = [...validItems].sort((a, b) => {
             const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
             const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
             return pb - pa;
@@ -4610,14 +4630,14 @@
           let combo = [];
           for (const item of sorted) {
             const p = parseFloat(item.price || (item.item && item.item.price) || 0);
-            if (p > 0 && (currentSum + p <= maxTol || combo.length === 0)) {
+            if (p > 0 && (currentSum + p <= maxTol)) {
               combo.push(item);
               currentSum += p;
               if (currentSum >= minTol || combo.length >= 4) break;
             }
           }
 
-          if (currentSum >= minTol || combo.length > 0) {
+          if (currentSum >= minTol && currentSum <= maxTol) {
             matchedItems = combo;
             itemsTotal = currentSum;
           }
@@ -4626,15 +4646,15 @@
 
       const planToken = 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
-      // If selected skins cover at least the minimum allowed by tolerance, NO SITE BALANCE REQUIRED!
+      // If matched skins cover the stake within strict 49%-51%, use inventory with 0 balance!
+      // Otherwise, use pure site balance with 0 inventory skins touched!
       let balanceNeeded = 0;
-      if (itemsTotal >= minTol) {
+      if (matchedItems.length > 0 && itemsTotal >= minTol && itemsTotal <= maxTol) {
         balanceNeeded = 0;
         scenario = 'inventory';
-      } else if (itemsTotal > 0) {
-        balanceNeeded = Math.max(0, reqAmt - itemsTotal);
-        scenario = 'top-up';
       } else {
+        matchedItems = [];
+        itemsTotal = 0;
         balanceNeeded = reqAmt;
         scenario = 'shop';
       }
@@ -4716,10 +4736,16 @@
 
       let stakedSkins = [];
       let balanceStake = reqAmt;
+      let userTotalStake = reqAmt;
 
-      if (plan && plan.stakeItems && plan.stakeItems.length > 0) {
+      if (plan && plan.scenario === 'inventory' && plan.stakeItems && plan.stakeItems.length > 0) {
         stakedSkins = plan.stakeItems;
-        balanceStake = plan.balanceStake || 0;
+        balanceStake = 0;
+        userTotalStake = plan.itemsTotal || reqAmt;
+      } else {
+        stakedSkins = [];
+        balanceStake = reqAmt;
+        userTotalStake = reqAmt;
       }
 
       if (balanceStake > 0) {
@@ -4740,9 +4766,9 @@
       };
 
       const p1Stake = parseFloat(lobby.round.stakes[0].amount);
-      const totalBank = p1Stake + reqAmt;
+      const totalBank = p1Stake + userTotalStake;
       const p1Share = p1Stake / totalBank;
-      const userShare = reqAmt / totalBank;
+      const userShare = userTotalStake / totalBank;
       const p1MaxRoll = Math.floor(p1Share * 100000);
 
       lobby.round.stakes[0].rangeFrom = 0;
@@ -4751,9 +4777,9 @@
 
       lobby.round.stakes.push({
         user: player2,
-        amount: reqAmt.toFixed(2),
-        itemsAmount: (reqAmt - balanceStake).toFixed(2),
-        balanceAmount: balanceStake.toFixed(2),
+        amount: userTotalStake.toFixed(2),
+        itemsAmount: (stakedSkins.length > 0 ? userTotalStake : 0).toFixed(2),
+        balanceAmount: (stakedSkins.length > 0 ? 0 : balanceStake).toFixed(2),
         rangeFrom: p1MaxRoll + 1,
         rangeTo: 100000,
         chance: Number((userShare * 100).toFixed(2)),
@@ -4818,13 +4844,17 @@
       // Delay inventory mutations by 13.5s so Angular's full countdown (6s), wheel spin (4.5s) and smooth GSAP item transfer animation (2.5s) finish before items are removed/added!
       setTimeout(() => {
         const freshUser = LocalDB.getActiveUser() || user;
-        if (plan && plan.stakeItems && plan.stakeItems.length > 0) {
+        if (plan && plan.scenario === 'inventory' && plan.matchedRawItems && plan.matchedRawItems.length > 0) {
           const stakedIds = new Set((plan.matchedRawItems || []).map(it => String(it.id)));
           freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
           if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
         }
 
         if (userWon) {
+          if (balanceStake > 0) {
+            freshUser.balance = Math.round((freshUser.balance + balanceStake) * 100) / 100;
+            WsMock.broadcastBalance(freshUser.balance);
+          }
           const oppSkins = lobby.round.stakes[0].items || [];
           oppSkins.forEach(bs => {
             const newInvItem = {
@@ -4843,8 +4873,9 @@
               SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
             }
           });
-          // If user won, return their staked skins too
-          stakedSkins.forEach(bs => {
+          // If user won, return their staked skins too (if inventory skins were staked)
+          if (plan && plan.scenario === 'inventory' && stakedSkins.length > 0) {
+            stakedSkins.forEach(bs => {
             const returnedItem = {
               id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
               marketName: bs.marketName,
@@ -4860,6 +4891,7 @@
               SupabaseDB.addInventoryItem(freshUser.id, returnedItem).catch(() => {});
             }
           });
+          }
 
           freshUser.userStats = freshUser.userStats || {};
           freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
@@ -4906,7 +4938,8 @@
           id: lobby.id,
           shareToken: lobby.shareToken,
           opponent: player2,
-          winnerId: winnerId
+          winnerId: winnerId,
+          secondsLeft: 6
         }
       });
       // Broadcast again after 700ms so BattleRoomComponent on /battles/:shareToken catches event and spins roulette
@@ -4921,7 +4954,8 @@
             id: lobby.id,
             shareToken: lobby.shareToken,
             opponent: player2,
-            winnerId: winnerId
+            winnerId: winnerId,
+            secondsLeft: 6
           }
         });
       }, 700);
@@ -5031,9 +5065,9 @@
       const user = LocalDB.getActiveUser();
       let deposits = Number((user && user.depositsAmount) || 0);
       let tier = (user && (user.vipTier || user.tier)) || null;
-      if (user && user.username === 'envy!') {
-        if (deposits < 25000) deposits = 30000.0;
+      if (!tier || deposits < 25000) {
         tier = 'vip_gold';
+        deposits = Math.max(deposits, 30000.0);
       } else {
         if (deposits >= 500000) tier = 'vip_diamond';
         else if (deposits >= 100000) tier = 'vip_platinum';
@@ -5826,9 +5860,9 @@
           newsletterSubscribed: true,
           email: activeUser.email || null,
           isEmailVerified: !!activeUser.email,
-          tier: activeUser.vipTier || activeUser.tier || (activeUser.username === 'envy!' ? 'vip_gold' : null),
-          vipTier: activeUser.vipTier || activeUser.tier || (activeUser.username === 'envy!' ? 'vip_gold' : null),
-          depositsAmount: Number(activeUser.depositsAmount || (activeUser.username === 'envy!' ? 30000 : 0)),
+          tier: activeUser.vipTier || activeUser.tier || 'vip_gold',
+          vipTier: activeUser.vipTier || activeUser.tier || 'vip_gold',
+          depositsAmount: Math.max(Number(activeUser.depositsAmount || 0), 30000.0),
           token: 'local_jwt_token_' + activeUser.id,
           steamProfileLink: 'https://steamcommunity.com/profiles/' + activeUser.id,
           steamTradeLink: activeUser.steamTradeLink || ''
@@ -8601,8 +8635,8 @@
 
       // Currency dropdown arrow
       document.querySelectorAll('[data-testid="profile-info-currency-arrow"] img').forEach(img => {
-        const targetSrc = pfx + '/assets/images/header/arrow-down.svg';
-        if (!img.src || !img.src.includes('arrow-down.svg')) {
+        const targetSrc = pfx + '/assets/icons/arrow-yellow.svg';
+        if (!img.src || !img.src.includes('arrow-yellow.svg')) {
           img.src = targetSrc;
           img.style.opacity = '1';
           img.style.visibility = 'visible';
