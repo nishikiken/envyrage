@@ -319,44 +319,48 @@
 
   function updateDomAvatar(avatarUrl) {
     if (!avatarUrl) return;
-    document.querySelectorAll('up-avatar-with-placeholder').forEach(wrap => {
-      if (wrap.closest('up-profile-preview, up-item-card, up-user-item-card, up-my-items-table, up-desired-items-table')) return;
-      const ph = wrap.querySelector('.skeleton-block, [class*="placeholder"], [class*="skeleton"]');
-      if (ph) ph.style.display = 'none';
-      const img = wrap.querySelector('img');
-      if (img) {
+    // Strictly update ONLY the active user's header avatar and user-menu
+    document.querySelectorAll('up-header up-profile-info up-avatar-with-placeholder img, header up-profile-info img, [data-testid*="header-avatar"] img, up-header .profile-avatar').forEach(img => {
+      img.src = avatarUrl;
+      img.classList.remove('opacity-0');
+      img.classList.add('opacity-100');
+      img.style.opacity = '1';
+      img.style.visibility = 'visible';
+      const wrap = img.closest('up-avatar-with-placeholder');
+      if (wrap) {
+        const ph = wrap.querySelector('.skeleton-block, [class*="placeholder"], [class*="skeleton"]');
+        if (ph) ph.style.display = 'none';
+      }
+    });
+
+    // Own profile page only (NOT /users/:id public profiles, and NOT profile previews!)
+    const p = window.location.pathname;
+    if ((p.endsWith('/profile') || p.endsWith('/profile/')) && !p.includes('/users/')) {
+      document.querySelectorAll('up-profile up-user-info img, up-profile up-avatar-with-placeholder img, up-profile .profile-avatar').forEach(img => {
+        if (img.closest('up-item-card, up-user-item-card, up-drop-item, up-profile-preview, .items-container')) return;
         img.src = avatarUrl;
         img.classList.remove('opacity-0');
         img.classList.add('opacity-100');
         img.style.opacity = '1';
         img.style.visibility = 'visible';
-      }
-    });
-    // Target only header, user menu, and current user's profile avatar; NEVER touch other profiles, items, or skins!
-    document.querySelectorAll('up-user-info img, up-header up-avatar img, header up-avatar img, [data-testid*="header-avatar"] img, .profile-avatar').forEach(el => {
-      if (el.closest('up-item-card, up-user-item-card, up-drop-item, up-drop-item-horizontal, up-best-drop-item, [class*="item-card"], [class*="item_card"], up-my-items-table, up-desired-items-table, up-profile-preview, .items-container, up-battle-stake-item, up-battle-items-strip')) {
-        return;
-      }
-      const s = el.getAttribute('src') || '';
-      if (s.includes('economy/image') || s.includes('steamstatic.com/economy') || s.includes('pricempire') || s.includes('items') || s.includes('weapon') || s.includes('skin')) {
-        return;
-      }
-      if (!s.includes('coin') && !s.includes('arrow') && !s.includes('svg') && !s.includes('badge') && !s.includes('online') && !s.includes('logo') && !s.includes('bell') && !s.includes('gear') && !s.includes('settings') && !s.includes('logout')) {
-        el.src = avatarUrl;
-        el.classList.remove('opacity-0');
-        el.classList.add('opacity-100');
-        el.style.opacity = '1';
-        el.style.visibility = 'visible';
-      }
-    });
+        const wrap = img.closest('up-avatar-with-placeholder');
+        if (wrap) {
+          const ph = wrap.querySelector('.skeleton-block, [class*="placeholder"], [class*="skeleton"]');
+          if (ph) ph.style.display = 'none';
+        }
+      });
+    }
   }
   window.updateDomAvatar = updateDomAvatar;
 
   function updateDomUpgrades(count) {
+    // Only update active user's own profile page, never public user profiles (/users/:id) or profile previews!
+    if (window.location.pathname.includes('/users/') || document.querySelector('up-profile-preview')) return;
     const num = parseInt(count, 10);
     if (isNaN(num)) return;
     const formatted = num.toLocaleString('ru-RU');
     document.querySelectorAll('up-user-stats').forEach(statsComp => {
+      if (statsComp.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       statsComp.querySelectorAll('div').forEach(card => {
         const txt = card.innerText || '';
         if ((txt.includes('Апгрейдов') || txt.includes('Upgrades')) && !txt.includes('Выведено') && !txt.includes('Withdrawn')) {
@@ -369,9 +373,12 @@
   window.updateDomUpgrades = updateDomUpgrades;
 
   function updateDomWithdrawn(amount, count) {
+    // Only update active user's own profile page, never public user profiles (/users/:id) or profile previews!
+    if (window.location.pathname.includes('/users/') || document.querySelector('up-profile-preview')) return;
     const numAmt = parseFloat(amount);
     const numCnt = parseInt(count, 10);
     document.querySelectorAll('up-user-stats').forEach(statsComp => {
+      if (statsComp.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       statsComp.querySelectorAll('div').forEach(card => {
         const txt = card.innerText || '';
         if ((txt.includes('Выведено') || txt.includes('Withdrawn')) && !txt.includes('Апгрейдов') && !txt.includes('Upgrades')) {
@@ -394,8 +401,11 @@
   window.updateDomWithdrawn = updateDomWithdrawn;
 
   function updateDomBestDrop(bestDrop) {
+    // Only update active user's own profile page, never public user profiles (/users/:id) or profile previews!
+    if (window.location.pathname.includes('/users/') || document.querySelector('up-profile-preview')) return;
     const containers = document.querySelectorAll('up-best-drop, [data-testid="profile-best-drop"]');
     containers.forEach(container => {
+      if (container.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
         const sub = container.querySelector('.text-gray, span.text-xs');
         if (sub) sub.textContent = 'Отобразится после первой игры';
@@ -3583,7 +3593,9 @@
     "crossfade", "sideeffect", "offscript", "misconduct", "counterfeit", "unbound", "unseen", "unruly", "unreal.", "untouched"
   ];
 
-  const AUTHENTIC_AVATARS = Array.from({ length: 40 }, (_, i) => '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
+  const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
+  const ghPrefix = isGH ? '/envyrage' : '';
+  const AUTHENTIC_AVATARS = Array.from({ length: 40 }, (_, i) => ghPrefix + '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
 
   let currentBestDrop = {
     id: "167862338",
@@ -3854,50 +3866,6 @@
   window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
 
 
-  // Battle Victory Effects (Fire Animation & Victory Sound)
-  function triggerBattleWinEffects() {
-    try {
-      const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-      const prefix = isGH ? '/envyrage' : '';
-      const audio = new Audio(prefix + '/assets/sounds/battles/battle_win.mp3');
-      audio.volume = 0.9;
-      audio.play().catch(() => {});
-
-      const wheels = document.querySelectorAll('up-battle-wheel');
-      wheels.forEach(w => {
-        w.classList.add('up-battle-wheel-flame');
-        setTimeout(() => {
-          w.classList.remove('up-battle-wheel-flame');
-        }, 6500);
-      });
-    } catch(e) {}
-  }
-
-  // Setup DOM Observer for battle win reveal in battle room
-  try {
-    let lastWinObserved = 0;
-    const observer = new MutationObserver(() => {
-      const room = document.querySelector('[data-testid="battle-room-page"]');
-      if (room) {
-        const transfer = room.getAttribute('upbattlewintransfer') || room.getAttribute('ng-reflect-up-battle-win-transfer');
-        if (transfer !== null && transfer !== '' && transfer !== 'null') {
-          const now = Date.now();
-          if (now - lastWinObserved > 4000) {
-            lastWinObserved = now;
-            triggerBattleWinEffects();
-          }
-        }
-      }
-    });
-    if (document.body) {
-      observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['upbattlewintransfer', 'ng-reflect-up-battle-win-transfer'] });
-    } else {
-      document.addEventListener('DOMContentLoaded', () => {
-        observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['upbattlewintransfer', 'ng-reflect-up-battle-win-transfer'] });
-      });
-    }
-  } catch(e) {}
-
   // =============================================================
   // BATTLE SYSTEM (Case Battles & PvP Duels Engine)
   // =============================================================
@@ -4133,49 +4101,36 @@
         const winnerId = (roll <= p1MaxRoll) ? target.createdBy.id : opponentBot.id;
 
         target.round.bank = totalBank.toFixed(2);
-        // Put in progress with countdown (5s) so users can spectate!
-        target.status = 'in_progress';
-        target.round.status = 'in_progress';
-        target.round.countdownSeconds = 5;
-        target.countdownRemaining = 5;
-        target.round.startedAt = new Date().toISOString();
+        target.round.roll = roll;
+        target.round.maxRoll = 100000;
+        target.round.winnerId = winnerId;
+        target.round.finishedAt = new Date().toISOString();
+        target.round.status = 'finished';
+        target.status = 'finished';
+        target.closedAt = new Date().toISOString();
+        target.finishedTimestamp = Date.now();
 
+        // Register in fast lookup map so room can always load it
+        this.allLobbies.set(target.shareToken, target);
+        this.allLobbies.set(target.id, target);
+
+        // Immediately notify battles list that lobby closed and matched!
+        // This makes Angular's battles list start the 6-second countdown on the battle card!
         WsMock.broadcast({
-          event: 'battle.lobby_updated',
-          data: target
+          event: 'battle.lobby_closed',
+          data: {
+            id: target.id,
+            shareToken: target.shareToken,
+            opponent: opponentBot,
+            winnerId: winnerId
+          }
         });
 
-        // Resolve roll and spin after full countdown
-        setTimeout(() => {
-          target.round.roll = roll;
-          target.round.maxRoll = 100000;
-          target.round.winnerId = winnerId;
-          target.round.finishedAt = new Date().toISOString();
-          target.round.status = 'finished';
-          target.status = 'finished';
-          target.closedAt = new Date().toISOString();
-          target.finishedTimestamp = Date.now();
-
-          WsMock.broadcast({
-            event: 'battle.round_finished',
-            data: target
-          });
-
-          triggerBattleWinEffects();
-
-          // Keep in botLobbies for 45s so users can watch spin before lobby closes
-          setTimeout(() => {
-            WsMock.broadcast({
-              event: 'battle.lobby_closed',
-              data: {
-                id: target.id,
-                shareToken: target.shareToken,
-                opponent: opponentBot,
-                winnerId: winnerId
-              }
-            });
-          }, 45000);
-        }, 5000);
+        // Broadcast battle.round_finished for spectators
+        WsMock.broadcast({
+          event: 'battle.round_finished',
+          data: target
+        });
       }
 
       // 3. Keep bot lobby feed fresh with new diverse stakes
@@ -4455,72 +4410,7 @@
       lobby.closedAt = new Date().toISOString();
 
       if (activeUser) {
-        if (userWon) {
-          if (Array.isArray(activeUser.inventory)) {
-            activeUser.inventory.forEach(it => {
-              if (it.locked_for_battle) it.locked_for_battle = false;
-            });
-          }
-          botSkins.forEach(bs => {
-            const newInvItem = {
-              id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-              marketName: bs.marketName,
-              price: bs.price,
-              image: bs.imageUrl || bs.image,
-              imageUrl: bs.imageUrl || bs.image,
-              extra: bs.extra,
-              obtainedAt: new Date().toISOString()
-            };
-            activeUser.inventory = activeUser.inventory || [];
-            activeUser.inventory.unshift(newInvItem);
-            WsMock.broadcastInventoryItem(newInvItem);
-            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-              SupabaseDB.addInventoryItem(activeUser.id, newInvItem).catch(() => {});
-            }
-          });
-          activeUser.userStats = activeUser.userStats || {};
-          activeUser.userStats.battlesWon = (activeUser.userStats.battlesWon || 0) + 1;
-          activeUser.userStats.profit = Math.round(((activeUser.userStats.profit || 0) + botAmt) * 100) / 100;
-        } else {
-          // USER LOST DUEL: permanently remove lost skins from memory, local storage & Supabase database
-          if (Array.isArray(activeUser.inventory)) {
-            const lostIds = [];
-            activeUser.inventory = activeUser.inventory.filter(it => {
-              if (it.locked_for_battle) {
-                lostIds.push(String(it.id));
-                return false;
-              }
-              return true;
-            });
-            if (lostIds.length > 0) {
-              WsMock.broadcastDeletedItems(lostIds);
-              lostIds.forEach(id => {
-                if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-                  SupabaseDB.removeInventoryItem(id).catch(() => {});
-                }
-              });
-            }
-          }
-          activeUser.userStats = activeUser.userStats || {};
-          activeUser.userStats.profit = Math.round(((activeUser.userStats.profit || 0) - userStake) * 100) / 100;
-        }
-        activeUser.userStats.gamesCount = (activeUser.userStats.gamesCount || 0) + 1;
-        LocalDB.saveUser(activeUser);
-        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-          SupabaseDB.updateUser(activeUser.id || activeUser.username, {
-            inventory: activeUser.inventory,
-            userStats: activeUser.userStats
-          }).catch(e => console.warn(e));
-        }
-
-        // Notify Angular items service to immediately refresh user inventory UI
-        try {
-          if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
-            window.__upgraderItemsService.notifyInventoryUpdate(true);
-          }
-        } catch(e) {}
-
-        // Record into persistent battle history
+        // Record into persistent battle history immediately
         const histEntry = {
           roundId: String(lobby.id),
           shareToken: lobby.shareToken,
@@ -4547,13 +4437,81 @@
           finishedAt: new Date().toISOString()
         };
         LocalDB.addBattleHistory(activeUser.username, histEntry);
+
+        // Delay inventory mutations by 13.5s so Angular's full countdown (6s), wheel spin (4.5s) and smooth GSAP item transfer animation (2.5s) finish before items are removed/added!
+        setTimeout(() => {
+          const freshUser = LocalDB.getActiveUser() || activeUser;
+          if (userWon) {
+            if (Array.isArray(freshUser.inventory)) {
+              freshUser.inventory.forEach(it => {
+                if (it.locked_for_battle) it.locked_for_battle = false;
+              });
+            }
+            botSkins.forEach(bs => {
+              const newInvItem = {
+                id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                marketName: bs.marketName,
+                price: bs.price,
+                image: bs.imageUrl || bs.image,
+                imageUrl: bs.imageUrl || bs.image,
+                extra: bs.extra,
+                obtainedAt: new Date().toISOString()
+              };
+              freshUser.inventory = freshUser.inventory || [];
+              freshUser.inventory.unshift(newInvItem);
+              WsMock.broadcastInventoryItem(newInvItem);
+              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
+              }
+            });
+            freshUser.userStats = freshUser.userStats || {};
+            freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
+            freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + botAmt) * 100) / 100;
+          } else {
+            // USER LOST DUEL: permanently remove lost skins from memory, local storage & Supabase database
+            if (Array.isArray(freshUser.inventory)) {
+              const lostIds = [];
+              freshUser.inventory = freshUser.inventory.filter(it => {
+                if (it.locked_for_battle) {
+                  lostIds.push(String(it.id));
+                  return false;
+                }
+                return true;
+              });
+              if (lostIds.length > 0) {
+                WsMock.broadcastDeletedItems(lostIds);
+                lostIds.forEach(id => {
+                  if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                    SupabaseDB.removeInventoryItem(id).catch(() => {});
+                  }
+                });
+              }
+            }
+            freshUser.userStats = freshUser.userStats || {};
+            freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - userStake) * 100) / 100;
+          }
+          freshUser.userStats.gamesCount = (freshUser.userStats.gamesCount || 0) + 1;
+          LocalDB.saveUser(freshUser);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.updateUser(freshUser.id || freshUser.username, {
+              inventory: freshUser.inventory,
+              userStats: freshUser.userStats
+            }).catch(e => console.warn(e));
+          }
+
+          // Notify Angular items service to refresh user inventory UI
+          try {
+            if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+              window.__upgraderItemsService.notifyInventoryUpdate(true);
+            }
+          } catch(e) {}
+        }, 13500);
       }
 
       WsMock.broadcast({
         event: 'battle.round_finished',
         data: lobby
       });
-      triggerBattleWinEffects();
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -4576,10 +4534,14 @@
       let scenario = 'shop';
 
       // 1. Prioritize user inventory skins to cover the stake without forcing site balance
+      const tol = (lobby && lobby.tolerancePercent) ? lobby.tolerancePercent : 10;
+      const minTol = reqAmt * (1 - tol / 100);
+      const maxTol = reqAmt * (1 + tol / 100);
+
       if (userInv.length > 0) {
         const singleFit = userInv.find(it => {
           const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-          return p >= reqAmt * 0.95 && p <= reqAmt * 1.30;
+          return p >= minTol && p <= maxTol;
         });
 
         if (singleFit) {
@@ -4596,14 +4558,14 @@
           let combo = [];
           for (const item of sorted) {
             const p = parseFloat(item.price || (item.item && item.item.price) || 0);
-            if (p > 0 && (currentSum + p <= reqAmt * 1.30 || combo.length === 0)) {
+            if (p > 0 && (currentSum + p <= maxTol || combo.length === 0)) {
               combo.push(item);
               currentSum += p;
-              if (currentSum >= reqAmt * 0.95 || combo.length >= 4) break;
+              if (currentSum >= minTol || combo.length >= 4) break;
             }
           }
 
-          if (currentSum >= reqAmt * 0.90 || combo.length > 0) {
+          if (currentSum >= minTol || combo.length > 0) {
             matchedItems = combo;
             itemsTotal = currentSum;
           }
@@ -4612,9 +4574,9 @@
 
       const planToken = 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
-      // If selected skins cover at least 95% of reqAmt, NO SITE BALANCE REQUIRED!
+      // If selected skins cover at least the minimum allowed by tolerance, NO SITE BALANCE REQUIRED!
       let balanceNeeded = 0;
-      if (itemsTotal >= reqAmt * 0.95) {
+      if (itemsTotal >= minTol) {
         balanceNeeded = 0;
         scenario = 'inventory';
       } else if (itemsTotal > 0) {
@@ -4706,10 +4668,6 @@
       if (plan && plan.stakeItems && plan.stakeItems.length > 0) {
         stakedSkins = plan.stakeItems;
         balanceStake = plan.balanceStake || 0;
-        // Remove staked skins from user inventory
-        const stakedIds = new Set(plan.matchedRawItems.map(it => String(it.id)));
-        user.inventory = (user.inventory || []).filter(it => !stakedIds.has(String(it.id)));
-        if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
       }
 
       if (balanceStake > 0) {
@@ -4718,14 +4676,6 @@
         }
         user.balance = Math.round((user.balance - balanceStake) * 100) / 100;
         WsMock.broadcastBalance(user.balance);
-      }
-
-      LocalDB.saveUser(user);
-      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-        SupabaseDB.updateUser(user.id || user.username, {
-          balance: user.balance,
-          inventory: user.inventory
-        }).catch(e => console.warn(e));
       }
 
       const player2 = {
@@ -4776,7 +4726,7 @@
       const userWon = (roll > p1MaxRoll);
       const winnerId = userWon ? String(user.id) : String(lobby.createdBy.id);
 
-      // Immediately settle round so playSettledRound triggers roulette spin animation to this exact roll!
+      // Immediately settle round so playSettledRound triggers countdown and spin animation to this exact roll!
       lobby.round.roll = roll;
       lobby.round.maxRoll = 100000;
       lobby.round.winnerId = winnerId;
@@ -4785,78 +4735,7 @@
       lobby.status = 'finished';
       lobby.closedAt = new Date().toISOString();
 
-      if (userWon) {
-        const oppSkins = lobby.round.stakes[0].items || [];
-        oppSkins.forEach(bs => {
-          const newInvItem = {
-            id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-            marketName: bs.marketName,
-            price: bs.price,
-            image: bs.imageUrl || bs.image,
-            imageUrl: bs.imageUrl || bs.image,
-            extra: bs.extra,
-            obtainedAt: new Date().toISOString()
-          };
-          user.inventory = user.inventory || [];
-          user.inventory.unshift(newInvItem);
-          WsMock.broadcastInventoryItem(newInvItem);
-          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-            SupabaseDB.addInventoryItem(user.id, newInvItem).catch(() => {});
-          }
-        });
-        // If user won, return their staked skins too
-        stakedSkins.forEach(bs => {
-          const returnedItem = {
-            id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-            marketName: bs.marketName,
-            price: bs.price,
-            image: bs.imageUrl || bs.image,
-            imageUrl: bs.imageUrl || bs.image,
-            extra: bs.extra,
-            obtainedAt: new Date().toISOString()
-          };
-          user.inventory.unshift(returnedItem);
-          WsMock.broadcastInventoryItem(returnedItem);
-          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-            SupabaseDB.addInventoryItem(user.id, returnedItem).catch(() => {});
-          }
-        });
-
-        user.userStats = user.userStats || {};
-        user.userStats.battlesWon = (user.userStats.battlesWon || 0) + 1;
-        user.userStats.profit = Math.round(((user.userStats.profit || 0) + p1Stake) * 100) / 100;
-      } else {
-        // User LOST DUEL: permanently remove staked items from Supabase database
-        if (plan && Array.isArray(plan.matchedRawItems)) {
-          plan.matchedRawItems.forEach(it => {
-            const iid = String(it.id);
-            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-              SupabaseDB.removeInventoryItem(iid).catch(() => {});
-            }
-          });
-        }
-        user.userStats = user.userStats || {};
-        user.userStats.profit = Math.round(((user.userStats.profit || 0) - reqAmt) * 100) / 100;
-      }
-
-      user.userStats.gamesCount = (user.userStats.gamesCount || 0) + 1;
-      LocalDB.saveUser(user);
-      if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
-        SupabaseDB.updateUser(user.id || user.username, {
-          balance: user.balance,
-          inventory: user.inventory,
-          userStats: user.userStats
-        }).catch(e => console.warn(e));
-      }
-
-      // Notify Angular items service so inventory refreshes immediately
-      try {
-        if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
-          window.__upgraderItemsService.notifyInventoryUpdate(true);
-        }
-      } catch(e) {}
-
-      // Record in persistent battle history
+      // Record in persistent battle history immediately
       const histEntry = {
         roundId: String(lobby.id),
         shareToken: lobby.shareToken,
@@ -4884,11 +4763,91 @@
       };
       LocalDB.addBattleHistory(user.username, histEntry);
 
+      // Delay inventory mutations by 13.5s so Angular's full countdown (6s), wheel spin (4.5s) and smooth GSAP item transfer animation (2.5s) finish before items are removed/added!
+      setTimeout(() => {
+        const freshUser = LocalDB.getActiveUser() || user;
+        if (plan && plan.stakeItems && plan.stakeItems.length > 0) {
+          const stakedIds = new Set((plan.matchedRawItems || []).map(it => String(it.id)));
+          freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
+          if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
+        }
+
+        if (userWon) {
+          const oppSkins = lobby.round.stakes[0].items || [];
+          oppSkins.forEach(bs => {
+            const newInvItem = {
+              id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              marketName: bs.marketName,
+              price: bs.price,
+              image: bs.imageUrl || bs.image,
+              imageUrl: bs.imageUrl || bs.image,
+              extra: bs.extra,
+              obtainedAt: new Date().toISOString()
+            };
+            freshUser.inventory = freshUser.inventory || [];
+            freshUser.inventory.unshift(newInvItem);
+            WsMock.broadcastInventoryItem(newInvItem);
+            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+              SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
+            }
+          });
+          // If user won, return their staked skins too
+          stakedSkins.forEach(bs => {
+            const returnedItem = {
+              id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+              marketName: bs.marketName,
+              price: bs.price,
+              image: bs.imageUrl || bs.image,
+              imageUrl: bs.imageUrl || bs.image,
+              extra: bs.extra,
+              obtainedAt: new Date().toISOString()
+            };
+            freshUser.inventory.unshift(returnedItem);
+            WsMock.broadcastInventoryItem(returnedItem);
+            if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+              SupabaseDB.addInventoryItem(freshUser.id, returnedItem).catch(() => {});
+            }
+          });
+
+          freshUser.userStats = freshUser.userStats || {};
+          freshUser.userStats.battlesWon = (freshUser.userStats.battlesWon || 0) + 1;
+          freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) + p1Stake) * 100) / 100;
+        } else {
+          // User LOST DUEL: permanently remove staked items from Supabase database
+          if (plan && Array.isArray(plan.matchedRawItems)) {
+            plan.matchedRawItems.forEach(it => {
+              const iid = String(it.id);
+              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                SupabaseDB.removeInventoryItem(iid).catch(() => {});
+              }
+            });
+          }
+          freshUser.userStats = freshUser.userStats || {};
+          freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - reqAmt) * 100) / 100;
+        }
+
+        freshUser.userStats.gamesCount = (freshUser.userStats.gamesCount || 0) + 1;
+        LocalDB.saveUser(freshUser);
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          SupabaseDB.updateUser(freshUser.id || freshUser.username, {
+            balance: freshUser.balance,
+            inventory: freshUser.inventory,
+            userStats: freshUser.userStats
+          }).catch(e => console.warn(e));
+        }
+
+        // Notify Angular items service so inventory refreshes immediately
+        try {
+          if (window.__upgraderItemsService && typeof window.__upgraderItemsService.notifyInventoryUpdate === 'function') {
+            window.__upgraderItemsService.notifyInventoryUpdate(true);
+          }
+        } catch(e) {}
+      }, 13500);
+
       WsMock.broadcast({
         event: 'battle.round_finished',
         data: lobby
       });
-      triggerBattleWinEffects();
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -5505,11 +5464,43 @@
       if (localAcc) return localAcc;
 
       // Deterministic bot profile generation from user ID using authentic 150 nicknames and 40 user pack avatars
-      const numId = Math.abs(parseInt(userId, 10)) || 1735123;
+      let hash = 0;
+      const strId = String(userId);
+      for (let i = 0; i < strId.length; i++) {
+        hash = ((hash << 5) - hash) + strId.charCodeAt(i);
+        hash |= 0;
+      }
+      const numId = Math.abs(hash) || 1735123;
       const nick = authenticNicknames[numId % authenticNicknames.length];
       const av = AUTHENTIC_AVATARS[numId % AUTHENTIC_AVATARS.length];
-      const cat = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : BattleSystem.fallbackSkins;
-      const bestSkin = cat[(numId + 7) % cat.length];
+
+      const PRESTIGE_SKINS = [
+        { id: '90001', marketName: '★ StatTrak™ Karambit | Doppler (Ruby) (Factory New)', price: '84500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
+        { id: '90002', marketName: '★ Butterfly Knife | Fade (Factory New)', price: '68200.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' },
+        { id: '90003', marketName: 'AWP | Gungnir (Factory New)', price: '96500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
+        { id: '90004', marketName: 'M4A4 | Howl (Field-Tested)', price: '49800.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
+        { id: '90005', marketName: 'AK-47 | Wild Lotus (Field-Tested)', price: '73000.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' },
+        { id: '90006', marketName: '★ Sport Gloves | Vice (Field-Tested)', price: '41500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
+        { id: '90007', marketName: '★ M9 Bayonet | Gamma Doppler (Emerald) (Factory New)', price: '89900.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
+        { id: '90008', marketName: 'AWP | Dragon Lore (Field-Tested)', price: '61400.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' },
+        { id: '90009', marketName: '★ Talon Knife | Fade (Factory New)', price: '54200.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
+        { id: '90010', marketName: '★ Skeleton Knife | Crimson Web (Minimal Wear)', price: '37800.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' }
+      ];
+
+      const bestSkin = PRESTIGE_SKINS[numId % PRESTIGE_SKINS.length];
+      let weaponType = '';
+      let skinName = '';
+      let wear = '';
+      if (bestSkin.marketName.includes('|')) {
+        const parts = bestSkin.marketName.split('|');
+        weaponType = parts[0].trim();
+        const rem = parts[1].trim();
+        const m = rem.match(/^(.*?)\s*(\([A-Za-z0-9\s-]+\))?$/);
+        skinName = (m && m[1]) ? m[1].trim() : rem;
+        wear = (m && m[2]) ? m[2].trim() : '';
+      } else {
+        skinName = bestSkin.marketName;
+      }
 
       return {
         id: String(userId),
@@ -5519,19 +5510,23 @@
         avatar: av,
         balance: 0,
         isBot: true,
-        upgradesMade: 25 + (numId % 140),
-        withdrawnAmount: 1200 + (numId % 38000),
-        withdrawnItemsCount: 1 + (numId % 12),
+        upgradesMade: 35 + ((numId * 19) % 320),
+        withdrawnAmount: 2400 + ((numId * 97) % 65000),
+        withdrawnItemsCount: 3 + ((numId * 7) % 24),
         bestDrop: {
           id: String(bestSkin.id),
           appId: 730,
           marketName: bestSkin.marketName,
           price: Number(bestSkin.price).toFixed(2),
-          image: bestSkin.image || bestSkin.imageUrl,
-          imageNew: bestSkin.image || bestSkin.imageUrl,
-          extra: bestSkin.extra || { r: 12, ch: 'd32ce6', n: bestSkin.marketName.split('|').map(s=>s.trim()) }
+          image: bestSkin.image,
+          imageNew: bestSkin.image,
+          extra: {
+            r: 16,
+            ch: 'eb4b4b',
+            n: [weaponType, skinName, wear].filter(Boolean)
+          }
         },
-        bestDropProbability: ((15 + (numId % 55)) / 100).toFixed(4)
+        bestDropProbability: ((2 + ((numId % 180) / 100)) / 100).toFixed(4)
       };
     }
 
@@ -5735,9 +5730,9 @@
     }
 
     // /users/:id (View profile of specific user)
-    if (path.match(/\/users\/\d+$/)) {
-      const m = path.match(/\/users\/(\d+)$/);
-      const acc = getOrGenerateUserProfile(m[1]);
+    const userProfileMatch = path.match(/\/users\/([^/?#]+)(?:\?|$)/);
+    if (userProfileMatch && !['me', 'stats', 'inventory', 'balance', 'settings', 'profile', 'notifications'].includes(userProfileMatch[1])) {
+      const acc = getOrGenerateUserProfile(userProfileMatch[1]);
       if (!acc) return { status: 404, data: { message: 'User not found' } };
       return {
         status: 200,
@@ -5747,7 +5742,7 @@
           nickname: acc.nickname,
           image: acc.avatar,
           avatar: acc.avatar,
-          balance: acc.balance,
+          balance: acc.balance || 0,
           steamProfileLink: 'https://steamcommunity.com/profiles/' + acc.id
         }
       };
@@ -6636,37 +6631,6 @@
         background-color: #121316 !important;
       }
 
-      /* Battle Victory Wheel Flame Effects */
-      @keyframes battleWheelFlamePulse {
-        0% {
-          box-shadow: 0 0 25px rgba(255, 120, 0, 0.85), 0 0 55px rgba(255, 60, 0, 0.65), inset 0 0 20px rgba(255, 180, 0, 0.5);
-          filter: drop-shadow(0 0 15px #ff5500);
-        }
-        50% {
-          box-shadow: 0 0 50px rgba(255, 160, 0, 1), 0 0 95px rgba(255, 80, 0, 0.9), inset 0 0 35px rgba(255, 220, 0, 0.8);
-          filter: drop-shadow(0 0 25px #ff9900) drop-shadow(0 0 45px #ff2200);
-        }
-        100% {
-          box-shadow: 0 0 25px rgba(255, 120, 0, 0.85), 0 0 55px rgba(255, 60, 0, 0.65), inset 0 0 20px rgba(255, 180, 0, 0.5);
-          filter: drop-shadow(0 0 15px #ff5500);
-        }
-      }
-      .up-battle-wheel-flame {
-        border-radius: 9999px !important;
-        animation: battleWheelFlamePulse 1.05s infinite ease-in-out !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        position: relative !important;
-      }
-      .up-battle-wheel-flame::after {
-        content: '';
-        position: absolute;
-        inset: -10px;
-        border-radius: 9999px;
-        background: radial-gradient(circle, rgba(255,140,0,0.35) 0%, rgba(255,50,0,0.2) 65%, transparent 100%);
-        pointer-events: none;
-        animation: battleWheelFlamePulse 0.85s infinite alternate !important;
-        z-index: 10;
-      }
 
       /* Always hide promo modal, cookie banner and push notification prompts */
       .cdk-overlay-pane.battle-promo-pane,
