@@ -97,11 +97,6 @@
         margin: 0 !important;
         padding: 0 !important;
       }
-      up-user-info-preview:has([href*="vip.upgrader.pro"]) .rounded-xl:has(img),
-      up-vip-user-card .rounded-xl:has(img) {
-        border: 2px solid #ffd700 !important;
-        box-shadow: 0 0 16px rgba(255, 215, 0, 0.45) !important;
-      }
     `;
     if (document.head) {
       document.head.appendChild(styleEl);
@@ -4555,7 +4550,35 @@ function getOrGenerateUserProfile(userId) {
       }
       setInterval(() => {
         this.tickBots();
-      }, 15000);
+      }, 3500);
+    },
+    isAffordableForUser(targetAmt) {
+      const activeUser = LocalDB.getActiveUser();
+      const userBal = Number((activeUser && activeUser.balance) || 0);
+      if (userBal >= targetAmt) return true;
+      const userInv = Array.isArray(activeUser && activeUser.inventory)
+        ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
+        : [];
+      const minTol = targetAmt * 0.96;
+      const maxTol = targetAmt * 1.04;
+      const validItems = userInv.filter(it => {
+        const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+        return p > 0 && p <= maxTol;
+      });
+      if (validItems.some(it => {
+        const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+        return p >= minTol && p <= maxTol;
+      })) return true;
+      const sorted = [...validItems].sort((a,b) => (parseFloat(b.price || (b.item && b.item.price) || 0)) - (parseFloat(a.price || (a.item && a.item.price) || 0)));
+      let sum = 0;
+      for (const it of sorted) {
+        const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+        if (sum + p <= maxTol) {
+          sum += p;
+          if (sum >= minTol) return true;
+        }
+      }
+      return false;
     },
     createBotLobby(targetAmount) {
       const bot = this.getRandomBot();
@@ -4600,16 +4623,16 @@ function getOrGenerateUserProfile(userId) {
             }
           ]
         },
-        canAfford: true,
+        canAfford: this.isAffordableForUser(finalAmt),
         isMine: false,
         createdAtTime: Date.now()
       };
       this.allLobbies.set(shareToken, lobby);
       this.allLobbies.set(id, lobby);
       this.botLobbies.unshift(lobby);
-      if (this.botLobbies.length > 12) {
+      if (this.botLobbies.length > 14) {
         const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
-        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 9) {
+        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 10) {
           const [removed] = this.botLobbies.splice(oldestWaitingIdx, 1);
           if (removed) {
             WsMock.broadcast({
@@ -4631,7 +4654,14 @@ function getOrGenerateUserProfile(userId) {
       }
       const amt = parseFloat(target.targetAmount);
       const opponentSkins = this.getSkinsForAmount(amt, opponentBot.id);
-      const oppAmt = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+      let oppAmt = opponentSkins.reduce((a, s) => a + parseFloat(s.price), 0);
+
+      // Calibrate so bot vs bot duel is strictly 50/50 (49.5% - 50.5%)
+      if (opponentSkins.length > 0 && Math.abs(oppAmt - amt) > amt * 0.02) {
+        opponentSkins[0].price = Number(amt).toFixed(3);
+        oppAmt = amt;
+      }
+
       const totalBank = amt + oppAmt;
 
       const p1Share = amt / totalBank;
@@ -4691,10 +4721,10 @@ function getOrGenerateUserProfile(userId) {
       return target;
     },
     tickBots() {
-      // 1. Purge finished lobbies older than 12 seconds so completed battles disappear cleanly
+      // 1. Purge finished lobbies older than 18 seconds so completed battles disappear cleanly
       const now = Date.now();
       const purgeFilter = l => {
-        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 12000)) {
+        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 18000)) {
           return false;
         }
         return true;
@@ -4702,18 +4732,33 @@ function getOrGenerateUserProfile(userId) {
       this.botLobbies = this.botLobbies.filter(purgeFilter);
       this.userLobbies = this.userLobbies.filter(purgeFilter);
 
-      // 2. Bot vs Bot: occasionally simulate duel between bots
+      // 2. Bot vs Bot: simulate duels between bots regularly!
       const waiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine);
-      if (waiting.length > 5 && Math.random() < 0.25) {
+      if (waiting.length >= 3 && Math.random() < 0.45) {
         const target = waiting[Math.floor(Math.random() * waiting.length)];
         this.matchBotVsBot(target);
       }
 
-      // 3. Keep bot lobby feed fresh with new diverse stakes (maintain 7-8 waiting lobbies)
+      // 3. Keep bot lobby feed fresh with new diverse stakes (maintain 8-10 waiting lobbies)
       const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
-      if (currentWaitingCount < 7) {
-        const amounts = [115, 230, 480, 890, 1400, 2600, 5200, 9500, 14000];
-        const newAmt = amounts[Math.floor(Math.random() * amounts.length)];
+      if (currentWaitingCount < 8) {
+        let newAmt = 0;
+        const activeUser = LocalDB.getActiveUser();
+        const userInv = Array.isArray(activeUser && activeUser.inventory)
+          ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
+          : [];
+        // If user has inventory skins, with 40% probability spawn a lobby matching one of user's skins!
+        if (userInv.length > 0 && Math.random() < 0.4) {
+          const randInvItem = userInv[Math.floor(Math.random() * userInv.length)];
+          const ip = parseFloat(randInvItem.price || (randInvItem.item && randInvItem.item.price) || 0);
+          if (ip >= 50 && ip <= 50000) {
+            newAmt = Math.round(ip * 100) / 100;
+          }
+        }
+        if (!newAmt) {
+          const amounts = [115, 180, 250, 420, 680, 950, 1500, 2400, 4800, 8500, 15000];
+          newAmt = amounts[Math.floor(Math.random() * amounts.length)];
+        }
         const fresh = this.createBotLobby(newAmt);
         WsMock.broadcast({
           event: 'battle.lobby_created',
@@ -4723,13 +4768,11 @@ function getOrGenerateUserProfile(userId) {
     },
     getLobbies(filter) {
       this.init();
-      const activeUser = LocalDB.getActiveUser();
-
       const userLobs = [...this.userLobbies];
       const botLobs = [...this.botLobbies];
 
       const now = Date.now();
-      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 12000));
+      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 18000));
       const seen = new Set();
       let res = [];
 
@@ -4738,6 +4781,7 @@ function getOrGenerateUserProfile(userId) {
         if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
           l.isMine = true;
+          l.canAfford = this.isAffordableForUser(parseFloat(l.targetAmount));
           res.push(l);
         }
       }
@@ -4747,8 +4791,14 @@ function getOrGenerateUserProfile(userId) {
         if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
           l.isMine = false;
+          l.canAfford = this.isAffordableForUser(parseFloat(l.targetAmount));
           res.push(l);
         }
+      }
+
+      // Filter by affordable if requested
+      if (filter && (filter.affordableOnly || filter.onlyAffordable)) {
+        res = res.filter(l => l.canAfford);
       }
 
       if (filter && filter.priceFrom) {
@@ -5100,9 +5150,9 @@ function getOrGenerateUserProfile(userId) {
       let scenario = 'shop';
 
       // 1. Prioritize user inventory skins to cover the stake without forcing site balance
-      // Strict tolerance 49% - 51% (±2% max, never allow exceeding maxTol)
-      const minTol = reqAmt * 0.98;
-      const maxTol = reqAmt * 1.02;
+      // Strict tolerance 49% - 51% (±4% max, never allow exceeding maxTol)
+      const minTol = reqAmt * 0.96;
+      const maxTol = reqAmt * 1.04;
 
       // Filter only inventory items that strictly do NOT exceed maxTol
       const validItems = userInv.filter(it => {
@@ -5152,11 +5202,13 @@ function getOrGenerateUserProfile(userId) {
       if (matchedItems.length > 0 && itemsTotal >= minTol && itemsTotal <= maxTol) {
         balanceNeeded = 0;
         scenario = 'inventory';
-      } else {
+      } else if (userBal >= reqAmt) {
         matchedItems = [];
         itemsTotal = 0;
         balanceNeeded = reqAmt;
         scenario = 'shop';
+      } else {
+        throw new Error('Недостаточно средств для участия в битве');
       }
 
       // Construct stakeItems with both flat properties and nested .item for mapInventoryItemToDisplayData
@@ -5193,7 +5245,8 @@ function getOrGenerateUserProfile(userId) {
         stakeItems: stakeItems,
         matchedRawItems: matchedItems,
         balanceStake: balanceNeeded,
-        totalStake: reqAmt
+        totalStake: reqAmt,
+        itemsTotal: itemsTotal
       };
       this.plans[planToken] = plan;
 
@@ -5238,12 +5291,14 @@ function getOrGenerateUserProfile(userId) {
       let balanceStake = reqAmt;
       let userTotalStake = reqAmt;
 
-      // Strict tolerance 49% - 51% (±2%)
+      const planItemsTotal = plan ? Number(plan.itemsTotal || (plan.stakeItems && plan.stakeItems.reduce((acc, it) => acc + parseFloat(it.price || (it.item && it.item.price) || 0), 0)) || 0) : 0;
+
+      // Strict tolerance 49% - 51% (±4%)
       if (plan && plan.scenario === 'inventory' && plan.stakeItems && plan.stakeItems.length > 0) {
-        if (plan.itemsTotal >= reqAmt * 0.98 && plan.itemsTotal <= reqAmt * 1.02) {
+        if (planItemsTotal >= reqAmt * 0.96 && planItemsTotal <= reqAmt * 1.04) {
           stakedSkins = plan.stakeItems;
           balanceStake = 0;
-          userTotalStake = plan.itemsTotal;
+          userTotalStake = planItemsTotal;
         } else {
           // Items don't strictly match: fallback to pure balance to maintain 50/50 odds!
           stakedSkins = [];
@@ -5342,8 +5397,10 @@ function getOrGenerateUserProfile(userId) {
 
       // Immediate inventory mutation: Won items are added to user inventory RIGHT NOW!
       const freshUser = LocalDB.getActiveUser() || user;
-      if (plan && plan.scenario === 'inventory' && plan.matchedRawItems && plan.matchedRawItems.length > 0) {
-        const stakedIds = new Set((plan.matchedRawItems || []).map(it => String(it.id)));
+      if (plan && plan.scenario === 'inventory' && ((plan.matchedRawItems && plan.matchedRawItems.length > 0) || (plan.stakeItems && plan.stakeItems.length > 0))) {
+        const rawIds = (plan.matchedRawItems || []).map(it => String(it.id));
+        const stakeIds = (plan.stakeItems || []).map(it => String(it.id));
+        const stakedIds = new Set([...rawIds, ...stakeIds]);
         freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
         if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
       }
@@ -5639,19 +5696,40 @@ function getOrGenerateUserProfile(userId) {
     if (path.includes('/game/battle/lobbies') && path.includes('/join/preview')) {
       const parts = path.split('/game/battle/lobbies/');
       const shareToken = parts[1].split('/join/preview')[0];
-      return {
-        status: 200,
-        data: BattleSystem.previewJoin(activeUser, shareToken)
-      };
+      try {
+        const preview = BattleSystem.previewJoin(activeUser, shareToken);
+        return {
+          status: 200,
+          data: preview
+        };
+      } catch(err) {
+        return {
+          status: 400,
+          data: {
+            code: 'insufficient_join_funds',
+            message: err.message || 'Недостаточно средств для участия в битве'
+          }
+        };
+      }
     }
 
     if (path.includes('/game/battle/lobbies') && path.endsWith('/join') && method === 'POST') {
       const parts = path.split('/game/battle/lobbies/');
       const shareToken = parts[1].split('/join')[0];
-      return {
-        status: 200,
-        data: BattleSystem.joinLobby(activeUser, shareToken, body && body.planToken)
-      };
+      try {
+        return {
+          status: 200,
+          data: BattleSystem.joinLobby(activeUser, shareToken, body && body.planToken)
+        };
+      } catch(err) {
+        return {
+          status: 400,
+          data: {
+            code: 'insufficient_join_funds',
+            message: err.message || 'Недостаточно средств на балансе'
+          }
+        };
+      }
     }
 
     if (path.includes('/game/battle/lobbies') && path.endsWith('/leave') && method === 'POST') {
@@ -5683,9 +5761,11 @@ function getOrGenerateUserProfile(userId) {
       const priceFrom = params ? params.get('priceFrom') : null;
       const priceTo = params ? params.get('priceTo') : null;
       const sort = params ? params.get('sort') : null;
+      const rawAffordable = params ? (params.get('affordableOnly') || params.get('onlyAffordable')) : null;
+      const affordableOnly = rawAffordable === 'true' || rawAffordable === '1' || rawAffordable === true || rawAffordable === 1;
       return {
         status: 200,
-        data: BattleSystem.getLobbies({ priceFrom, priceTo, sort, user: activeUser })
+        data: BattleSystem.getLobbies({ priceFrom, priceTo, sort, affordableOnly, user: activeUser })
       };
     }
 

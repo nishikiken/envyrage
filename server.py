@@ -255,8 +255,8 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             best = snap.get("bestLiveDrop")
             return self.send_json({"bestLiveDrop": best} if best else {"bestLiveDrop": None})
 
-        # Battle lobbies live feed directly synced from upgrader.best
-        if parsed.path in ['/api/game/battle/lobbies/live', '/game/battle/lobbies/live', '/api/game/battle/lobbies', '/game/battle/lobbies']:
+        # Battle lobbies live feed directly synced from upgrader.best (debug/live preview only)
+        if parsed.path in ['/api/game/battle/lobbies/live', '/game/battle/lobbies/live']:
             return self.send_json({"items": LIVE_SYNC.battle_lobbies, "hasMore": False})
 
         # 1. Root redirect to cis/index.html
