@@ -335,8 +335,8 @@
 
     // Own profile page only (NOT /users/:id public profiles, and NOT profile previews!)
     const p = window.location.pathname;
-    if ((p.endsWith('/profile') || p.endsWith('/profile/')) && !p.includes('/users/')) {
-      document.querySelectorAll('up-profile up-user-info img, up-profile up-avatar-with-placeholder img, up-profile .profile-avatar').forEach(img => {
+    if ((p.endsWith('/profile') || p.endsWith('/profile/')) && !p.includes('/users/') && !document.querySelector('up-profile-preview')) {
+      document.querySelectorAll('up-profile:not(up-profile-preview) up-user-info img, up-profile:not(up-profile-preview) up-avatar-with-placeholder img, up-profile:not(up-profile-preview) .profile-avatar').forEach(img => {
         if (img.closest('up-item-card, up-user-item-card, up-drop-item, up-profile-preview, .items-container')) return;
         img.src = avatarUrl;
         img.classList.remove('opacity-0');
@@ -354,12 +354,13 @@
   window.updateDomAvatar = updateDomAvatar;
 
   function updateDomUpgrades(count) {
-    // Only update active user's own profile page, never public user profiles (/users/:id) or profile previews!
-    if (window.location.pathname.includes('/users/') || document.querySelector('up-profile-preview')) return;
+    const p = window.location.pathname;
+    if (!p.endsWith('/profile') && !p.endsWith('/profile/')) return;
+    if (p.includes('/users/') || document.querySelector('up-profile-preview')) return;
     const num = parseInt(count, 10);
     if (isNaN(num)) return;
     const formatted = num.toLocaleString('ru-RU');
-    document.querySelectorAll('up-user-stats').forEach(statsComp => {
+    document.querySelectorAll('up-profile:not(up-profile-preview) up-user-stats').forEach(statsComp => {
       if (statsComp.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       statsComp.querySelectorAll('div').forEach(card => {
         const txt = card.innerText || '';
@@ -373,11 +374,12 @@
   window.updateDomUpgrades = updateDomUpgrades;
 
   function updateDomWithdrawn(amount, count) {
-    // Only update active user's own profile page, never public user profiles (/users/:id) or profile previews!
-    if (window.location.pathname.includes('/users/') || document.querySelector('up-profile-preview')) return;
+    const p = window.location.pathname;
+    if (!p.endsWith('/profile') && !p.endsWith('/profile/')) return;
+    if (p.includes('/users/') || document.querySelector('up-profile-preview')) return;
     const numAmt = parseFloat(amount);
     const numCnt = parseInt(count, 10);
-    document.querySelectorAll('up-user-stats').forEach(statsComp => {
+    document.querySelectorAll('up-profile:not(up-profile-preview) up-user-stats').forEach(statsComp => {
       if (statsComp.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       statsComp.querySelectorAll('div').forEach(card => {
         const txt = card.innerText || '';
@@ -401,9 +403,10 @@
   window.updateDomWithdrawn = updateDomWithdrawn;
 
   function updateDomBestDrop(bestDrop) {
-    // Only update active user's own profile page, never public user profiles (/users/:id) or profile previews!
-    if (window.location.pathname.includes('/users/') || document.querySelector('up-profile-preview')) return;
-    const containers = document.querySelectorAll('up-best-drop, [data-testid="profile-best-drop"]');
+    const p = window.location.pathname;
+    if (!p.endsWith('/profile') && !p.endsWith('/profile/')) return;
+    if (p.includes('/users/') || document.querySelector('up-profile-preview')) return;
+    const containers = document.querySelectorAll('up-profile:not(up-profile-preview) up-best-drop');
     containers.forEach(container => {
       if (container.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
@@ -3593,9 +3596,30 @@
     "crossfade", "sideeffect", "offscript", "misconduct", "counterfeit", "unbound", "unseen", "unruly", "unreal.", "untouched"
   ];
 
-  const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
-  const ghPrefix = isGH ? '/envyrage' : '';
-  const AUTHENTIC_AVATARS = Array.from({ length: 40 }, (_, i) => ghPrefix + '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
+  const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
+  const isGH = (typeof window !== 'undefined') && (window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage'));
+  const basePath = isGH ? (origin + '/envyrage') : origin;
+  const AUTHENTIC_AVATARS = Array.from({ length: 40 }, (_, i) => basePath + '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
+
+  const knownBots = new Map();
+  function registerKnownBot(user) {
+    if (!user || !user.id) return;
+    knownBots.set(String(user.id), user);
+  }
+
+  // Spectator sound muter: Suppress audio when spectating a battle room
+  try {
+    const origAudioPlay = HTMLAudioElement.prototype.play;
+    HTMLAudioElement.prototype.play = function() {
+      if (window.location.pathname.includes('/battles/')) {
+        const meStake = document.querySelector('[data-battle-stake="0"] .is-me, [data-battle-stake="1"] .is-me, up-battle-room [data-testid="battle-room-remove"]');
+        if (!meStake) {
+          return Promise.resolve();
+        }
+      }
+      return origAudioPlay.apply(this, arguments);
+    };
+  } catch(e) {}
 
   let currentBestDrop = {
     id: "167862338",
@@ -3625,13 +3649,14 @@
       const skin = catalog[Math.floor(Math.random() * catalog.length)];
       const nick = authenticNicknames[Math.floor(Math.random() * authenticNicknames.length)];
       const av = AUTHENTIC_AVATARS[Math.floor(Math.random() * AUTHENTIC_AVATARS.length)];
-      return {
+      const botObj = {
         id: String(Date.now() + '_' + Math.floor(Math.random() * 10000)),
         probability: ((Math.random() * 75 + 4) / 100).toFixed(4),
         user: {
           id: String(Math.floor(Math.random() * 900000) + 1735000),
           nickname: nick,
-          image: av
+          image: av,
+          avatar: av
         },
         item: {
           id: String(skin.id),
@@ -3643,6 +3668,8 @@
           extra: skin.extra || { r: 12, ch: 'd32ce6', n: skin.marketName.split('|').map(s=>s.trim()) }
         }
       };
+      registerKnownBot(botObj.user);
+      return botObj;
     }
     if (authenticDropsPool.length > 0) {
       const base = authenticDropsPool[Math.floor(Math.random() * authenticDropsPool.length)];
@@ -3895,7 +3922,7 @@
       const avIdx = Math.floor(Math.random() * this.botAvatars.length);
       const av = this.botAvatars[avIdx];
       const name = this.botNames[idx];
-      return {
+      const bot = {
         id: botId,
         username: name,
         nickname: name,
@@ -3903,6 +3930,8 @@
         image: av,
         avatarUrl: av
       };
+      registerKnownBot(bot);
+      return bot;
     },
     getSkinsForAmount(targetAmount, ownerId) {
       const skins = [];
@@ -5463,7 +5492,8 @@
       const localAcc = LocalDB.getUserById(userId);
       if (localAcc) return localAcc;
 
-      // Deterministic bot profile generation from user ID using authentic 150 nicknames and 40 user pack avatars
+      // Check known bots cache first, or deterministic generation from user ID
+      const cachedBot = knownBots.get(String(userId));
       let hash = 0;
       const strId = String(userId);
       for (let i = 0; i < strId.length; i++) {
@@ -5471,20 +5501,20 @@
         hash |= 0;
       }
       const numId = Math.abs(hash) || 1735123;
-      const nick = authenticNicknames[numId % authenticNicknames.length];
-      const av = AUTHENTIC_AVATARS[numId % AUTHENTIC_AVATARS.length];
+      const nick = (cachedBot && (cachedBot.nickname || cachedBot.username)) || authenticNicknames[numId % authenticNicknames.length];
+      const av = (cachedBot && (cachedBot.avatar || cachedBot.image)) || AUTHENTIC_AVATARS[numId % AUTHENTIC_AVATARS.length];
 
       const PRESTIGE_SKINS = [
-        { id: '90001', marketName: '★ StatTrak™ Karambit | Doppler (Ruby) (Factory New)', price: '84500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
-        { id: '90002', marketName: '★ Butterfly Knife | Fade (Factory New)', price: '68200.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' },
-        { id: '90003', marketName: 'AWP | Gungnir (Factory New)', price: '96500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
-        { id: '90004', marketName: 'M4A4 | Howl (Field-Tested)', price: '49800.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
-        { id: '90005', marketName: 'AK-47 | Wild Lotus (Field-Tested)', price: '73000.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' },
-        { id: '90006', marketName: '★ Sport Gloves | Vice (Field-Tested)', price: '41500.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
-        { id: '90007', marketName: '★ M9 Bayonet | Gamma Doppler (Emerald) (Factory New)', price: '89900.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
-        { id: '90008', marketName: 'AWP | Dragon Lore (Field-Tested)', price: '61400.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' },
-        { id: '90009', marketName: '★ Talon Knife | Fade (Factory New)', price: '54200.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLhx8bf9TZk_PujeKhoH_OSA2ivzOtyufRkAS23zUoj4WSEn42oeHzDaQ90D8d0QeQN5xjpwYeyY-_k4VHdioMTzX7gznQeKbQ00Mw/360fx360f' },
-        { id: '90010', marketName: '★ Skeleton Knife | Crimson Web (Minimal Wear)', price: '37800.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8jsHf_DNk4uL5V7FhNOKSA2iUxPx4j-1gSCGn2xhw6zjSzYysICiUOgV0Cpd1TORe5BW9w922Nrux5gKLitpGz3irhnlXrnE866qixJk/360fx360f' }
+        { id: '11356', marketName: '★ Karambit | Doppler (Factory New)', price: '294525.00', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Q7uCvZaZkNM-SA1iSze91u_FsTju_qhAmoT-Jn4bjJC_4Ml93UtZuRLQPsBawkNfiMbnl5AKMiopCnin7iCJBv31j4rkBBKEg-6zUjV3GY6p9v8dpLWT3Fg', extra: { e: 2, g: 507, n: ['★ Karambit', 'Doppler', 'Factory New'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
+        { id: '11031', marketName: '★ Butterfly Knife | Fade (Field-Tested)', price: '253014.67', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Z-ua6bbZrLOmsD2avx-9ytd5lRi67gVNwsDvSwtqqc3iXZg4kCZYjReYLtRbum9XgYuvm5wbWjtgUzCn3iSsf8G81tFEeH9rw', extra: { e: 3, g: 515, n: ['★ Butterfly Knife', 'Fade', 'Field-Tested'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
+        { id: '15730', marketName: 'AWP | Dragon Lore (Factory New)', price: '1201391.93', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk4veqYaF7IfysCnWRxuF4j-B-Xxa_nBovp3Pdwtj9cC_GaAd0DZdwQu9fuhS4kNy0NePntVTbjYpCyyT_3CgY5i9j_a9cBkcCWUKV/360fx360f', extra: { e: 2, g: 3, n: ['AWP', 'Dragon Lore', 'Factory New'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: false } },
+        { id: '15720', marketName: 'StatTrak™ M4A4 | Howl (Factory New)', price: '1431021.53', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afVSKP-EAm6extF6ueZhW2exwkl2tmTXwt39eCiUPQR2DMN4TOVetUK8xoLgM-K341eM2otDnC6okGoXufBz_TAB/360fx360f', extra: { e: 2, g: 14, n: ['M4A4', 'Howl', 'Factory New'], r: 11, s: false, t: 16, ch: 'e4ae39', st: true } },
+        { id: '15775', marketName: 'StatTrak™ AK-47 | Fire Serpent (Factory New)', price: '524196.76', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwlcK3wiFO0PSneqF-JeKDC2mE_u995LZWTTuygxIYvzSCkpu3cnvFPQB2DpUkROFY4Rntw93lP7i241DbiI1BxSuviHlKunk_6-sHU71lpPMTRLyP4Q/360fx360f', extra: { e: 2, g: 1, n: ['AK-47', 'Fire Serpent', 'Factory New'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: true } },
+        { id: '11559', marketName: '★ Skeleton Knife | Fade (Field-Tested)', price: '175958.55', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1I5PeibbBiLs-SD1iWwOpzj-1gSCGn20kjt2-En9mpcCmQag8hXsciQeJYthW9kILkMLji4g3Ygo8Uznj6jX9XrnE8raC5r1M', extra: { e: 3, g: 525, n: ['★ Skeleton Knife', 'Fade', 'Field-Tested'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
+        { id: '11763', marketName: '★ Talon Knife | Fade (Field-Tested)', price: '159458.76', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1M5vahf6lsK_WBMWaR_uh3tORWQyC0nQlpsmXcnNaoeHuTZwUiWMZzRrVZsxm9x9ThNrzj4QCPjdhNmHj73S9KujErvbhX2ACGeQ', extra: { e: 3, g: 523, n: ['★ Talon Knife', 'Fade', 'Field-Tested'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
+        { id: '11428', marketName: '★ M9 Bayonet | Doppler (Factory New)', price: '259462.50', image: 'https://community.akamai.steamstatic.com/economy/image/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJf3qr3czxb49KzgL-Kmsj2P7rSnXtU6dd9teTA5475jV2urhcDPzCkfMKLcAE-aV3R-lO5l-e61sfqvZ2fyiBgvikqsXiMyRGw1U1Ja-dm06adSULeWfJvEZCxug', extra: { e: 2, g: 508, n: ['★ M9 Bayonet', 'Doppler', 'Factory New'], r: 11, s: false, t: 16, ch: 'ffae39', st: false } },
+        { id: '15830', marketName: '★ Sport Gloves | Vice (Factory New)', price: '624908.23', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk5UvzWCL2kpn2-DFk_OKherB0H_KfG2Kv0ed4u95lRi67gVNx4T-Bw434IHyVb1QlAsd1FOUDthG4xNznMu3m4QXXg90Wzn_33C1I8G81tLaDi_rK/360fx360f', extra: { e: 2, g: null, n: ['★ Sport Gloves', 'Vice', 'Factory New'], r: 11, s: false, t: 6, ch: 'ffae39', st: false } },
+        { id: '19574', marketName: '★ Butterfly Knife | Crimson Web (Factory New)', price: '495322.21', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Z-ua6bbZrLOmsBn6v1ut0o95lRi67gVN04WmDzNz_cX_CalAiW8FxR7MI4xKxmtPlYe7ksgzeiN5BziT83y4f8G81tOxPsLb-/360fx360f', extra: { e: 2, g: null, n: ['★ Butterfly Knife', 'Crimson Web', 'Factory New'], r: 11, s: false, t: 9, ch: 'ffae39', st: false } }
       ];
 
       const bestSkin = PRESTIGE_SKINS[numId % PRESTIGE_SKINS.length];
@@ -5520,7 +5550,7 @@
           price: Number(bestSkin.price).toFixed(2),
           image: bestSkin.image,
           imageNew: bestSkin.image,
-          extra: {
+          extra: bestSkin.extra || {
             r: 16,
             ch: 'eb4b4b',
             n: [weaponType, skinName, wear].filter(Boolean)
@@ -8508,7 +8538,9 @@
     function syncDomAvatars() {
       const activeUser = LocalDB.getActiveUser();
       if (!activeUser || !activeUser.avatar) return;
-      updateDomAvatar(activeUser.avatar);
+      document.querySelectorAll('up-header up-profile-info img, header up-profile-info img').forEach(img => {
+        if (img.src !== activeUser.avatar) img.src = activeUser.avatar;
+      });
     }
 
     function syncPushSwitchState() {
