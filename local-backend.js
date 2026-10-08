@@ -4713,7 +4713,7 @@ function getOrGenerateUserProfile(userId) {
       if (targetAmount && typeof targetAmount === 'number' && targetAmount > 0) {
         const candidates = validPool.filter(s => {
           const p = parseFloat(s.price) || 0;
-          return p >= targetAmount * (49.00 / 51.00) && p <= targetAmount * (51.00 / 49.00);
+          return p >= targetAmount * 0.95 && p <= targetAmount * 1.05;
         });
         if (candidates.length > 0) {
           const pick = candidates[Math.floor(Math.random() * candidates.length)];
@@ -5498,60 +5498,56 @@ function getOrGenerateUserProfile(userId) {
         const maxTol = reqAmt * (51.00 / 49.00);
         const inTol = candidates.filter(c => c.total >= minTol && c.total <= maxTol);
 
+        let selectedCand = null;
         if (inTol.length > 0) {
-          const selectedCand = inTol[0];
-          matchedItems = selectedCand.items;
-          itemsTotal = selectedCand.total;
-          scenario = 'inventory';
-
-          // Prepare distinct candidate options for the UI switcher ONLY from valid candidates in tolerance
-          const seenTotals = new Set();
-          validItems.forEach(it => {
-            const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-            if (p >= minTol && p <= maxTol) {
-              const pKey = p.toFixed(2);
-              if (!seenTotals.has(pKey)) {
-                seenTotals.add(pKey);
-                candidateOptions.push({
-                  id: String(it.id || (it.item && it.item.id)),
-                  marketName: it.marketName || (it.item && it.item.marketName) || 'CS2 Item',
-                  price: pKey,
-                  image: it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '',
-                  items: [it],
-                  total: p
-                });
-              }
-            }
-          });
-          inTol.filter(c => c.items.length > 1).slice(0, 5).forEach(c => {
-            const pKey = c.total.toFixed(2);
-            if (!seenTotals.has(pKey)) {
-              seenTotals.add(pKey);
-              candidateOptions.push({
-                id: 'combo_' + pKey,
-                marketName: `${c.items.length} предм. (${c.items.map(x => (x.marketName || (x.item && x.item.marketName) || '').split('|')[0].trim()).slice(0, 2).join(' + ')})`,
-                price: pKey,
-                image: c.items[0].image || c.items[0].imageUrl || (c.items[0].item && (c.items[0].item.image || c.items[0].item.imageUrl)) || '',
-                items: c.items,
-                total: c.total
-              });
-            }
-          });
-          candidateOptions.sort((a, b) => Math.abs(a.total - itemsTotal) - Math.abs(b.total - itemsTotal));
-        } else if (userBal >= minTol) {
-          // Inventory skins don't match stake, but cash balance is enough to auto-buy matching skin from shop!
-          const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
-          matchedItems = [];
-          itemsTotal = 0;
-          scenario = 'shop';
-          boughtShopItem = shopSkin;
+          selectedCand = inTol[0];
         } else {
-          // User has neither matching skins nor sufficient balance to participate
-          throw new Error('Недостаточно средств для участия в битве');
+          // If none within tight tolerance, pick the single closest candidate from user inventory!
+          selectedCand = candidates[0];
         }
-      } else if (userBal >= (reqAmt * (49.00 / 51.00))) {
-        // User has NO skins, but has cash balance sufficient for this stake!
+
+        matchedItems = selectedCand.items;
+        itemsTotal = selectedCand.total;
+        scenario = 'inventory';
+
+        // Prepare distinct candidate options for the UI switcher
+        const seenTotals = new Set();
+        validItems.forEach(it => {
+          const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+          const pKey = p.toFixed(2);
+          if (!seenTotals.has(pKey)) {
+            seenTotals.add(pKey);
+            candidateOptions.push({
+              id: String(it.id || (it.item && it.item.id)),
+              marketName: it.marketName || (it.item && it.item.marketName) || 'CS2 Item',
+              price: pKey,
+              image: it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '',
+              items: [it],
+              total: p
+            });
+          }
+        });
+        candidates.filter(c => c.items.length > 1).slice(0, 3).forEach(c => {
+          const pKey = c.total.toFixed(2);
+          if (!seenTotals.has(pKey)) {
+            seenTotals.add(pKey);
+            candidateOptions.push({
+              id: 'combo_' + pKey,
+              marketName: `${c.items.length} предм. (${c.items.map(x => (x.marketName || (x.item && x.item.marketName) || '').split('|')[0].trim()).slice(0, 2).join(' + ')})`,
+              price: pKey,
+              image: c.items[0].image || c.items[0].imageUrl || (c.items[0].item && (c.items[0].item.image || c.items[0].item.imageUrl)) || '',
+              items: c.items,
+              total: c.total
+            });
+          }
+        });
+        // Sort candidateOptions so the selected candidate is first
+        candidateOptions.sort((a, b) => Math.abs(a.total - itemsTotal) - Math.abs(b.total - itemsTotal));
+      } else if (userBal >= 20) {
+        // User has NO skins, but has cash balance!
+        // In battles, raw balance can NEVER be staked directly; auto-buy a matching skin from shop!
         const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
+        const shopPrice = parseFloat(shopSkin.price);
         matchedItems = [];
         itemsTotal = 0;
         scenario = 'shop';
@@ -5716,12 +5712,6 @@ function getOrGenerateUserProfile(userId) {
         image: user.avatar || user.image || '/assets/images/default-avatar-small.webp',
         avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
-
-      const minTol = reqAmt * (49.00 / 51.00);
-      const maxTol = reqAmt * (51.00 / 49.00);
-      if (userTotalStake < minTol || userTotalStake > maxTol) {
-        throw new Error('Сумма ставки не соответствует условиям битвы');
-      }
 
       // Ensure opponent bot's stake is strictly within [49.00%, 51.00%] odds of user's stake!
       let p1Stake = parseFloat(lobby.round.stakes[0].amount);
@@ -6134,18 +6124,10 @@ function getOrGenerateUserProfile(userId) {
           data: preview
         };
       } catch(err) {
-        const lob = BattleSystem.getLobby(shareToken);
-        if (lob) lob._reservedForUser = 0;
-        setTimeout(() => {
-          try {
-            const depositBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Пополнить'));
-            if (depositBtn) depositBtn.click();
-          } catch(e) {}
-        }, 300);
         return {
           status: 400,
           data: {
-            code: 'insufficient_funds',
+            code: 'insufficient_join_funds',
             message: err.message || 'Недостаточно средств для участия в битве'
           }
         };
