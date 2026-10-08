@@ -1878,6 +1878,7 @@
 
       acc.bestDrop = null;
       acc.bestDropProbability = null;
+      acc.bestDropReset = true;
       saveAccounts(accounts);
       displayAccount(acc);
 
@@ -1896,6 +1897,28 @@
           SupabaseAdmin.recordUserStats(acc.username, acc.id, { best_drop: null });
         }
       }
+
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          new BroadcastChannel('upgrader_channel').postMessage({
+            type: 'USER_STATS_SYNCED',
+            stats: { bestDrop: null, bestDropProbability: null },
+            username: acc.username,
+            id: acc.id,
+            t: Date.now()
+          });
+        }
+      } catch(e) {}
+
+      try {
+        localStorage.setItem('upgrader_stats_sync', JSON.stringify({
+          type: 'USER_STATS_SYNCED',
+          stats: { bestDrop: null, bestDropProbability: null },
+          username: acc.username,
+          id: acc.id,
+          t: Date.now()
+        }));
+      } catch(e) {}
 
       showToast('✓ Лучший дроп успешно сброшен!');
     }

@@ -505,6 +505,21 @@
     containers.forEach(container => {
       if (container.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
+        const typeSpan = container.querySelector('span.uppercase, span.text-xxxs.text-gray');
+        if (typeSpan) typeSpan.textContent = '';
+        const nameSpan = container.querySelector('span.font-tektur.text-white, span.text-13.font-tektur');
+        if (nameSpan) nameSpan.textContent = '';
+        const wearSpan = container.querySelector('span.text-\\[\\#A7A7A7\\], span[class*="A7A7A7"]');
+        if (wearSpan) wearSpan.textContent = '';
+        const prEl = container.querySelector('.text-gradient-yellow-main, [class*="convert"], [class*="price"]');
+        if (prEl) prEl.textContent = '';
+        const lottieEl = container.querySelector('ng-lottie, [class*="lottie"]');
+        if (lottieEl) lottieEl.style.display = 'none';
+        const imgEl = container.querySelector('img');
+        if (imgEl && !imgEl.src.includes('coin') && !imgEl.src.includes('arrow')) {
+          imgEl.src = '/assets/images/profile/ak47.webp';
+          imgEl.style.display = 'block';
+        }
         const sub = container.querySelector('.text-gray, span.text-xs');
         if (sub) sub.textContent = isEn ? 'Will be displayed after the first game' : 'Отобразится после первой игры';
         return;
@@ -575,8 +590,8 @@
     const isEn = isSiteEnglish();
     try {
       const active = LocalDB.getActiveUser();
-      if (active && active.bestDrop) {
-        updateDomBestDrop(active.bestDrop);
+      if (active) {
+        updateDomBestDrop(active.bestDrop || null);
       }
     } catch(e) {}
     document.querySelectorAll('up-best-drop, [data-testid="profile-best-drop"]').forEach(container => {
@@ -906,8 +921,15 @@
                 if (u.upgrades_made !== undefined) accounts[uname].upgradesMade = Number(u.upgrades_made);
                 if (u.withdrawn_amount !== undefined) accounts[uname].withdrawnAmount = Number(u.withdrawn_amount);
                 if (u.withdrawn_count !== undefined) accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count);
-                if (u.best_drop !== undefined && u.best_drop !== null) {
+                if (accounts[uname].bestDropReset) {
+                  accounts[uname].bestDrop = null;
+                  accounts[uname].bestDropProbability = null;
+                } else if (u.best_drop !== undefined && u.best_drop !== null) {
                   accounts[uname].bestDrop = u.best_drop;
+                } else if (u.best_drop === null) {
+                  accounts[uname].bestDrop = null;
+                  accounts[uname].bestDropProbability = null;
+                  accounts[uname].bestDropReset = true;
                 } else if (!accounts[uname].bestDrop && DEFAULT_SEED_ACCOUNTS[uname] && DEFAULT_SEED_ACCOUNTS[uname].bestDrop) {
                   accounts[uname].bestDrop = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[uname].bestDrop));
                 }
@@ -938,7 +960,7 @@
                   upgradesMade: Number(u.upgrades_made || 0),
                   withdrawnAmount: Number(u.withdrawn_amount || 0),
                   withdrawnItemsCount: Number(u.withdrawn_count || 0),
-                  bestDrop: u.best_drop || (DEFAULT_SEED_ACCOUNTS[uname] ? JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[uname].bestDrop)) : null),
+                  bestDrop: (u.best_drop !== undefined && u.best_drop !== null) ? u.best_drop : (u.best_drop === null ? null : (DEFAULT_SEED_ACCOUNTS[uname] ? JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[uname].bestDrop)) : null)),
                   bestDropProbability: (u.best_drop && u.best_drop.probability) || null,
                   inventoryHistory: LocalDB.getInventoryHistory(uname),
                   gamesHistory: LocalDB.getGamesHistory(uname),
@@ -971,6 +993,19 @@
               updateDomUpgrades(currentActive.upgradesMade);
               updateDomWithdrawn(currentActive.withdrawnAmount, currentActive.withdrawnItemsCount);
               updateDomBestDrop(currentActive.bestDrop);
+              try {
+                if (window.__upgraderUserState && window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+                  const cur = window.__upgraderUserState.userStats() || {};
+                  window.__upgraderUserState.userStats.set({
+                    ...cur,
+                    upgradesMade: currentActive.upgradesMade || 0,
+                    withdrawnAmount: currentActive.withdrawnAmount || 0,
+                    withdrawnItemsCount: currentActive.withdrawnItemsCount || 0,
+                    bestDrop: currentActive.bestDrop || null,
+                    bestDropProbability: currentActive.bestDropProbability || null
+                  });
+                }
+              } catch(e) {}
               WsMock.broadcastProfile(currentActive);
               WsMock.broadcastStats({
                 upgradesMade: currentActive.upgradesMade || 0,
@@ -1418,11 +1453,26 @@
 
             // 7. Sync Best Drop from cloud (strictly from users table)
             const cloudBestDrop = cloudUser.best_drop !== undefined ? cloudUser.best_drop : undefined;
-            if (cloudBestDrop !== undefined) {
+            if (activeUser.bestDropReset && cloudBestDrop !== null) {
+              // The user's best drop was explicitly reset by admin! Do NOT restore stale cloud drop.
+              // Push the reset to Supabase to keep cloud in sync.
+              if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                const targetQuery = `or=(id.eq.${encodeURIComponent(activeUser.id)},username.eq.${encodeURIComponent(activeUser.username)})`;
+                fetch(`${url}/rest/v1/users?${targetQuery}`, {
+                  method: 'PATCH',
+                  headers: this.getHeaders(),
+                  body: JSON.stringify({ best_drop: null, updated_at: new Date().toISOString() })
+                }).catch(() => {});
+              }
+            } else if (cloudBestDrop !== undefined) {
               const prevDropStr = JSON.stringify(activeUser.bestDrop || null);
               const nextDropStr = JSON.stringify(cloudBestDrop || null);
               if (prevDropStr !== nextDropStr) {
                 activeUser.bestDrop = cloudBestDrop;
+                if (cloudBestDrop === null) {
+                  activeUser.bestDropProbability = null;
+                  activeUser.bestDropReset = true;
+                }
                 statsChanged = true;
               }
             }
@@ -1439,6 +1489,10 @@
                 accounts[activeUser.username].withdrawnAmount = activeUser.withdrawnAmount;
                 accounts[activeUser.username].withdrawnItemsCount = activeUser.withdrawnItemsCount;
                 accounts[activeUser.username].bestDrop = activeUser.bestDrop;
+                if (activeUser.bestDrop === null) {
+                  accounts[activeUser.username].bestDropProbability = null;
+                  accounts[activeUser.username].bestDropReset = true;
+                }
               }
               LocalDB.saveAccounts(accounts);
               LocalDB.setActiveUser(activeUser.username);
@@ -2036,10 +2090,6 @@
                   accs[k].depositsAmount = 30000.0;
                   updated = true;
                 }
-                if (DEFAULT_SEED_ACCOUNTS[k] && !accs[k].bestDrop && DEFAULT_SEED_ACCOUNTS[k].bestDrop) {
-                  accs[k].bestDrop = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[k].bestDrop));
-                  updated = true;
-                }
               }
             }
             if (Object.keys(accs).length === 0 && Object.keys(DEFAULT_SEED_ACCOUNTS).length > 0) {
@@ -2140,10 +2190,12 @@
 
     static updateAccountAdmin(idOrUsername, updates) {
       const accounts = this.getAccounts();
-      const str = String(idOrUsername).trim();
+      const str = String(idOrUsername).trim().toLowerCase();
       let targetKey = null;
       for (const uname in accounts) {
-        if (String(accounts[uname].id) === str || uname.toLowerCase() === str.toLowerCase()) {
+        const a = accounts[uname];
+        if (!a) continue;
+        if (String(a.id).toLowerCase() === str || uname.toLowerCase() === str || (a.username && a.username.toLowerCase() === str) || (a.nickname && a.nickname.toLowerCase() === str)) {
           targetKey = uname;
           break;
         }
@@ -2159,6 +2211,16 @@
       if (updates.resetBestDrop) {
         acc.bestDrop = null;
         acc.bestDropProbability = null;
+        acc.bestDropReset = true;
+        if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+          const sbUrl = SupabaseDB.getUrl();
+          const targetQuery = `or=(id.eq.${encodeURIComponent(acc.id || acc.username)},username.eq.${encodeURIComponent(acc.username)})`;
+          fetch(`${sbUrl}/rest/v1/users?${targetQuery}`, {
+            method: 'PATCH',
+            headers: SupabaseDB.getHeaders(),
+            body: JSON.stringify({ best_drop: null, updated_at: new Date().toISOString() })
+          }).catch(() => {});
+        }
       }
       if (updates.balance !== undefined) {
         acc.balance = parseFloat(updates.balance) || 0;
@@ -2166,8 +2228,29 @@
 
       this.saveAccounts(accounts);
       const active = this.getActiveUser();
-      if (active && (active.username === acc.username || String(active.id) === String(acc.id))) {
+      if (active && (active.username === acc.username || String(active.id) === String(acc.id) || (active.nickname && active.nickname.toLowerCase() === (acc.nickname || '').toLowerCase()))) {
         this.setActiveUser(acc.username);
+        try {
+          if (window.__upgraderUserState && window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+            const cur = window.__upgraderUserState.userStats() || {};
+            window.__upgraderUserState.userStats.set({
+              ...cur,
+              upgradesMade: acc.upgradesMade !== undefined ? acc.upgradesMade : cur.upgradesMade,
+              withdrawnAmount: acc.withdrawnAmount !== undefined ? acc.withdrawnAmount : cur.withdrawnAmount,
+              withdrawnItemsCount: acc.withdrawnItemsCount !== undefined ? acc.withdrawnItemsCount : cur.withdrawnItemsCount,
+              bestDrop: acc.bestDrop || null,
+              bestDropProbability: acc.bestDropProbability || null
+            });
+          }
+        } catch(e) {}
+        updateDomBestDrop(acc.bestDrop || null);
+        WsMock.broadcastStats({
+          upgradesMade: acc.upgradesMade || 0,
+          withdrawnAmount: acc.withdrawnAmount || 0,
+          withdrawnItemsCount: acc.withdrawnItemsCount || 0,
+          bestDrop: acc.bestDrop || null,
+          bestDropProbability: acc.bestDropProbability || null
+        });
         window.dispatchEvent(new CustomEvent('upgrader:user-updated', { detail: acc }));
       }
       return acc;
@@ -2686,6 +2769,7 @@
         if (targetPrice >= currentBestPrice) {
           acc.bestDrop = targetSkin;
           acc.bestDropProbability = chance;
+          delete acc.bestDropReset;
         }
 
         // Record in inventory history
@@ -3001,6 +3085,41 @@
       const targetUser = localStorage.getItem('upgrader_target_user_rig');
       const targetId = localStorage.getItem('upgrader_target_id_rig');
       applyLiveRigUpdate({ mode, customChance: customVal, targetUser, targetId });
+    } else if (e.key === 'upgrader_stats_sync' && e.newValue) {
+      try {
+        const payload = JSON.parse(e.newValue);
+        if (payload && payload.type === 'USER_STATS_SYNCED') {
+          const activeUser = LocalDB.getActiveUser();
+          if (activeUser && (!payload.username || payload.username === activeUser.username)) {
+            if (payload.stats && payload.stats.bestDrop === null) {
+              activeUser.bestDrop = null;
+              activeUser.bestDropProbability = null;
+              activeUser.bestDropReset = true;
+              const accs = LocalDB.getAccounts();
+              if (accs[activeUser.username]) {
+                accs[activeUser.username].bestDrop = null;
+                accs[activeUser.username].bestDropProbability = null;
+                accs[activeUser.username].bestDropReset = true;
+                LocalDB.saveAccounts(accs);
+              }
+              try {
+                if (window.__upgraderUserState && window.__upgraderUserState.userStats && typeof window.__upgraderUserState.userStats.set === 'function') {
+                  const cur = window.__upgraderUserState.userStats() || {};
+                  window.__upgraderUserState.userStats.set({ ...cur, bestDrop: null, bestDropProbability: null });
+                }
+              } catch(err) {}
+              updateDomBestDrop(null);
+              WsMock.broadcastStats({
+                upgradesMade: activeUser.upgradesMade || 0,
+                withdrawnAmount: activeUser.withdrawnAmount || 0,
+                withdrawnItemsCount: activeUser.withdrawnItemsCount || 0,
+                bestDrop: null,
+                bestDropProbability: null
+              });
+            }
+          }
+        }
+      } catch(err) {}
     } else if (e.key === STORAGE_ACCOUNTS_KEY) {
       const activeUser = LocalDB.getActiveUser();
       if (activeUser) {
@@ -3072,8 +3191,12 @@
             if (stats.bestDrop !== undefined) {
               const prevDropStr = JSON.stringify(activeUser.bestDrop || null);
               const nextDropStr = JSON.stringify(stats.bestDrop || null);
-              if (prevDropStr !== nextDropStr) {
+              if (prevDropStr !== nextDropStr || stats.bestDrop === null) {
                 activeUser.bestDrop = stats.bestDrop;
+                if (stats.bestDrop === null) {
+                  activeUser.bestDropProbability = null;
+                  activeUser.bestDropReset = true;
+                }
                 statsChanged = true;
                 updateDomBestDrop(stats.bestDrop);
               }
@@ -3109,6 +3232,10 @@
                 accounts[activeUser.username].withdrawnAmount = activeUser.withdrawnAmount;
                 accounts[activeUser.username].withdrawnItemsCount = activeUser.withdrawnItemsCount;
                 accounts[activeUser.username].bestDrop = activeUser.bestDrop;
+                if (activeUser.bestDrop === null) {
+                  accounts[activeUser.username].bestDropProbability = null;
+                  accounts[activeUser.username].bestDropReset = true;
+                }
                 if (stats.inventory) accounts[activeUser.username].inventory = activeUser.inventory;
               }
               LocalDB.saveAccounts(accounts);
@@ -5366,7 +5493,7 @@ function getOrGenerateUserProfile(userId) {
         data: target
       });
 
-      // Schedule finalization after 13 seconds (10s countdown + 3s wheel spin)
+      // Schedule finalization after 10 seconds
       setTimeout(() => {
         target.round.status = 'finished';
         target.status = 'finished';
@@ -5388,10 +5515,11 @@ function getOrGenerateUserProfile(userId) {
             opponent: opponentBot,
             winnerId: winnerId,
             secondsLeft: 0,
+            status: 'finished',
             isLeaving: true
           }
         });
-      }, 13000);
+      }, 10000);
 
       return target;
     },
@@ -5403,8 +5531,9 @@ function getOrGenerateUserProfile(userId) {
       const purgeFilter = l => {
         const isFinished = (l.status === 'finished');
         const isCancelled = (l.status === 'cancelled');
+        const isStartedAndOver = (l.startedAt && (now - l.startedAt >= 10000));
         const isStale = (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting');
-        if (isFinished || isCancelled || isStale) {
+        if (isFinished || isCancelled || isStartedAndOver || isStale) {
           purged.push(l);
           return false;
         }
@@ -5484,6 +5613,7 @@ function getOrGenerateUserProfile(userId) {
       const now = Date.now();
       const isFresh = l => {
         if (!l || l.status === 'cancelled' || l.status === 'finished') return false;
+        if (l.startedAt && (now - l.startedAt >= 10000)) return false;
         if (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting') return false;
         return true;
       };
@@ -6013,6 +6143,7 @@ function getOrGenerateUserProfile(userId) {
         data: lobby
       });
 
+      lobby.startedAt = Date.now();
       setTimeout(() => {
         lobby.round.status = 'finished';
         lobby.status = 'finished';
@@ -6033,10 +6164,11 @@ function getOrGenerateUserProfile(userId) {
             opponent: bot,
             winnerId: winnerId,
             secondsLeft: 0,
+            status: 'finished',
             isLeaving: true
           }
         });
-      }, 13000);
+      }, 10000);
     },
     findShopSkinForStake(targetStake, maxBudget) {
       let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
@@ -6620,6 +6752,7 @@ function getOrGenerateUserProfile(userId) {
         data: lobby
       });
 
+      lobby.startedAt = Date.now();
       setTimeout(() => {
         lobby.round.status = 'finished';
         lobby.status = 'finished';
@@ -6642,10 +6775,11 @@ function getOrGenerateUserProfile(userId) {
             opponent: player2,
             winnerId: winnerId,
             secondsLeft: 0,
+            status: 'finished',
             isLeaving: true
           }
         });
-      }, 13000);
+      }, 10000);
 
       return lobby;
     },
