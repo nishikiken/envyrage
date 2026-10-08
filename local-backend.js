@@ -5017,9 +5017,45 @@ function getOrGenerateUserProfile(userId) {
         localStorage.setItem('upgrader_recent_finished_lobbies', JSON.stringify(clean.slice(0, 30)));
       } catch(e) {}
     },
+    saveActiveLobby(lob) {
+      if (!lob) return;
+      try {
+        const raw = localStorage.getItem('upgrader_active_lobbies');
+        const list = raw ? JSON.parse(raw) : [];
+        const clean = list.filter(l => l.shareToken !== lob.shareToken && l.id !== lob.id && (Date.now() - (l.startedAt || l.createdAtTime || 0) < 90000));
+        clean.unshift(lob);
+        localStorage.setItem('upgrader_active_lobbies', JSON.stringify(clean.slice(0, 30)));
+      } catch(e) {}
+    },
+    removeActiveLobby(lob) {
+      if (!lob) return;
+      try {
+        const raw = localStorage.getItem('upgrader_active_lobbies');
+        if (raw) {
+          const list = JSON.parse(raw);
+          const clean = list.filter(l => l.shareToken !== lob.shareToken && l.id !== lob.id);
+          localStorage.setItem('upgrader_active_lobbies', JSON.stringify(clean));
+        }
+      } catch(e) {}
+    },
     init() {
       if (this.initialized) return;
       this.initialized = true;
+      try {
+        const activeSaved = localStorage.getItem('upgrader_active_lobbies');
+        if (activeSaved) {
+          const arr = JSON.parse(activeSaved);
+          for (const lob of arr) {
+            if (lob && lob.shareToken && (Date.now() - (lob.startedAt || lob.createdAtTime || 0) < 90000)) {
+              this.allLobbies.set(lob.shareToken, lob);
+              this.allLobbies.set(lob.id, lob);
+              if (lob.status === 'waiting' && !lob.isMine && !this.botLobbies.some(b => b.shareToken === lob.shareToken)) {
+                this.botLobbies.push(lob);
+              }
+            }
+          }
+        }
+      } catch(e) {}
       try {
         const saved = localStorage.getItem('upgrader_user_lobbies');
         if (saved) {
@@ -5053,56 +5089,82 @@ function getOrGenerateUserProfile(userId) {
       }
       setInterval(() => {
         this.tickBots();
-      }, 2000);
+      }, 1000);
+    },
+    findBestInventoryMatch(items, minTol, maxTol, reqAmt, maxDepth = 8) {
+      if (!Array.isArray(items) || items.length === 0) return null;
+      const sorted = [...items].map(it => ({
+        raw: it,
+        price: parseFloat(it.price || (it.item && it.item.price) || 0)
+      })).filter(x => x.price > 0).sort((a, b) => b.price - a.price);
+
+      const n = sorted.length;
+      if (n === 0) return null;
+
+      const suffixSums = new Array(n + 1).fill(0);
+      for (let i = n - 1; i >= 0; i--) {
+        suffixSums[i] = suffixSums[i + 1] + sorted[i].price;
+      }
+
+      let best = null;
+      let bestDiff = Infinity;
+      let steps = 0;
+
+      function dfs(idx, curItems, curSum) {
+        steps++;
+        if (steps > 15000) return;
+
+        if (curSum >= minTol && curSum <= maxTol) {
+          const diff = Math.abs(curSum - reqAmt);
+          if (diff < bestDiff || (diff === bestDiff && curItems.length < (best ? best.items.length : Infinity))) {
+            bestDiff = diff;
+            best = { items: curItems.map(x => x.raw), total: curSum };
+            if (diff === 0) return;
+          }
+        }
+
+        if (curSum > maxTol || idx >= n || curItems.length >= maxDepth) return;
+        if (curSum + suffixSums[idx] < minTol) return;
+
+        for (let i = idx; i < n; i++) {
+          const p = sorted[i].price;
+          if (curSum + p > maxTol) continue;
+          curItems.push(sorted[i]);
+          dfs(i + 1, curItems, curSum + p);
+          curItems.pop();
+          if (bestDiff === 0 || steps > 15000) break;
+        }
+      }
+
+      dfs(0, [], 0);
+      return best;
     },
     isAffordableForUser(targetAmt) {
       const activeUser = LocalDB.getActiveUser();
       const userBal = Number((activeUser && activeUser.balance) || 0);
-      if (userBal >= targetAmt) return true;
+      const minTol = targetAmt * (49.00 / 51.00);
+      const maxTol = targetAmt * (51.00 / 49.00);
+      if (userBal >= minTol) return true;
+
       const userInv = Array.isArray(activeUser && activeUser.inventory)
         ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
         : [];
-      const minTol = targetAmt * (46.00 / 54.00);
-      const maxTol = targetAmt * (54.00 / 46.00);
       const validItems = userInv.filter(it => {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
         return p > 0;
       });
       if (validItems.length === 0) return false;
 
-      // 1. Single items
+      // 1. Direct inventory match within strict [minTol, maxTol]
+      if (this.findBestInventoryMatch(validItems, minTol, maxTol, targetAmt)) return true;
+
+      // 2. Surplus swap item (user has skin >= minTol)
       if (validItems.some(it => {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-        return p >= minTol && p <= maxTol;
+        return p >= minTol;
       })) return true;
 
-      // 2. Pairs
-      for (let i = 0; i < validItems.length; i++) {
-        const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
-        if (pi > maxTol) continue;
-        for (let j = i + 1; j < validItems.length; j++) {
-          const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
-          const sum2 = pi + pj;
-          if (sum2 >= minTol && sum2 <= maxTol) return true;
-        }
-      }
-
-      // 3. Triplets
-      if (validItems.length >= 3 && validItems.length <= 30) {
-        for (let i = 0; i < validItems.length; i++) {
-          const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
-          for (let j = i + 1; j < validItems.length; j++) {
-            const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
-            for (let k = j + 1; k < validItems.length; k++) {
-              const pk = parseFloat(validItems[k].price || (validItems[k].item && validItems[k].item.price) || 0);
-              const sum3 = pi + pj + pk;
-              if (sum3 >= minTol && sum3 <= maxTol) return true;
-            }
-          }
-        }
-      }
-
-      // 4. Combined item + cash balance
+      // 3. Combined item + cash balance
       if (validItems.some(it => {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
         return (p + userBal) >= minTol;
@@ -5213,6 +5275,7 @@ function getOrGenerateUserProfile(userId) {
       };
       this.allLobbies.set(shareToken, lobby);
       this.allLobbies.set(id, lobby);
+      this.saveActiveLobby(lobby);
       this.botLobbies.unshift(lobby);
       if (this.botLobbies.length > 6) {
         const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
@@ -5283,8 +5346,9 @@ function getOrGenerateUserProfile(userId) {
       // Register in fast lookup map so room can always load it
       this.allLobbies.set(target.shareToken, target);
       this.allLobbies.set(target.id, target);
+      this.saveActiveLobby(target);
 
-      // 1. Immediately notify lobby list that an opponent joined and 6s countdown begins!
+      // 1. Immediately notify lobby list that an opponent joined and 10s countdown begins!
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -5292,7 +5356,7 @@ function getOrGenerateUserProfile(userId) {
           shareToken: target.shareToken,
           opponent: opponentBot,
           winnerId: winnerId,
-          secondsLeft: 6
+          secondsLeft: 10
         }
       });
 
@@ -5302,7 +5366,7 @@ function getOrGenerateUserProfile(userId) {
         data: target
       });
 
-      // Schedule finalization after 9 seconds (6s countdown + 3s wheel spin)
+      // Schedule finalization after 13 seconds (10s countdown + 3s wheel spin)
       setTimeout(() => {
         target.round.status = 'finished';
         target.status = 'finished';
@@ -5310,6 +5374,11 @@ function getOrGenerateUserProfile(userId) {
         target.closedAt = new Date().toISOString();
         target.finishedTimestamp = Date.now();
         this.saveRecentFinishedLobby(target);
+        this.removeActiveLobby(target);
+
+        // Immediately remove from botLobbies so finished duel never lingers in list!
+        const bIdx = this.botLobbies.findIndex(l => l.id === target.id || l.shareToken === target.shareToken);
+        if (bIdx !== -1) this.botLobbies.splice(bIdx, 1);
 
         WsMock.broadcast({
           event: 'battle.lobby_closed',
@@ -5322,25 +5391,20 @@ function getOrGenerateUserProfile(userId) {
             isLeaving: true
           }
         });
-      }, 9000);
+      }, 13000);
 
       return target;
     },
     tickBots() {
       const now = Date.now();
 
-      // 1. Purge finished lobbies quickly (within 2.5s) so old battles disappear dynamically
+      // 1. Purge finished lobbies immediately so completed battles disappear instantly
       const purged = [];
       const purgeFilter = l => {
         const isFinished = (l.status === 'finished');
         const isCancelled = (l.status === 'cancelled');
         const isStale = (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting');
-        if (isFinished) {
-          if (!l.finishedTimestamp || (now - l.finishedTimestamp > 2500)) {
-            purged.push(l);
-            return false;
-          }
-        } else if (isCancelled || isStale) {
+        if (isFinished || isCancelled || isStale) {
           purged.push(l);
           return false;
         }
@@ -5394,7 +5458,7 @@ function getOrGenerateUserProfile(userId) {
               data: fresh
             });
           }
-          this._nextLobbyPublishTime = now + Math.floor(2500 + Math.random() * 4500);
+          this._nextLobbyPublishTime = now + Math.floor(1200 + Math.random() * 2000);
         }
       }
 
@@ -5419,11 +5483,8 @@ function getOrGenerateUserProfile(userId) {
 
       const now = Date.now();
       const isFresh = l => {
-        if (!l || l.status === 'cancelled') return false;
-        if (l.status === 'finished') {
-          if (!l.finishedTimestamp || (now - l.finishedTimestamp > 6000)) return false;
-        }
-        if (l.createdAtTime && (now - l.createdAtTime > 90000) && l.status !== 'waiting') return false;
+        if (!l || l.status === 'cancelled' || l.status === 'finished') return false;
+        if (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting') return false;
         return true;
       };
       const seen = new Set();
@@ -5519,6 +5580,19 @@ function getOrGenerateUserProfile(userId) {
           }
         } catch(e) {}
       }
+      if (!lob) {
+        try {
+          const activeSaved = localStorage.getItem('upgrader_active_lobbies');
+          if (activeSaved) {
+            const list = JSON.parse(activeSaved);
+            lob = list.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) || null;
+            if (lob) {
+              this.allLobbies.set(lob.shareToken, lob);
+              this.allLobbies.set(lob.id, lob);
+            }
+          }
+        } catch(e) {}
+      }
       if (!lob && typeof tokenOrId === 'string' && tokenOrId.length >= 10) {
         // Dynamic fallback so direct link / page refresh never produces 404 "Lobby not found"!
         lob = this.createBotLobby(1500.0);
@@ -5527,10 +5601,19 @@ function getOrGenerateUserProfile(userId) {
       }
       if (lob && lob.startedAt && lob.status !== 'finished') {
         const elapsed = Date.now() - lob.startedAt;
-        const maxSec = lob.isMine ? 10 : 6;
-        const rem = Math.max(1, Math.min(maxSec, Math.ceil(((maxSec * 1000) - elapsed) / 1000)));
-        if (lob.round) {
-          lob.round.countdownSeconds = rem;
+        if (elapsed >= 13000) {
+          lob.status = 'finished';
+          if (lob.round) lob.round.status = 'finished';
+          lob.finishedTimestamp = lob.startedAt + 13000;
+          this.saveRecentFinishedLobby(lob);
+        } else if (elapsed >= 10000) {
+          if (lob.round) lob.round.countdownSeconds = 0;
+        } else {
+          const maxSec = 10;
+          const rem = Math.max(1, Math.min(maxSec, Math.ceil(((maxSec * 1000) - elapsed) / 1000)));
+          if (lob.round) {
+            lob.round.countdownSeconds = rem;
+          }
         }
       }
       // Spectating a waiting lobby: respect the natural match delay so spectator can wait for bot to join!
@@ -5937,6 +6020,10 @@ function getOrGenerateUserProfile(userId) {
         lobby.closedAt = new Date().toISOString();
         lobby.finishedTimestamp = Date.now();
         this.saveRecentFinishedLobby(lobby);
+        this.removeActiveLobby(lobby);
+
+        const uIdx = this.userLobbies.findIndex(l => l.id === lobby.id || l.shareToken === lobby.shareToken);
+        if (uIdx !== -1) this.userLobbies.splice(uIdx, 1);
 
         WsMock.broadcast({
           event: 'battle.lobby_closed',
@@ -5949,7 +6036,7 @@ function getOrGenerateUserProfile(userId) {
             isLeaving: true
           }
         });
-      }, 16000);
+      }, 13000);
     },
     findShopSkinForStake(targetStake, maxBudget) {
       let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
@@ -6017,124 +6104,71 @@ function getOrGenerateUserProfile(userId) {
         return p > 0;
       });
 
-      if (validItems.length > 0) {
-        // User has inventory skins! Find candidate options and combinations
-        const candidates = [];
-        validItems.forEach(it => {
+      // Strict 49.00% to 51.00% odds window
+      const minTol = reqAmt * (49.00 / 51.00);
+      const maxTol = reqAmt * (51.00 / 49.00);
+
+      // 1. First priority: DFS subset-sum direct match from inventory (1 to 8+ skins)
+      const directMatch = (validItems.length > 0) ? this.findBestInventoryMatch(validItems, minTol, maxTol, reqAmt) : null;
+
+      if (directMatch) {
+        // Exact or close direct match found! Other user skins (e.g. 200 ₽ skin) left 100% untouched!
+        matchedItems = directMatch.items;
+        itemsTotal = directMatch.total;
+        scenario = 'inventory';
+      } else if (validItems.length > 0 || userBal >= minTol) {
+        // Check surplus single skins (sorted ascending by price to pick the smallest surplus skin)
+        const surplusItems = validItems.filter(it => {
           const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-          candidates.push({ items: [it], total: p });
+          return p >= minTol;
+        }).sort((a, b) => {
+          const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
+          const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
+          return pa - pb;
         });
 
-        // Pairs
-        if (validItems.length >= 2 && validItems.length <= 40) {
-          for (let i = 0; i < validItems.length; i++) {
-            const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
-            for (let j = i + 1; j < validItems.length; j++) {
-              const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
-              candidates.push({ items: [validItems[i], validItems[j]], total: pi + pj });
-            }
-          }
-        }
+        // Combined single skin + cash balance
+        const combinedItems = validItems.filter(it => {
+          const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+          return (p + userBal) >= minTol;
+        }).sort((a, b) => {
+          const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
+          const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
+          return Math.abs((pa + userBal) - reqAmt) - Math.abs((pb + userBal) - reqAmt);
+        });
 
-        // Triplets
-        if (validItems.length >= 3 && validItems.length <= 25) {
-          for (let i = 0; i < validItems.length; i++) {
-            const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
-            for (let j = i + 1; j < validItems.length; j++) {
-              const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
-              for (let k = j + 1; k < validItems.length; k++) {
-                const pk = parseFloat(validItems[k].price || (validItems[k].item && validItems[k].item.price) || 0);
-                candidates.push({ items: [validItems[i], validItems[j], validItems[k]], total: pi + pj + pk });
-              }
-            }
-          }
-        }
-
-        // 4-items combo if needed
-        if (validItems.length >= 4 && validItems.length <= 15) {
-          for (let i = 0; i < validItems.length; i++) {
-            const pi = parseFloat(validItems[i].price || (validItems[i].item && validItems[i].item.price) || 0);
-            for (let j = i + 1; j < validItems.length; j++) {
-              const pj = parseFloat(validItems[j].price || (validItems[j].item && validItems[j].item.price) || 0);
-              for (let k = j + 1; k < validItems.length; k++) {
-                const pk = parseFloat(validItems[k].price || (validItems[k].item && validItems[k].item.price) || 0);
-                for (let l = k + 1; l < validItems.length; l++) {
-                  const pl = parseFloat(validItems[l].price || (validItems[l].item && validItems[l].item.price) || 0);
-                  candidates.push({ items: [validItems[i], validItems[j], validItems[k], validItems[l]], total: pi + pj + pk + pl });
-                }
-              }
-            }
-          }
-        }
-
-        // Sort candidates by closeness to reqAmt
-        candidates.sort((a, b) => Math.abs(a.total - reqAmt) - Math.abs(b.total - reqAmt));
-
-        // Strict 49.00% to 51.00% odds window
-        const minTol = reqAmt * (46.00 / 54.00);
-        const maxTol = reqAmt * (54.00 / 46.00);
-        const inTol = candidates.filter(c => c.total >= minTol && c.total <= maxTol);
-
-        if (inTol.length > 0) {
-          const selectedCand = inTol[0];
-          matchedItems = selectedCand.items;
-          itemsTotal = selectedCand.total;
-          scenario = 'inventory';
+        if (surplusItems.length > 0) {
+          const selectedSkin = surplusItems[0];
+          const sPrice = parseFloat(selectedSkin.price || (selectedSkin.item && selectedSkin.item.price) || 0);
+          const shopSkin = this.findShopSkinForStake(reqAmt, sPrice);
+          matchedItems = [];
+          itemsTotal = 0;
+          scenario = 'swap';
+          soldSkins = [selectedSkin];
+          soldSkin = selectedSkin;
+          boughtShopItem = shopSkin;
+        } else if (userBal >= minTol) {
+          // Cash balance is enough to auto-buy matching skin from shop
+          const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
+          matchedItems = [];
+          itemsTotal = 0;
+          scenario = 'shop';
+          boughtShopItem = shopSkin;
+        } else if (combinedItems.length > 0) {
+          // Combined skin + balance
+          const selectedSkin = combinedItems[0];
+          const sPrice = parseFloat(selectedSkin.price || (selectedSkin.item && selectedSkin.item.price) || 0);
+          const totalAvail = sPrice + userBal;
+          const shopSkin = this.findShopSkinForStake(reqAmt, totalAvail);
+          matchedItems = [];
+          itemsTotal = 0;
+          scenario = 'swap';
+          soldSkins = [selectedSkin];
+          soldSkin = selectedSkin;
+          boughtShopItem = shopSkin;
         } else {
-          // 1. Check all candidate combos (singles, pairs, triplets, etc.) where combo.total >= minTol
-          const surplusCombos = candidates.filter(c => c.total >= minTol).sort((a, b) => {
-            const diffA = a.total - reqAmt;
-            const diffB = b.total - reqAmt;
-            if (diffA >= 0 && diffB >= 0) return diffA - diffB;
-            if (diffA >= 0) return -1;
-            if (diffB >= 0) return 1;
-            return Math.abs(diffA) - Math.abs(diffB);
-          });
-
-          // 2. Check candidate combos where combo.total + userBal >= minTol
-          const combinedCombos = candidates.filter(c => (c.total + userBal) >= minTol).sort((a, b) => {
-            return Math.abs(a.total - reqAmt) - Math.abs(b.total - reqAmt);
-          });
-
-          if (surplusCombos.length > 0) {
-            const selectedCombo = surplusCombos[0];
-            const shopSkin = this.findShopSkinForStake(reqAmt, selectedCombo.total);
-            matchedItems = [];
-            itemsTotal = 0;
-            scenario = 'swap';
-            soldSkins = selectedCombo.items;
-            soldSkin = selectedCombo.items[0] || null;
-            boughtShopItem = shopSkin;
-          } else if (userBal >= minTol) {
-            // Cash balance is enough to auto-buy matching skin from shop
-            const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
-            matchedItems = [];
-            itemsTotal = 0;
-            scenario = 'shop';
-            boughtShopItem = shopSkin;
-          } else if (combinedCombos.length > 0) {
-            // Combined skin(s) + balance!
-            const selectedCombo = combinedCombos[0];
-            const totalAvail = selectedCombo.total + userBal;
-            const shopSkin = this.findShopSkinForStake(reqAmt, totalAvail);
-            matchedItems = [];
-            itemsTotal = 0;
-            scenario = 'swap';
-            soldSkins = selectedCombo.items;
-            soldSkin = selectedCombo.items[0] || null;
-            boughtShopItem = shopSkin;
-          } else {
-            // User has neither matching skins, nor skins to swap, nor combined skins+balance
-            throw new Error('Недостаточно средств для участия в битве');
-          }
+          throw new Error('Недостаточно средств для участия в битве');
         }
-      } else if (userBal >= (reqAmt * (46.00 / 54.00))) {
-        // User has NO skins, but has cash balance sufficient for this stake!
-        const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
-        matchedItems = [];
-        itemsTotal = 0;
-        scenario = 'shop';
-        boughtShopItem = shopSkin;
       } else {
         throw new Error('Недостаточно средств для участия в битве');
       }
@@ -6370,19 +6404,19 @@ function getOrGenerateUserProfile(userId) {
         avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
 
-      const minTol = reqAmt * (46.00 / 54.00);
-      const maxTol = reqAmt * (54.00 / 46.00);
+      const minTol = reqAmt * (49.00 / 51.00);
+      const maxTol = reqAmt * (51.00 / 49.00);
       if (userTotalStake < minTol || userTotalStake > maxTol) {
         throw new Error('Сумма ставки не соответствует условиям битвы');
       }
 
-      // Ensure opponent bot's stake is within [46.00%, 54.00%] odds of user's stake
+      // Ensure opponent bot's stake is strictly within [49.00%, 51.00%] odds of user's stake
       let p1Stake = parseFloat(lobby.round.stakes[0].amount);
       const isOpponentBot = !lobby.isMine;
       if (isOpponentBot) {
         const totalB = p1Stake + userTotalStake;
         let c1 = Math.round((p1Stake / totalB) * 10000) / 100;
-        if (c1 < 46.00 || c1 > 54.00) {
+        if (c1 < 49.00 || c1 > 51.00) {
           const newBotSkins = this.getOpponentSkins(userTotalStake, lobby.createdBy.id);
           lobby.round.stakes[0].items = newBotSkins;
           p1Stake = newBotSkins.reduce((a, s) => a + parseFloat(s.price), 0);
@@ -6394,8 +6428,8 @@ function getOrGenerateUserProfile(userId) {
 
       const totalBank = p1Stake + userTotalStake;
       let p1Chance = Math.round((p1Stake / totalBank) * 10000) / 100;
-      if (p1Chance < 46.00) p1Chance = 46.00;
-      if (p1Chance > 54.00) p1Chance = 54.00;
+      if (p1Chance < 49.00) p1Chance = 49.00;
+      if (p1Chance > 51.00) p1Chance = 51.00;
       let userChance = Number((100.00 - p1Chance).toFixed(2));
       const p1MaxRoll = Math.round(p1Chance * 1000);
 
@@ -6593,6 +6627,12 @@ function getOrGenerateUserProfile(userId) {
         lobby.closedAt = new Date().toISOString();
         lobby.finishedTimestamp = Date.now();
         this.saveRecentFinishedLobby(lobby);
+        this.removeActiveLobby(lobby);
+
+        const bIdx = this.botLobbies.findIndex(l => l.id === lobby.id || l.shareToken === lobby.shareToken);
+        if (bIdx !== -1) this.botLobbies.splice(bIdx, 1);
+        const uIdx = this.userLobbies.findIndex(l => l.id === lobby.id || l.shareToken === lobby.shareToken);
+        if (uIdx !== -1) this.userLobbies.splice(uIdx, 1);
 
         WsMock.broadcast({
           event: 'battle.lobby_closed',
@@ -6605,7 +6645,7 @@ function getOrGenerateUserProfile(userId) {
             isLeaving: true
           }
         });
-      }, 16000);
+      }, 13000);
 
       return lobby;
     },
@@ -6769,6 +6809,7 @@ function getOrGenerateUserProfile(userId) {
       };
     }
   };
+  window.__BattleSystem = BattleSystem;
 
   // 7. MOCK REST API HANDLER
   function handleMockApi(method, path, body, params) {
