@@ -367,8 +367,8 @@
     // Own profile page only (NOT /users/:id public profiles, and NOT profile previews!)
     const p = window.location.pathname;
     if ((p.endsWith('/profile') || p.endsWith('/profile/')) && !p.includes('/users/') && !document.querySelector('up-profile-preview')) {
-      document.querySelectorAll('up-profile:not(up-profile-preview) up-user-info img, up-profile:not(up-profile-preview) up-avatar-with-placeholder img, up-profile:not(up-profile-preview) .profile-avatar').forEach(img => {
-        if (img.closest('up-item-card, up-user-item-card, up-drop-item, up-profile-preview, .items-container')) return;
+      document.querySelectorAll('up-profile:not(up-profile-preview) up-user-info up-avatar-with-placeholder img, up-profile:not(up-profile-preview) up-profile-info up-avatar-with-placeholder img, up-profile:not(up-profile-preview) up-user-info .profile-avatar').forEach(img => {
+        if (img.closest('up-item-card, up-user-item-card, up-drop-item, up-profile-preview, .items-container, up-battles-history, up-battle-players, up-battle-row, up-battle-card, up-profile-battles')) return;
         if (!isAvatarElement(img)) return;
         img.src = avatarUrl;
         img.classList.remove('opacity-0');
@@ -495,9 +495,25 @@
         const prEl = container.querySelector('.text-gradient-yellow-main, [class*="convert"], [class*="price"]');
         if (prEl) prEl.textContent = price.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
+
+      // Ensure localized Russian title
+      const labelSpan = container.querySelector('.text-\\[0\\.875rem\\], span.text-white\\/50, [class*="text-white/50"]');
+      if (labelSpan) {
+        labelSpan.textContent = 'Лучший дроп';
+      }
     });
   }
   window.updateDomBestDrop = updateDomBestDrop;
+
+  function checkAndLocalizeBestDropLabels() {
+    document.querySelectorAll('up-best-drop, [data-testid="profile-best-drop"]').forEach(container => {
+      const labelSpan = container.querySelector('.text-\\[0\\.875rem\\], span.text-white\\/50, [class*="text-white/50"]');
+      if (labelSpan && (labelSpan.textContent.toLowerCase().includes('best') || labelSpan.textContent.includes('Drop') || labelSpan.textContent.includes('drop'))) {
+        labelSpan.textContent = 'Лучший дроп';
+      }
+    });
+  }
+  setInterval(checkAndLocalizeBestDropLabels, 500);
 
   // WEBSOCKET MOCK ENGINE (Declared before SupabaseDB to prevent TDZ ReferenceError)
   const WsMock = {
@@ -4634,8 +4650,11 @@ function getOrGenerateUserProfile(userId) {
         const saved = localStorage.getItem('upgrader_user_lobbies');
         if (saved) {
           const arr = JSON.parse(saved);
+          const activeUser = LocalDB.getActiveUser();
+          const currentUid = activeUser ? String(activeUser.id) : null;
           for (const lob of arr) {
-            if (lob && lob.shareToken && !this.allLobbies.has(lob.shareToken)) {
+            // ONLY restore fresh active waiting lobbies that belong to the current active user
+            if (lob && lob.shareToken && lob.status === 'waiting' && lob.createdAtTime && (Date.now() - lob.createdAtTime < 60000) && (!currentUid || String(lob.createdBy?.id) === currentUid)) {
               if (lob.round && Array.isArray(lob.round.stakes)) {
                 lob.round.stakes.forEach(stk => {
                   if (stk && stk.items && stk.items.length > 0) {
@@ -4650,6 +4669,9 @@ function getOrGenerateUserProfile(userId) {
             }
           }
         }
+      } catch(e) {}
+      try {
+        localStorage.setItem('upgrader_user_lobbies', JSON.stringify(this.userLobbies.filter(l => l.status === 'waiting')));
       } catch(e) {}
       const initialTierTargets = [110, 180, 260, 390, 520, 780, 1150, 2400];
       for (const tAmt of initialTierTargets) {
@@ -4705,6 +4727,12 @@ function getOrGenerateUserProfile(userId) {
           }
         }
       }
+
+      // 4. Combined item + cash balance
+      if (validItems.some(it => {
+        const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+        return (p + userBal) >= minTol;
+      })) return true;
 
       return false;
     },
@@ -4926,10 +4954,18 @@ function getOrGenerateUserProfile(userId) {
     tickBots() {
       const now = Date.now();
 
-      // 1. Purge finished lobbies older than 6 seconds and notify so cards immediately disappear
+      // 1. Purge finished lobbies older than 6 seconds, cancelled lobbies, or stale lobbies
       const purged = [];
       const purgeFilter = l => {
-        if (l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 6000)) {
+        const isFinished = (l.status === 'finished');
+        const isCancelled = (l.status === 'cancelled');
+        const isStale = (l.createdAtTime && (now - l.createdAtTime > 90000) && l.status !== 'waiting');
+        if (isFinished) {
+          if (!l.finishedTimestamp || (now - l.finishedTimestamp > 6000)) {
+            purged.push(l);
+            return false;
+          }
+        } else if (isCancelled || isStale) {
           purged.push(l);
           return false;
         }
@@ -4943,6 +4979,12 @@ function getOrGenerateUserProfile(userId) {
           event: 'battle.lobby_closed',
           data: { id: p.id, shareToken: p.shareToken }
         });
+      }
+
+      if (purged.length > 0) {
+        try {
+          localStorage.setItem('upgrader_user_lobbies', JSON.stringify(this.userLobbies.filter(l => l.status === 'waiting')));
+        } catch(e) {}
       }
 
       // 2. Bot vs Bot: any bot lobby waiting for >= 3 seconds gets matched with a companion bot!
@@ -4969,15 +5011,25 @@ function getOrGenerateUserProfile(userId) {
       const botLobs = [...this.botLobbies];
 
       const now = Date.now();
-      const isFresh = l => !(l.status === 'finished' && l.finishedTimestamp && (now - l.finishedTimestamp > 6000));
+      const isFresh = l => {
+        if (!l || l.status === 'cancelled') return false;
+        if (l.status === 'finished') {
+          if (!l.finishedTimestamp || (now - l.finishedTimestamp > 6000)) return false;
+        }
+        if (l.createdAtTime && (now - l.createdAtTime > 90000) && l.status !== 'waiting') return false;
+        return true;
+      };
       const seen = new Set();
       let res = [];
+
+      const activeUser = LocalDB.getActiveUser();
+      const currentUserId = activeUser ? String(activeUser.id) : null;
 
       // 1. User lobbies first
       for (const l of userLobs) {
         if (!seen.has(l.shareToken) && isFresh(l)) {
           seen.add(l.shareToken);
-          l.isMine = true;
+          l.isMine = !!(currentUserId && l.createdBy && String(l.createdBy.id) === currentUserId);
           l.canAfford = this.isAffordableForUser(parseFloat(l.targetAmount));
           res.push(l);
         }
@@ -5032,6 +5084,13 @@ function getOrGenerateUserProfile(userId) {
         lob = this.createBotLobby(1500.0);
         lob.shareToken = tokenOrId;
         this.allLobbies.set(tokenOrId, lob);
+      }
+      if (lob && lob.startedAt) {
+        const elapsed = Date.now() - lob.startedAt;
+        const rem = Math.max(1, Math.min(10, Math.ceil((10000 - elapsed) / 1000)));
+        if (lob.round) {
+          lob.round.countdownSeconds = rem;
+        }
       }
       // When a spectator enters a waiting bot lobby, match within 2.5s so spectator sees the duel visually
       if (lob && lob.status === 'waiting' && !lob.isMine && !lob._matchScheduled) {
@@ -5571,6 +5630,16 @@ function getOrGenerateUserProfile(userId) {
             return pa - pb; // pick the cheapest expensive item
           });
 
+          // Combined: Check if user has an item where item.price + userBal >= minTol
+          const combinedCandidates = validItems.filter(it => {
+            const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+            return (p + userBal) >= minTol;
+          }).sort((a, b) => {
+            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
+            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
+            return Math.abs(pa - reqAmt) - Math.abs(pb - reqAmt); // closest to reqAmt
+          });
+
           if (expensiveCandidates.length > 0) {
             const expensiveSkin = expensiveCandidates[0];
             const expPrice = parseFloat(expensiveSkin.price || (expensiveSkin.item && expensiveSkin.item.price) || 0);
@@ -5587,8 +5656,19 @@ function getOrGenerateUserProfile(userId) {
             itemsTotal = 0;
             scenario = 'shop';
             boughtShopItem = shopSkin;
+          } else if (combinedCandidates.length > 0) {
+            // Combined skin + balance! User sells skin, tops up remainder from balance
+            const skinToSwap = combinedCandidates[0];
+            const skinPrice = parseFloat(skinToSwap.price || (skinToSwap.item && skinToSwap.item.price) || 0);
+            const totalAvail = skinPrice + userBal;
+            const shopSkin = this.findShopSkinForStake(reqAmt, totalAvail);
+            matchedItems = [];
+            itemsTotal = 0;
+            scenario = 'swap';
+            soldSkin = skinToSwap;
+            boughtShopItem = shopSkin;
           } else {
-            // User has neither matching skins, nor expensive skin to swap, nor balance to participate
+            // User has neither matching skins, nor expensive skin to swap, nor combined skin+balance
             throw new Error('Недостаточно средств для участия в битве');
           }
         }
@@ -5723,6 +5803,7 @@ function getOrGenerateUserProfile(userId) {
         totals: {
           purchaseAmount: purchaseAmtStr,
           saleProceeds: saleProceedsStr,
+          balanceDifference: (parseFloat(saleProceedsStr) - parseFloat(purchaseAmtStr)).toFixed(2),
           balanceBefore: userBal.toFixed(2),
           balanceAfter: balanceAfterStr,
           stakeAmount: finalStakeAmount.toFixed(2)
@@ -5758,6 +5839,9 @@ function getOrGenerateUserProfile(userId) {
         const soldPrice = parseFloat(plan.soldSkin.price || (plan.soldSkin.item && plan.soldSkin.item.price) || 0);
         const boughtPrice = parseFloat(plan.boughtItem.price || 0);
         const diff = Math.round((soldPrice - boughtPrice) * 100) / 100;
+        if (diff < 0 && Number(user.balance || 0) < Math.abs(diff)) {
+          throw new Error('Недостаточно средств на балансе');
+        }
         user.balance = Math.round(((user.balance || 0) + diff) * 100) / 100;
         user._lastBalanceUpdate = Date.now();
         LocalDB.saveUser(user);
@@ -6135,7 +6219,60 @@ function getOrGenerateUserProfile(userId) {
           hasMore: offset + limit < botBattles.length
         };
       }
-      const battles = LocalDB.getBattleHistory(user.username);
+      let battles = LocalDB.getBattleHistory(user.username);
+      if (!Array.isArray(battles) || battles.length === 0) {
+        const pool = (Array.isArray(catalogData) && catalogData.length > 20) ? catalogData : this.fallbackSkins;
+        const seedBattles = [];
+        const seedCount = 6;
+        for (let i = 0; i < seedCount; i++) {
+          const skin1 = pool[(i * 7 + 3) % pool.length];
+          const skin2 = pool[(i * 11 + 5) % pool.length];
+          const oppNick = authenticNicknames[i % authenticNicknames.length];
+          const oppAv = AUTHENTIC_AVATARS[i % AUTHENTIC_AVATARS.length];
+          const isWinner = (i % 2) === 0;
+          const myStake = parseFloat(skin1.price || 150);
+          const oppStake = parseFloat(skin2.price || 150);
+          seedBattles.push({
+            id: String(Date.now() - (i + 1) * 86400000),
+            roundId: String(Date.now() - (i + 1) * 86400000),
+            shareToken: 'user_seed_battle_' + i,
+            myStake: myStake.toFixed(2),
+            opponent: {
+              id: String(200000 + i),
+              nickname: oppNick,
+              image: oppAv,
+              avatar: oppAv
+            },
+            isWinner: isWinner,
+            roundItems: [
+              { ...skin1, userId: String(user.id || 'me'), imageUrl: skin1.imageUrl || skin1.image || '', image: skin1.imageUrl || skin1.image || '' },
+              { ...skin2, userId: String(200000 + i), imageUrl: skin2.imageUrl || skin2.image || '', image: skin2.imageUrl || skin2.image || '' }
+            ],
+            roundBalances: [],
+            wonBalance: '0.00',
+            rangeFrom: 0,
+            rangeTo: 50000,
+            maxRoll: 100000,
+            roll: isWinner ? 25000 : 75000,
+            finishedAt: new Date(Date.now() - (i + 1) * 3600000 * 4).toISOString()
+          });
+        }
+        for (const b of seedBattles) {
+          LocalDB.addBattleHistory(user.username, b);
+        }
+        battles = seedBattles;
+      } else {
+        // Sanitize any existing battle entries where opponent avatar might be missing or wrongly set to user avatar
+        battles.forEach((b, idx) => {
+          if (b && b.opponent) {
+            const oppAv = AUTHENTIC_AVATARS[(parseInt(b.opponent.id, 10) || idx) % AUTHENTIC_AVATARS.length];
+            if (!b.opponent.image || !b.opponent.avatar || (user && user.avatar && (b.opponent.image === user.avatar || b.opponent.avatar === user.avatar))) {
+              b.opponent.image = oppAv;
+              b.opponent.avatar = oppAv;
+            }
+          }
+        });
+      }
       return {
         items: battles.slice(offset, offset + limit),
         total: battles.length,
