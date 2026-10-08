@@ -3904,16 +3904,41 @@
     "задержка", "откат", "промах", "без лица", "noct.", "vanta", "vesper", "nexial", "vellichor", "liminal",
     "sonder", "saudade", "lacuna", "reverie", "umbra", "echelon", "parallax", "silhouette", "aftermath", "deadlock",
     "crossfade", "sideeffect", "offscript", "misconduct", "counterfeit", "unbound", "unseen", "unruly", "unreal.", "untouched",
-    "педик 14ВВ", "глитер", "пузотряс", "S1rota", "dnk666", "s0mple", "10 yo talent",
+    "глитер", "пузотряс", "S1rota", "dnk666", "s0mple", "10 yo talent",
     "заводской брак", "мамкин снайпер", "скуф 2000", "подпивас", "бездарность", "DEAD INSIDE 1337",
     "токсик из паблика", "пивной барон", "быдло 1tap", "сын фермера", "помойка e-sports",
-    "1000-7 zxcursed", "минус уши", "0iq player", "рачина", "бухой батя", "солевой лорд", "clown.exe"
+    "1000-7 zxcursed", "минус уши", "0iq player", "рачина", "бухой батя", "солевой лорд", "clown.exe",
+    "m0NESY fan", "b1t enjoyer", "donk peek", "zywoo mode", "ropz crosshair", "flameZ 1tap",
+    "faceit lvl 10", "3000 elo beast", "smurf acc", "road to fpl", "mirage only", "inferno b rusher",
+    "dust2 boss", "nuke roof camper", "ancient lurker", "anubis b god", "vertigo boost",
+    "headshot machine", "silent step", "bhop god", "strafing only", "deagle 1tap only", "awp demon",
+    "smoke criminal", "flashbang yourself", "clutch or kick", "defuse kit forgotten", "eco round warrior",
+    "p90 rush b", "negev spray down", "zeus enjoyer", "knife fight only", "1v5 believer",
+    "drop avp pls", "russian voice chat", "no comms soloq", "tilt proof", "full tilt mode",
+    "mute all & play", "cfg from 2015", "autoexec god", "raw input 1", "stretched res 4:3",
+    "black bars enjoyer", "144hz difference", "240hz blessed", "0 ping abuser", "packet loss 100%",
+    "tickrate victim", "subtick made me miss", "hitreg issues", "cs2 broken", "valve pls fix",
+    "gaben blessed me", "case opener 9000", "dragon lore dreamer", "howl collector", "blue gem enjoyer",
+    "printstream lover", "asiimov classic", "fade 100%", "doppler phase 2", "ruby enjoyer",
+    "sapphire king", "emerald dream", "butterfly knife spin", "karambit flip", "m9 bayonet lover",
+    "skeleton knife inspect", "gloves fade", "vice gloves enjoyer", "spearmint flex",
+    "гуль 1000-7", "дед инсайд снайпер", "читер без софта", "лаки шот", "вантап в прыжке",
+    "прострел через смок", "ночной рашер", "дигл на эко", "эйс на пистолетке", "клатч мастер",
+    "завезите тиммейтов", "соло очередь ад", "слил 25 авг", "минус пять в спину", "флешка в лицо",
+    "кастомный прицел", "сенса 0.8", "коврик во весь стол", "вайб на мираже", "чилл на б пленте",
+    "паблик легенда", "ночной калибровщик", "проклятый мм", "тильт на первом раунде", "форсбай каждый раунд",
+    "баер на миду", "хедхантер", "зум на авп", "пуля в пиксель", "тайминг бог", "префайр машина",
+    "пик феррари", "вайд пик", "оверпик наказан", "чекер углов", "сейвер авп", "бомбплантер",
+    "ниндзя дефьюз", "ранбуст в окно", "подсадка на шорт", "фейк флеш", "молотов под ноги",
+    "главный по смокам", "снайпер с твича", "легенда сильверов", "биг бой на авике", "папич в тильте",
+    "симпл в прайме", "девайс на турнире", "клик на префайре", "три хедшота в темке", "раш лонг",
+    "хелпа на банане", "пуш андер", "прострел дверей", "нож в спину", "без шансов для вас"
   ];
 
   const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
   const isGH = (typeof window !== 'undefined') && (window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage'));
   const basePath = isGH ? (origin + '/envyrage') : origin;
-  const AUTHENTIC_AVATARS = Array.from({ length: 40 }, (_, i) => basePath + '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
+  const AUTHENTIC_AVATARS = Array.from({ length: 149 }, (_, i) => basePath + '/assets/avatars/user_pack/avatar_' + (i + 1) + '.jpg');
 
   const knownBots = new Map();
   function registerKnownBot(user) {
@@ -5021,17 +5046,51 @@ function getOrGenerateUserProfile(userId) {
       { id: '3085', marketName: 'M4A4 | The Emperor (Field-Tested)', price: '5208.25', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiVI0P_6afBSJf2DC3Wf09F7teVgWiT9kEtxsW_dntepcn2SZgF1CcN3RORe4RTtlN2yYenh7wPXiYxDmS_22jQJsHjOUN0CaQ/360fx360f', extra: { e: 3, g: 14, n: ['M4A4', 'The Emperor', 'Field-Tested'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: false } },
       { id: '3033', marketName: 'USP-S | Printstream (Field-Tested)', price: '3723.29', image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSI-WsG3SA_v5kue99XD2hkBwqjDCAnobsLGXFOwQnCZQmE7MPu0G5l9HhNe7q7lOK2tgXmCn4jiofvCZisboKWfZw5OSJ2G1OXXQx/360fx360f', extra: { e: 3, g: 33, n: ['USP-S', 'Printstream', 'Field-Tested'], r: 10, s: false, t: 16, ch: 'eb4b4b', st: false } }
     ],
-    getRandomBot() {
+    getRandomBot(excludeNames = [], excludeAvatars = []) {
       const activeUser = LocalDB.getActiveUser();
       let botId;
       do {
         botId = String(100000 + Math.floor(Math.random() * 899999));
       } while (activeUser && String(activeUser.id) === botId);
 
-      const idx = Math.floor(Math.random() * this.botNames.length);
-      const avIdx = Math.floor(Math.random() * this.botAvatars.length);
-      const av = this.botAvatars[avIdx];
-      const name = this.botNames[idx];
+      // Collect all currently active bot nicknames and avatars across botLobbies and userLobbies
+      const activeNames = new Set(Array.isArray(excludeNames) ? excludeNames : [excludeNames]);
+      const activeAvatars = new Set(Array.isArray(excludeAvatars) ? excludeAvatars : [excludeAvatars]);
+
+      if (Array.isArray(this.botLobbies)) {
+        this.botLobbies.forEach(l => {
+          if (l.createdBy && l.createdBy.nickname) activeNames.add(l.createdBy.nickname);
+          if (l.createdBy && (l.createdBy.avatar || l.createdBy.image)) activeAvatars.add(l.createdBy.avatar || l.createdBy.image);
+          if (l.round && Array.isArray(l.round.stakes)) {
+            l.round.stakes.forEach(s => {
+              if (s.user && s.user.nickname) activeNames.add(s.user.nickname);
+              if (s.user && (s.user.avatar || s.user.image)) activeAvatars.add(s.user.avatar || s.user.image);
+            });
+          }
+        });
+      }
+      if (Array.isArray(this.userLobbies)) {
+        this.userLobbies.forEach(l => {
+          if (l.createdBy && l.createdBy.nickname) activeNames.add(l.createdBy.nickname);
+          if (l.round && Array.isArray(l.round.stakes)) {
+            l.round.stakes.forEach(s => {
+              if (s.user && s.user.nickname) activeNames.add(s.user.nickname);
+              if (s.user && (s.user.avatar || s.user.image)) activeAvatars.add(s.user.avatar || s.user.image);
+            });
+          }
+        });
+      }
+
+      // Filter available bot names and avatars
+      let availableNames = this.botNames.filter(n => !activeNames.has(n));
+      if (availableNames.length === 0) availableNames = this.botNames;
+      let availableAvatars = this.botAvatars.filter(a => !activeAvatars.has(a));
+      if (availableAvatars.length === 0) availableAvatars = this.botAvatars;
+
+      const idx = Math.floor(Math.random() * availableNames.length);
+      const avIdx = Math.floor(Math.random() * availableAvatars.length);
+      const av = availableAvatars[avIdx];
+      const name = availableNames[idx];
       const bot = {
         id: botId,
         username: name,
@@ -5422,10 +5481,10 @@ function getOrGenerateUserProfile(userId) {
       if (!target || target.status !== 'waiting' || (target.round && target.round.stakes && target.round.stakes.length > 1)) {
         return target;
       }
-      const opponentBot = this.getRandomBot();
-      while (opponentBot.id === target.createdBy.id) {
-        opponentBot.id = String(Math.floor(100000 + Math.random() * 899999));
-      }
+      const opponentBot = this.getRandomBot(
+        [target.createdBy.nickname, target.createdBy.username],
+        [target.createdBy.avatar, target.createdBy.image]
+      );
 
       const p1Stake = parseFloat(target.round.stakes[0].amount);
       const opponentSkins = this.getOpponentSkins(p1Stake, opponentBot.id);
@@ -5493,7 +5552,23 @@ function getOrGenerateUserProfile(userId) {
         data: target
       });
 
-      // Schedule finalization after 6 seconds (6s countdown)
+      // 1. At 6000ms (end of 6s countdown): broadcast secondsLeft: 0 so card flips to finished state in list
+      setTimeout(() => {
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: {
+            id: target.id,
+            shareToken: target.shareToken,
+            opponent: opponentBot,
+            winnerId: winnerId,
+            secondsLeft: 0,
+            status: 'finished',
+            isLeaving: false
+          }
+        });
+      }, 6000);
+
+      // 2. At 7500ms (1.5s after countdown ends): remove battle card from list!
       setTimeout(() => {
         target.round.status = 'finished';
         target.status = 'finished';
@@ -5519,7 +5594,7 @@ function getOrGenerateUserProfile(userId) {
             isLeaving: true
           }
         });
-      }, 6000);
+      }, 7500);
 
       return target;
     },
@@ -5531,7 +5606,7 @@ function getOrGenerateUserProfile(userId) {
       const purgeFilter = l => {
         const isFinished = (l.status === 'finished');
         const isCancelled = (l.status === 'cancelled');
-        const isStartedAndOver = (l.startedAt && (now - l.startedAt >= 6000));
+        const isStartedAndOver = (l.startedAt && (now - l.startedAt >= 7500));
         const isStale = (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting');
         if (isFinished || isCancelled || isStartedAndOver || isStale) {
           purged.push(l);
@@ -5613,7 +5688,7 @@ function getOrGenerateUserProfile(userId) {
       const now = Date.now();
       const isFresh = l => {
         if (!l || l.status === 'cancelled' || l.status === 'finished') return false;
-        if (l.startedAt && (now - l.startedAt >= 6000)) return false;
+        if (l.startedAt && (now - l.startedAt >= 7500)) return false;
         if (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting') return false;
         return true;
       };
@@ -5756,14 +5831,19 @@ function getOrGenerateUserProfile(userId) {
           }
         }, delay);
       }
-      // When user enters their waiting lobby, guarantee bot joins within 2.5s
+      // When user enters their waiting lobby, respect the stake-based delay
       if (lob && lob.status === 'waiting' && lob.isMine && !lob._botJoinScheduled) {
         lob._botJoinScheduled = true;
+        const totalAmount = parseFloat(lob.targetAmount) || 100;
+        const totalDelay = lob._botJoinDelay || this.getBotJoinDelayForStake(totalAmount);
+        lob._botJoinDelay = totalDelay;
+        const elapsed = Date.now() - (lob.createdAtTime || Date.now());
+        const remainingDelay = Math.max(2000, totalDelay - elapsed);
         setTimeout(() => {
           if (lob.status === 'waiting') {
             this.botJoinUserLobby(lob.shareToken);
           }
-        }, 2500);
+        }, remainingDelay);
       }
       // Ensure 100% skin stakes never show redundant balanceAmount
       if (lob && lob.round && Array.isArray(lob.round.stakes)) {
@@ -5778,6 +5858,11 @@ function getOrGenerateUserProfile(userId) {
     },
     createLobby(user, body) {
       this.init();
+      if (!body && user && typeof user === 'object' && (user.inventoryItemIds || user.shopItemIds || user.targetAmount || !user.username)) {
+        body = user;
+        user = LocalDB.getActiveUser();
+      }
+      body = body || {};
       const id = String(Date.now());
       const shareToken = this.generateToken();
       let totalAmount = 0;
@@ -5921,8 +6006,12 @@ function getOrGenerateUserProfile(userId) {
 
       // Bot joins user lobby with delay scaled to the battle stake amount!
       const botDelay = this.getBotJoinDelayForStake(totalAmount);
+      lobby._botJoinDelay = botDelay;
+      lobby._botJoinScheduled = true;
       setTimeout(() => {
-        this.botJoinUserLobby(lobby.shareToken);
+        if (lobby.status === 'waiting') {
+          this.botJoinUserLobby(lobby.shareToken);
+        }
       }, botDelay);
 
       return lobby;
@@ -5947,7 +6036,9 @@ function getOrGenerateUserProfile(userId) {
       const lobby = this.getLobby(shareToken);
       if (!lobby || lobby.status !== 'waiting') return;
 
-      const bot = this.getRandomBot();
+      const ownerNick = (lobby.createdBy && (lobby.createdBy.nickname || lobby.createdBy.username)) || '';
+      const ownerAv = (lobby.createdBy && (lobby.createdBy.avatar || lobby.createdBy.image)) || '';
+      const bot = this.getRandomBot([ownerNick], [ownerAv]);
       const userStake = parseFloat(lobby.round.stakes[0].amount);
       const botSkins = this.getOpponentSkins(userStake, bot.id);
       const botStake = botSkins.reduce((a, s) => a + parseFloat(s.price), 0);
