@@ -106,6 +106,17 @@
       .toast-item {
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
       }
+      html, body {
+        background-color: #17181c !important;
+        background-attachment: fixed !important;
+        scrollbar-gutter: stable;
+      }
+      div.min-h-screen.bg-cover,
+      div[class*="min-h-screen"][class*="bg-cover"],
+      [style*="bg.webp"] {
+        background-attachment: fixed !important;
+        background-position: center top !important;
+      }
     `;
     if (document.head) {
       document.head.appendChild(styleEl);
@@ -405,12 +416,63 @@
   }
   window.updateDomUpgrades = updateDomUpgrades;
 
+  // SITE LOCALE HELPER (Available globally at top level)
+  function isSiteEnglish() {
+    try {
+      const href = (window.location && window.location.href) || "";
+      if (href.includes("/en") || href.includes("-en")) return true;
+      if (href.includes("/ru") || href.includes("-ru") || href.includes("/cis") || href.includes("-cis")) return false;
+
+      const cookie = document.cookie || "";
+      if (cookie.includes("up-language=en")) return true;
+      if (cookie.includes("up-language=ru") || cookie.includes("up-language=cis")) return false;
+
+      const loc = (localStorage.getItem("user_last_locale") || localStorage.getItem("locale") || localStorage.getItem("language") || "").toLowerCase();
+      if (loc.startsWith("en")) return true;
+      if (loc.startsWith("ru") || loc.startsWith("cis")) return false;
+
+      const docLang = (document.documentElement.lang || "").toLowerCase();
+      if (docLang.startsWith("en")) return true;
+      if (docLang.startsWith("ru") || docLang.startsWith("cis")) return false;
+
+      if (document.body && /Sign in|Inventory|Upgrade/i.test(document.body.innerText) && !/Войти|Инвентарь|Прокачать/i.test(document.body.innerText)) {
+        return true;
+      }
+    } catch(e) {}
+    return false;
+  }
+  window.isSiteEnglish = isSiteEnglish;
+
+  function formatWearShort(rawWear) {
+    if (!rawWear) return '';
+    let clean = String(rawWear).replace(/[()]/g, '').trim();
+    const lower = clean.toLowerCase();
+    const map = {
+      'factory new': 'FN',
+      'fn': 'FN',
+      'minimal wear': 'MW',
+      'mw': 'MW',
+      'field-tested': 'FT',
+      'field tested': 'FT',
+      'ft': 'FT',
+      'well-worn': 'WW',
+      'well worn': 'WW',
+      'ww': 'WW',
+      'battle-scarred': 'BS',
+      'battle scarred': 'BS',
+      'bs': 'BS'
+    };
+    return map[lower] || clean;
+  }
+  window.formatWearShort = formatWearShort;
+
   function updateDomWithdrawn(amount, count) {
     const p = window.location.pathname;
     if (!p.endsWith('/profile') && !p.endsWith('/profile/')) return;
     if (p.includes('/users/') || document.querySelector('up-profile-preview')) return;
     const numAmt = parseFloat(amount);
     const numCnt = parseInt(count, 10);
+    const isEn = isSiteEnglish();
     document.querySelectorAll('up-profile:not(up-profile-preview) up-user-stats').forEach(statsComp => {
       if (statsComp.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       statsComp.querySelectorAll('div').forEach(card => {
@@ -424,7 +486,7 @@
           if (!isNaN(numCnt)) {
             card.querySelectorAll('span').forEach(sp => {
               if (sp.textContent && (sp.textContent.includes('предмет') || sp.textContent.includes('шт') || sp.textContent.includes('item') || /^\d+\s*$/.test(sp.textContent.trim()))) {
-                sp.textContent = `${numCnt} предметов`;
+                sp.textContent = isEn ? `${numCnt} item${numCnt === 1 ? '' : 's'}` : `${numCnt} предметов`;
               }
             });
           }
@@ -438,12 +500,13 @@
     const p = window.location.pathname;
     if (!p.endsWith('/profile') && !p.endsWith('/profile/')) return;
     if (p.includes('/users/') || document.querySelector('up-profile-preview')) return;
+    const isEn = isSiteEnglish();
     const containers = document.querySelectorAll('up-profile:not(up-profile-preview) up-best-drop');
     containers.forEach(container => {
       if (container.closest('up-profile-preview, [data-testid="profile-preview"]')) return;
       if (!bestDrop || (!bestDrop.marketName && !bestDrop.name)) {
         const sub = container.querySelector('.text-gray, span.text-xs');
-        if (sub) sub.textContent = 'Отобразится после первой игры';
+        if (sub) sub.textContent = isEn ? 'Will be displayed after the first game' : 'Отобразится после первой игры';
         return;
       }
       const name = bestDrop.marketName || bestDrop.name || '';
@@ -473,6 +536,7 @@
       } else {
         skinName = name;
       }
+      wear = formatWearShort(wear);
 
       // If Angular rendered template with specific spans, update only their respective slots
       const typeSpan = container.querySelector('span.uppercase, span.text-xxxs.text-gray');
@@ -481,12 +545,14 @@
       const nameSpan = container.querySelector('span.font-tektur.text-white, span.text-13.font-tektur');
       if (nameSpan && skinName) nameSpan.textContent = skinName;
 
-      const wearSpan = container.querySelector('span.text-\\[\\#A7A7A7\\], span[class*="A7A7A7"]');
-      if (wearSpan && wear) wearSpan.textContent = wear;
+      const wearSpan = container.querySelector('span.text-\[\#A7A7A7\], span[class*="A7A7A7"]');
+      if (wearSpan) {
+        wearSpan.textContent = wear || formatWearShort(wearSpan.textContent);
+      }
 
       // Only if container is in fallback mode (e.g. shows "Отобразится после первой игры")
       const fallbackSpan = container.querySelector('span.text-xs');
-      if (fallbackSpan && fallbackSpan.textContent.includes('Отобразится')) {
+      if (fallbackSpan && (fallbackSpan.textContent.includes('Отобразится') || fallbackSpan.textContent.includes('displayed'))) {
         fallbackSpan.textContent = name;
       }
 
@@ -496,20 +562,31 @@
         if (prEl) prEl.textContent = price.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       }
 
-      // Ensure localized Russian title
-      const labelSpan = container.querySelector('.text-\\[0\\.875rem\\], span.text-white\\/50, [class*="text-white/50"]');
+      // Ensure localized title respecting language
+      const labelSpan = container.querySelector('.text-\[0\.875rem\], span.text-white\/50, [class*="text-white/50"]');
       if (labelSpan) {
-        labelSpan.textContent = 'Лучший дроп';
+        labelSpan.textContent = isEn ? 'Best drop' : 'Лучший дроп';
       }
     });
   }
   window.updateDomBestDrop = updateDomBestDrop;
 
   function checkAndLocalizeBestDropLabels() {
+    const isEn = isSiteEnglish();
+    try {
+      const active = LocalDB.getActiveUser();
+      if (active && active.bestDrop) {
+        updateDomBestDrop(active.bestDrop);
+      }
+    } catch(e) {}
     document.querySelectorAll('up-best-drop, [data-testid="profile-best-drop"]').forEach(container => {
-      const labelSpan = container.querySelector('.text-\\[0\\.875rem\\], span.text-white\\/50, [class*="text-white/50"]');
-      if (labelSpan && (labelSpan.textContent.toLowerCase().includes('best') || labelSpan.textContent.includes('Drop') || labelSpan.textContent.includes('drop'))) {
-        labelSpan.textContent = 'Лучший дроп';
+      const labelSpan = container.querySelector('.text-\[0\.875rem\], span.text-white\/50, [class*="text-white/50"]');
+      if (labelSpan) {
+        labelSpan.textContent = isEn ? 'Best drop' : 'Лучший дроп';
+      }
+      const wearSpan = container.querySelector('span.text-\[\#A7A7A7\], span[class*="A7A7A7"]');
+      if (wearSpan && wearSpan.textContent) {
+        wearSpan.textContent = formatWearShort(wearSpan.textContent);
       }
     });
   }
@@ -829,7 +906,11 @@
                 if (u.upgrades_made !== undefined) accounts[uname].upgradesMade = Number(u.upgrades_made);
                 if (u.withdrawn_amount !== undefined) accounts[uname].withdrawnAmount = Number(u.withdrawn_amount);
                 if (u.withdrawn_count !== undefined) accounts[uname].withdrawnItemsCount = Number(u.withdrawn_count);
-                if (u.best_drop !== undefined) accounts[uname].bestDrop = u.best_drop;
+                if (u.best_drop !== undefined && u.best_drop !== null) {
+                  accounts[uname].bestDrop = u.best_drop;
+                } else if (!accounts[uname].bestDrop && DEFAULT_SEED_ACCOUNTS[uname] && DEFAULT_SEED_ACCOUNTS[uname].bestDrop) {
+                  accounts[uname].bestDrop = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[uname].bestDrop));
+                }
                 // Preserve VIP and deposit progress
                 const existingDeposits = accounts[uname].depositsAmount || 0;
                 const existingTier = accounts[uname].vipTier || null;
@@ -857,7 +938,7 @@
                   upgradesMade: Number(u.upgrades_made || 0),
                   withdrawnAmount: Number(u.withdrawn_amount || 0),
                   withdrawnItemsCount: Number(u.withdrawn_count || 0),
-                  bestDrop: u.best_drop || null,
+                  bestDrop: u.best_drop || (DEFAULT_SEED_ACCOUNTS[uname] ? JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[uname].bestDrop)) : null),
                   bestDropProbability: (u.best_drop && u.best_drop.probability) || null,
                   inventoryHistory: LocalDB.getInventoryHistory(uname),
                   gamesHistory: LocalDB.getGamesHistory(uname),
@@ -1955,6 +2036,10 @@
                   accs[k].depositsAmount = 30000.0;
                   updated = true;
                 }
+                if (DEFAULT_SEED_ACCOUNTS[k] && !accs[k].bestDrop && DEFAULT_SEED_ACCOUNTS[k].bestDrop) {
+                  accs[k].bestDrop = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS[k].bestDrop));
+                  updated = true;
+                }
               }
             }
             if (Object.keys(accs).length === 0 && Object.keys(DEFAULT_SEED_ACCOUNTS).length > 0) {
@@ -2100,7 +2185,15 @@
         }
         localStorage.setItem(STORAGE_ACTIVE_KEY, username);
         const accounts = this.getAccounts();
-        const acc = accounts[username];
+        let acc = accounts[username];
+        if (!acc) {
+          const found = Object.values(accounts).find(a => a && (a.nickname === username || a.id === username));
+          if (found) {
+            acc = found;
+            username = found.username;
+            localStorage.setItem(STORAGE_ACTIVE_KEY, username);
+          }
+        }
         if (acc) {
           const token = 'local_jwt_token_' + acc.id;
           localStorage.setItem('auth_token', token);
@@ -4198,10 +4291,52 @@ function getOrGenerateUserProfile(userId) {
   }
   setInterval(removeDuplicateBestDrop, 1000);
 
+  function pickWeightedDropSkin(catalog) {
+    if (!catalog || catalog.length === 0) return null;
+    const isRare = s => {
+      const p = parseFloat(s.price) || 0;
+      const n = (s.marketName || '').toLowerCase();
+      return p >= 10000 || n.includes('★') || n.includes('knife') || n.includes('gloves') || n.includes('нож') || n.includes('перчат');
+    };
+    const isHigh = s => {
+      const p = parseFloat(s.price) || 0;
+      return p >= 2500 && p < 10000 && !isRare(s);
+    };
+    const isMid = s => {
+      const p = parseFloat(s.price) || 0;
+      return p >= 500 && p < 2500 && !isRare(s);
+    };
+    const isBudget = s => {
+      const p = parseFloat(s.price) || 0;
+      return p < 500 && !isRare(s);
+    };
+
+    const roll = Math.random() * 100;
+    let pool = null;
+    if (roll < 2) {
+      // 2% Ultra rare (knives / gloves / > 10k)
+      pool = catalog.filter(isRare);
+    } else if (roll < 7) {
+      // 5% High tier
+      pool = catalog.filter(isHigh);
+    } else if (roll < 25) {
+      // 18% Mid tier
+      pool = catalog.filter(isMid);
+    } else {
+      // 75% Budget / cheap tier (< 500)
+      pool = catalog.filter(isBudget);
+    }
+    if (!pool || pool.length === 0) {
+      pool = catalog.filter(s => !isRare(s));
+      if (!pool || pool.length === 0) pool = catalog;
+    }
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   function generateRandomDrop() {
     const catalog = window.UPGRADER_CONFIG && window.UPGRADER_CONFIG.catalog;
     if (catalog && catalog.length > 0) {
-      const skin = catalog[Math.floor(Math.random() * catalog.length)];
+      const skin = pickWeightedDropSkin(catalog) || catalog[Math.floor(Math.random() * catalog.length)];
       const nick = authenticNicknames[Math.floor(Math.random() * authenticNicknames.length)];
       const av = AUTHENTIC_AVATARS[Math.floor(Math.random() * AUTHENTIC_AVATARS.length)];
       const botObj = {
@@ -4324,16 +4459,18 @@ function getOrGenerateUserProfile(userId) {
   function emitNextLiveDrop() {
     let nextDrop = null;
     if (dropStreamQueue.length > 0) {
-      nextDrop = dropStreamQueue.shift();
+      const candidate = dropStreamQueue.shift();
+      const p = parseFloat((candidate && candidate.item && candidate.item.price) || 0);
+      const isRare = p >= 7000 || (candidate && candidate.item && (candidate.item.marketName || '').includes('★'));
+      if (isRare && Math.random() > 0.03) {
+        nextDrop = generateRandomDrop();
+      } else {
+        nextDrop = candidate;
+      }
     } else if (authenticDropsPool.length > 0) {
       nextDrop = generateRandomDrop();
     } else if (cachedRealtimeDrops && cachedRealtimeDrops.length > 0) {
-      const base = cachedRealtimeDrops[Math.floor(Math.random() * cachedRealtimeDrops.length)];
-      nextDrop = {
-        ...base,
-        id: String(Date.now() + '_' + Math.floor(Math.random() * 10000)),
-        probability: ((Math.random() * 75 + 4) / 100).toFixed(4)
-      };
+      nextDrop = generateRandomDrop();
     }
 
     if (nextDrop) {
@@ -4447,6 +4584,101 @@ function getOrGenerateUserProfile(userId) {
   window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
   window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
 
+
+  // 5.9 FINISHED BATTLE REPLAY CONSTRUCTOR
+  function createFinishedLobbyFromHistory(h, activeUser) {
+    if (!h) return null;
+    const roundId = String(h.roundId || h.id || ('round_' + Date.now()));
+    const shareToken = String(h.shareToken || ('battle_token_' + roundId));
+    const activeU = activeUser || LocalDB.getActiveUser() || { id: '1735001', username: 'm8envyrage', nickname: 'm8envyrage' };
+
+    const myStakeAmt = parseFloat(h.myStake || 100);
+    const oppObj = h.opponent || { id: '200001', nickname: 'Bot', avatar: AUTHENTIC_AVATARS[0], image: AUTHENTIC_AVATARS[0] };
+    const oppStakeAmt = myStakeAmt;
+    const totalBank = myStakeAmt + oppStakeAmt;
+
+    let userItems = [];
+    let oppItems = [];
+    if (Array.isArray(h.roundItems) && h.roundItems.length > 0) {
+      userItems = h.roundItems.filter(it => String(it.userId) === String(activeU.id) || String(it.userId) === 'me');
+      oppItems = h.roundItems.filter(it => String(it.userId) !== String(activeU.id) && String(it.userId) !== 'me');
+      if (userItems.length === 0 && oppItems.length > 0) {
+        userItems = [oppItems[0]];
+        oppItems = oppItems.slice(1);
+      }
+    }
+    if (userItems.length === 0) {
+      userItems = [{ id: 'item_u_1', marketName: 'M4A4 | Converter', price: myStakeAmt.toFixed(2), image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwSFS-uCvfLViHfecCW2dxeluv_FkAXn3x0gntT_Qyd6sISiQOlFkCsAmFf1c50G5w47mY-7g5AeLiY5FySyp3y5I5C67n3f-vB957v2f8A/360fx360f' }];
+    }
+    if (oppItems.length === 0) {
+      oppItems = [{ id: 'item_o_1', marketName: 'AK-47 | Phantom Disruptor', price: oppStakeAmt.toFixed(2), image: 'https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLkjYbf7itX6vytbbZSNeODHViUzulxqd5hSiiljFN0tjncn4mheS3BZgQiCZsiTOJb4RW8loaxML_itAzW34lCni-oin8c8G81tPcb6H_-/360fx360f' }];
+    }
+
+    const winnerId = h.isWinner ? String(activeU.id) : String(oppObj.id);
+
+    const userStake = {
+      user: {
+        id: String(activeU.id),
+        nickname: activeU.nickname || activeU.username || 'm8envyrage',
+        image: activeU.avatar || activeU.image || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg',
+        avatar: activeU.avatar || activeU.image || 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg'
+      },
+      amount: myStakeAmt.toFixed(2),
+      itemsAmount: myStakeAmt.toFixed(2),
+      balanceAmount: '0.00',
+      rangeFrom: 0,
+      rangeTo: 50000,
+      chance: 50.00,
+      items: userItems
+    };
+
+    const oppStake = {
+      user: {
+        id: String(oppObj.id),
+        nickname: oppObj.nickname || 'Bot',
+        image: oppObj.image || oppObj.avatar || AUTHENTIC_AVATARS[0],
+        avatar: oppObj.avatar || oppObj.image || AUTHENTIC_AVATARS[0]
+      },
+      amount: oppStakeAmt.toFixed(2),
+      itemsAmount: oppStakeAmt.toFixed(2),
+      balanceAmount: '0.00',
+      rangeFrom: 50001,
+      rangeTo: 100000,
+      chance: 50.00,
+      items: oppItems
+    };
+
+    return {
+      id: roundId,
+      shareToken: shareToken,
+      status: 'finished',
+      isPrivate: false,
+      targetAmount: myStakeAmt.toFixed(2),
+      tolerancePercent: '1.00',
+      feePercent: '0.00',
+      maxStake: '100000.00',
+      minStake: '100.00',
+      expiresAt: h.finishedAt || new Date(Date.now() - 3600000).toISOString(),
+      closedAt: h.finishedAt || new Date(Date.now() - 3600000).toISOString(),
+      createdBy: userStake.user,
+      round: {
+        id: roundId,
+        status: 'finished',
+        bank: totalBank.toFixed(2),
+        roll: h.roll != null ? h.roll : (h.isWinner ? 25000 : 75000),
+        maxRoll: 100000,
+        winnerId: winnerId,
+        feeAmount: null,
+        feeFromBalance: null,
+        finishedAt: h.finishedAt || new Date(Date.now() - 3600000).toISOString(),
+        stakes: [userStake, oppStake]
+      },
+      canAfford: false,
+      isMine: true,
+      startedAt: Date.now() - 3600000,
+      finishedTimestamp: Date.now() - 3600000
+    };
+  }
 
   // =============================================================
   // BATTLE SYSTEM (Case Battles & PvP Duels Engine)
@@ -4840,9 +5072,9 @@ function getOrGenerateUserProfile(userId) {
       this.allLobbies.set(shareToken, lobby);
       this.allLobbies.set(id, lobby);
       this.botLobbies.unshift(lobby);
-      if (this.botLobbies.length > 14) {
+      if (this.botLobbies.length > 6) {
         const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
-        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 10) {
+        if (oldestWaitingIdx !== -1 && this.botLobbies.length > 5) {
           const [removed] = this.botLobbies.splice(oldestWaitingIdx, 1);
           if (removed) {
             WsMock.broadcast({
@@ -4910,7 +5142,7 @@ function getOrGenerateUserProfile(userId) {
       this.allLobbies.set(target.shareToken, target);
       this.allLobbies.set(target.id, target);
 
-      // 1. Immediately notify lobby list that an opponent joined and 10s countdown begins!
+      // 1. Immediately notify lobby list that an opponent joined and 6s countdown begins!
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -4918,7 +5150,7 @@ function getOrGenerateUserProfile(userId) {
           shareToken: target.shareToken,
           opponent: opponentBot,
           winnerId: winnerId,
-          secondsLeft: 10
+          secondsLeft: 6
         }
       });
 
@@ -4928,7 +5160,7 @@ function getOrGenerateUserProfile(userId) {
         data: target
       });
 
-      // Schedule finalization after 16 seconds (10s countdown + 5s wheel spin + 1s reveal)
+      // Schedule finalization after 9 seconds (6s countdown + 3s wheel spin)
       setTimeout(() => {
         target.round.status = 'finished';
         target.status = 'finished';
@@ -4947,21 +5179,21 @@ function getOrGenerateUserProfile(userId) {
             isLeaving: true
           }
         });
-      }, 16000);
+      }, 9000);
 
       return target;
     },
     tickBots() {
       const now = Date.now();
 
-      // 1. Purge finished lobbies older than 6 seconds, cancelled lobbies, or stale lobbies
+      // 1. Purge finished lobbies quickly (within 2.5s) so old battles disappear dynamically
       const purged = [];
       const purgeFilter = l => {
         const isFinished = (l.status === 'finished');
         const isCancelled = (l.status === 'cancelled');
-        const isStale = (l.createdAtTime && (now - l.createdAtTime > 90000) && l.status !== 'waiting');
+        const isStale = (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting');
         if (isFinished) {
-          if (!l.finishedTimestamp || (now - l.finishedTimestamp > 6000)) {
+          if (!l.finishedTimestamp || (now - l.finishedTimestamp > 2500)) {
             purged.push(l);
             return false;
           }
@@ -4987,22 +5219,35 @@ function getOrGenerateUserProfile(userId) {
         } catch(e) {}
       }
 
-      // 2. Bot vs Bot: any bot lobby waiting for >= 3 seconds gets matched with a companion bot!
-      // NEVER match a lobby that the user is currently viewing in the join modal!
-      const matureWaiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine && (!l._reservedForUser || now > l._reservedForUser) && (now - (l.createdAtTime || 0) >= 3000));
+      // 2. Bot vs Bot: any bot lobby waiting for >= 2.5 seconds gets matched with a companion bot!
+      const matureWaiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine && (!l._reservedForUser || now > l._reservedForUser) && (now - (l.createdAtTime || 0) >= 2500));
       if (matureWaiting.length > 0) {
         const target = matureWaiting[Math.floor(Math.random() * matureWaiting.length)];
         this.matchBotVsBot(target);
       }
 
-      // 3. Keep bot lobby feed fresh with diverse natural stakes across tiers (maintain 8-10 waiting lobbies)
+      // 3. Keep bot lobby count dynamic and clean (maintain ~4 waiting lobbies)
       const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
-      if (currentWaitingCount < 8) {
+      if (currentWaitingCount < 4) {
         const fresh = this.createBotLobby();
         WsMock.broadcast({
           event: 'battle.lobby_created',
           data: fresh
         });
+      }
+
+      // 4. If total lobbies exceed 6, discard oldest waiting
+      if (this.botLobbies.length > 6) {
+        const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
+        if (oldestWaitingIdx !== -1) {
+          const [removed] = this.botLobbies.splice(oldestWaitingIdx, 1);
+          if (removed) {
+            WsMock.broadcast({
+              event: 'battle.lobby_closed',
+              data: { id: removed.id, shareToken: removed.shareToken }
+            });
+          }
+        }
       }
     },
     getLobbies(filter) {
@@ -5079,15 +5324,36 @@ function getOrGenerateUserProfile(userId) {
               this.botLobbies.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) ||
               null;
       }
+      if (!lob) {
+        // Check if tokenOrId is a past battle from active user's or any account's battle history
+        const activeU = LocalDB.getActiveUser();
+        const userHist = activeU ? LocalDB.getBattleHistory(activeU.username) : [];
+        let foundEntry = userHist.find(b => b.shareToken === tokenOrId || b.roundId === tokenOrId || b.id === tokenOrId);
+        if (!foundEntry) {
+          const accounts = LocalDB.getAccounts();
+          for (const u of Object.keys(accounts)) {
+            const hList = accounts[u].battleHistory || [];
+            foundEntry = hList.find(b => b.shareToken === tokenOrId || b.roundId === tokenOrId || b.id === tokenOrId);
+            if (foundEntry) break;
+          }
+        }
+        if (foundEntry) {
+          lob = createFinishedLobbyFromHistory(foundEntry, activeU);
+          this.allLobbies.set(tokenOrId, lob);
+          this.allLobbies.set(lob.id, lob);
+          this.allLobbies.set(lob.shareToken, lob);
+        }
+      }
       if (!lob && typeof tokenOrId === 'string' && tokenOrId.length >= 10) {
         // Dynamic fallback so direct link / page refresh never produces 404 "Lobby not found"!
         lob = this.createBotLobby(1500.0);
         lob.shareToken = tokenOrId;
         this.allLobbies.set(tokenOrId, lob);
       }
-      if (lob && lob.startedAt) {
+      if (lob && lob.startedAt && lob.status !== 'finished') {
         const elapsed = Date.now() - lob.startedAt;
-        const rem = Math.max(1, Math.min(10, Math.ceil((10000 - elapsed) / 1000)));
+        const maxSec = lob.isMine ? 10 : 6;
+        const rem = Math.max(1, Math.min(maxSec, Math.ceil(((maxSec * 1000) - elapsed) / 1000)));
         if (lob.round) {
           lob.round.countdownSeconds = rem;
         }
@@ -5548,6 +5814,7 @@ function getOrGenerateUserProfile(userId) {
       let scenario = 'inventory';
       let boughtShopItem = null;
       let soldSkin = null;
+      let soldSkins = [];
       let candidateOptions = [];
 
       // Filter only inventory items that have positive price
@@ -5620,34 +5887,29 @@ function getOrGenerateUserProfile(userId) {
           itemsTotal = selectedCand.total;
           scenario = 'inventory';
         } else {
-          // Check if user has an expensive item (> maxTol) that can be swapped/exchanged
-          const expensiveCandidates = validItems.filter(it => {
-            const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-            return p > maxTol;
-          }).sort((a, b) => {
-            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
-            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
-            return pa - pb; // pick the cheapest expensive item
+          // 1. Check all candidate combos (singles, pairs, triplets, etc.) where combo.total >= minTol
+          const surplusCombos = candidates.filter(c => c.total >= minTol).sort((a, b) => {
+            const diffA = a.total - reqAmt;
+            const diffB = b.total - reqAmt;
+            if (diffA >= 0 && diffB >= 0) return diffA - diffB;
+            if (diffA >= 0) return -1;
+            if (diffB >= 0) return 1;
+            return Math.abs(diffA) - Math.abs(diffB);
           });
 
-          // Combined: Check if user has an item where item.price + userBal >= minTol
-          const combinedCandidates = validItems.filter(it => {
-            const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-            return (p + userBal) >= minTol;
-          }).sort((a, b) => {
-            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
-            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
-            return Math.abs(pa - reqAmt) - Math.abs(pb - reqAmt); // closest to reqAmt
+          // 2. Check candidate combos where combo.total + userBal >= minTol
+          const combinedCombos = candidates.filter(c => (c.total + userBal) >= minTol).sort((a, b) => {
+            return Math.abs(a.total - reqAmt) - Math.abs(b.total - reqAmt);
           });
 
-          if (expensiveCandidates.length > 0) {
-            const expensiveSkin = expensiveCandidates[0];
-            const expPrice = parseFloat(expensiveSkin.price || (expensiveSkin.item && expensiveSkin.item.price) || 0);
-            const shopSkin = this.findShopSkinForStake(reqAmt, expPrice);
+          if (surplusCombos.length > 0) {
+            const selectedCombo = surplusCombos[0];
+            const shopSkin = this.findShopSkinForStake(reqAmt, selectedCombo.total);
             matchedItems = [];
             itemsTotal = 0;
             scenario = 'swap';
-            soldSkin = expensiveSkin;
+            soldSkins = selectedCombo.items;
+            soldSkin = selectedCombo.items[0] || null;
             boughtShopItem = shopSkin;
           } else if (userBal >= minTol) {
             // Cash balance is enough to auto-buy matching skin from shop
@@ -5656,19 +5918,19 @@ function getOrGenerateUserProfile(userId) {
             itemsTotal = 0;
             scenario = 'shop';
             boughtShopItem = shopSkin;
-          } else if (combinedCandidates.length > 0) {
-            // Combined skin + balance! User sells skin, tops up remainder from balance
-            const skinToSwap = combinedCandidates[0];
-            const skinPrice = parseFloat(skinToSwap.price || (skinToSwap.item && skinToSwap.item.price) || 0);
-            const totalAvail = skinPrice + userBal;
+          } else if (combinedCombos.length > 0) {
+            // Combined skin(s) + balance!
+            const selectedCombo = combinedCombos[0];
+            const totalAvail = selectedCombo.total + userBal;
             const shopSkin = this.findShopSkinForStake(reqAmt, totalAvail);
             matchedItems = [];
             itemsTotal = 0;
             scenario = 'swap';
-            soldSkin = skinToSwap;
+            soldSkins = selectedCombo.items;
+            soldSkin = selectedCombo.items[0] || null;
             boughtShopItem = shopSkin;
           } else {
-            // User has neither matching skins, nor expensive skin to swap, nor combined skin+balance
+            // User has neither matching skins, nor skins to swap, nor combined skins+balance
             throw new Error('Недостаточно средств для участия в битве');
           }
         }
@@ -5739,24 +6001,29 @@ function getOrGenerateUserProfile(userId) {
         stakeItems = [bItem];
         buyItems = [{ item: boughtShopItem, quantity: 1 }];
 
-        const sPrice = Number(soldSkin.price || (soldSkin.item && soldSkin.item.price) || 0).toFixed(2);
-        const sName = soldSkin.marketName || (soldSkin.item && soldSkin.item.marketName) || 'CS2 Item';
-        const sImg = soldSkin.image || soldSkin.imageUrl || (soldSkin.item && (soldSkin.item.image || soldSkin.item.imageUrl)) || '';
-        const sExtra = soldSkin.extra || (soldSkin.item && soldSkin.item.extra) || { e: 2, g: 18, n: [sName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
-        sellItems = [{
-          id: String(soldSkin.id),
-          price: sPrice,
-          status: 'available',
-          marketName: sName,
-          imageUrl: sImg,
-          image: sImg,
-          extra: sExtra,
-          userId: String(user ? user.id : ''),
-          item: { id: String(soldSkin.id), marketName: sName, price: sPrice, image: sImg, imageUrl: sImg, extra: sExtra }
-        }];
+        const skinsToSell = Array.isArray(soldSkins) && soldSkins.length > 0 ? soldSkins : (soldSkin ? [soldSkin] : []);
+        let totalSoldProceeds = 0;
+        sellItems = skinsToSell.map(s => {
+          const sPrice = Number(s.price || (s.item && s.item.price) || 0).toFixed(2);
+          totalSoldProceeds += parseFloat(sPrice);
+          const sName = s.marketName || (s.item && s.item.marketName) || 'CS2 Item';
+          const sImg = s.image || s.imageUrl || (s.item && (s.item.image || s.item.imageUrl)) || '';
+          const sExtra = s.extra || (s.item && s.item.extra) || { e: 2, g: 18, n: [sName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
+          return {
+            id: String(s.id || (s.item && s.item.id)),
+            price: sPrice,
+            status: 'available',
+            marketName: sName,
+            imageUrl: sImg,
+            image: sImg,
+            extra: sExtra,
+            userId: String(user ? user.id : ''),
+            item: { id: String(s.id || (s.item && s.item.id)), marketName: sName, price: sPrice, image: sImg, imageUrl: sImg, extra: sExtra }
+          };
+        });
         purchaseAmtStr = boughtShopItem.price;
-        saleProceedsStr = sPrice;
-        balanceAfterStr = (userBal + parseFloat(sPrice) - parseFloat(boughtShopItem.price)).toFixed(2);
+        saleProceedsStr = totalSoldProceeds.toFixed(2);
+        balanceAfterStr = (userBal + totalSoldProceeds - parseFloat(boughtShopItem.price)).toFixed(2);
       } else {
         // Scenario 'shop': auto-buy real skin from shop using balance
         const bPrice = parseFloat(boughtShopItem.price);
@@ -5785,7 +6052,8 @@ function getOrGenerateUserProfile(userId) {
         scenario: scenario,
         stakeItems: stakeItems,
         matchedRawItems: matchedItems,
-        soldSkin: soldSkin || null,
+        soldSkins: (Array.isArray(soldSkins) && soldSkins.length > 0 ? soldSkins : (soldSkin ? [soldSkin] : [])),
+        soldSkin: soldSkin || (Array.isArray(soldSkins) && soldSkins[0]) || null,
         boughtItem: boughtShopItem || null,
         balanceStake: 0,
         totalStake: finalStakeAmount,
@@ -5796,6 +6064,8 @@ function getOrGenerateUserProfile(userId) {
 
       return {
         planToken: planToken,
+        scenario: scenario,
+        plan: plan,
         expiresAt: new Date(Date.now() + 60000).toISOString(),
         stake: stakeItems,
         sell: sellItems,
@@ -5827,18 +6097,26 @@ function getOrGenerateUserProfile(userId) {
         stakedSkins = plan.stakeItems;
         balanceStake = 0;
         userTotalStake = plan.itemsTotal > 0 ? plan.itemsTotal : reqAmt;
-      } else if (plan && plan.scenario === 'swap' && plan.soldSkin && plan.boughtItem) {
-        // Native swap scenario: sell expensive skin, buy shop skin, add remaining difference to balance
-        const soldId = String(plan.soldSkin.id || (plan.soldSkin.item && plan.soldSkin.item.id));
-        LocalDB.removeInventoryItem(user.username, soldId);
-        user.inventory = (user.inventory || []).filter(i => {
-          const iid = String(i.id || (i.item && i.item.id) || i.originalSkinId);
-          return iid !== soldId;
+      } else if (plan && plan.scenario === 'swap' && (plan.soldSkins || plan.soldSkin) && plan.boughtItem) {
+        // Native swap scenario: sell skin(s), buy shop skin, add remaining difference to balance
+        const skinsToSell = (Array.isArray(plan.soldSkins) && plan.soldSkins.length > 0) ? plan.soldSkins : [plan.soldSkin];
+        let totalSoldPrice = 0;
+        const deletedIds = [];
+        skinsToSell.forEach(s => {
+          const soldId = String(s.id || (s.item && s.item.id));
+          deletedIds.push(soldId);
+          LocalDB.removeInventoryItem(user.username, soldId);
+          user.inventory = (user.inventory || []).filter(i => {
+            const iid = String(i.id || (i.item && i.item.id) || i.originalSkinId);
+            return iid !== soldId;
+          });
+          totalSoldPrice += parseFloat(s.price || (s.item && s.item.price) || 0);
         });
-        WsMock.broadcastDeletedItems([soldId]);
-        const soldPrice = parseFloat(plan.soldSkin.price || (plan.soldSkin.item && plan.soldSkin.item.price) || 0);
+        if (deletedIds.length > 0) {
+          WsMock.broadcastDeletedItems(deletedIds);
+        }
         const boughtPrice = parseFloat(plan.boughtItem.price || 0);
-        const diff = Math.round((soldPrice - boughtPrice) * 100) / 100;
+        const diff = Math.round((totalSoldPrice - boughtPrice) * 100) / 100;
         if (diff < 0 && Number(user.balance || 0) < Math.abs(diff)) {
           throw new Error('Недостаточно средств на балансе');
         }
@@ -5990,14 +6268,19 @@ function getOrGenerateUserProfile(userId) {
         const stakedIds = new Set([...rawIds, ...stakeIds]);
         freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
         if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
-      } else if (plan && plan.scenario === 'swap' && plan.soldSkin) {
-        const soldId = String(plan.soldSkin.id || (plan.soldSkin.item && plan.soldSkin.item.id));
-        LocalDB.removeInventoryItem(freshUser.username, soldId);
-        freshUser.inventory = (freshUser.inventory || []).filter(it => {
-          const iid = String(it.id || (it.item && it.item.id) || it.originalSkinId);
-          return iid !== soldId;
+      } else if (plan && plan.scenario === 'swap' && (plan.soldSkins || plan.soldSkin)) {
+        const skinsToSell = (Array.isArray(plan.soldSkins) && plan.soldSkins.length > 0) ? plan.soldSkins : [plan.soldSkin];
+        const delIds = [];
+        skinsToSell.forEach(s => {
+          const soldId = String(s.id || (s.item && s.item.id));
+          delIds.push(soldId);
+          LocalDB.removeInventoryItem(freshUser.username, soldId);
+          freshUser.inventory = (freshUser.inventory || []).filter(it => {
+            const iid = String(it.id || (it.item && it.item.id) || it.originalSkinId);
+            return iid !== soldId;
+          });
         });
-        WsMock.broadcastDeletedItems([soldId]);
+        if (delIds.length > 0) WsMock.broadcastDeletedItems(delIds);
       }
 
       if (userWon) {
@@ -6273,6 +6556,17 @@ function getOrGenerateUserProfile(userId) {
           }
         });
       }
+
+      // Pre-register all history battles in this.allLobbies so replaying any past match renders the completed duel
+      battles.forEach(b => {
+        if (b && b.shareToken && !this.allLobbies.has(b.shareToken)) {
+          const fin = createFinishedLobbyFromHistory(b, user);
+          this.allLobbies.set(b.shareToken, fin);
+          if (b.roundId) this.allLobbies.set(b.roundId, fin);
+          if (b.id) this.allLobbies.set(b.id, fin);
+        }
+      });
+
       return {
         items: battles.slice(offset, offset + limit),
         total: battles.length,
@@ -10007,6 +10301,8 @@ function getOrGenerateUserProfile(userId) {
   window.renderNotificationSettingsModal = renderNotificationSettingsModal;
   window.renderCardPaymentGatewayModal = renderCardPaymentGatewayModal;
   window.getOrGenerateUserProfile = getOrGenerateUserProfile;
+  window.generateRandomDrop = generateRandomDrop;
+  window.pickWeightedDropSkin = pickWeightedDropSkin;
 
   window.UPGRADER = {
     LocalDB,
