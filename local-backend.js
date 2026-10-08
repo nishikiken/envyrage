@@ -97,6 +97,15 @@
         margin: 0 !important;
         padding: 0 !important;
       }
+      .toast-container,
+      up-toast-container .toast-container {
+        top: 76px !important;
+        right: 20px !important;
+        z-index: 999999 !important;
+      }
+      .toast-item {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45) !important;
+      }
     `;
     if (document.head) {
       document.head.appendChild(styleEl);
@@ -2428,6 +2437,10 @@
       }
     }
 
+    static removeInventoryItem(username, itemId) {
+      return this.removeItemFromInventory(username, itemId);
+    }
+
     static getBattleHistory(username) {
       if (!username) return [];
       try {
@@ -3654,7 +3667,11 @@
     "тише.", "холодно", "невесомый", "приглушен", "вне сети", "сбой", "помеха", "пиксель", "артефакт", "шум.",
     "задержка", "откат", "промах", "без лица", "noct.", "vanta", "vesper", "nexial", "vellichor", "liminal",
     "sonder", "saudade", "lacuna", "reverie", "umbra", "echelon", "parallax", "silhouette", "aftermath", "deadlock",
-    "crossfade", "sideeffect", "offscript", "misconduct", "counterfeit", "unbound", "unseen", "unruly", "unreal.", "untouched"
+    "crossfade", "sideeffect", "offscript", "misconduct", "counterfeit", "unbound", "unseen", "unruly", "unreal.", "untouched",
+    "педик 14ВВ", "глитер", "пузотряс", "S1rota", "dnk666", "s0mple", "10 yo talent",
+    "заводской брак", "мамкин снайпер", "скуф 2000", "подпивас", "бездарность", "DEAD INSIDE 1337",
+    "токсик из паблика", "пивной барон", "быдло 1tap", "сын фермера", "помойка e-sports",
+    "1000-7 zxcursed", "минус уши", "0iq player", "рачина", "бухой батя", "солевой лорд", "clown.exe"
   ];
 
   const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
@@ -4634,7 +4651,7 @@ function getOrGenerateUserProfile(userId) {
           }
         }
       } catch(e) {}
-      const initialTierTargets = [120, 280, 520, 850, 1400, 2600, 4800, 9500];
+      const initialTierTargets = [110, 180, 260, 390, 520, 780, 1150, 2400];
       for (const tAmt of initialTierTargets) {
         this.createBotLobby(tAmt);
       }
@@ -4715,19 +4732,28 @@ function getOrGenerateUserProfile(userId) {
       }
 
       if (pickedSkins.length === 0) {
-        // Diverse natural price tiers for CS2 battles
-        const tiers = [
-          [70, 250],
-          [250, 650],
-          [650, 1600],
-          [1600, 3800],
-          [3800, 8500],
-          [8500, 25000]
+        // Weighted distribution favoring cheap, accessible CS2 battles
+        const weightedTiers = [
+          { min: 80, max: 280, weight: 35 },   // 35% cheap (80 - 280 ₽)
+          { min: 280, max: 600, weight: 30 },  // 30% budget (280 - 600 ₽)
+          { min: 600, max: 1300, weight: 20 }, // 20% medium (600 - 1300 ₽)
+          { min: 1300, max: 2800, weight: 10 },// 10% high (1300 - 2800 ₽)
+          { min: 2800, max: 6500, weight: 4 }, // 4% rare (2800 - 6500 ₽)
+          { min: 6500, max: 15000, weight: 1 } // 1% ultra-rare (6500 - 15000 ₽)
         ];
-        const tier = tiers[Math.floor(Math.random() * tiers.length)];
+        const totalW = weightedTiers.reduce((acc, t) => acc + t.weight, 0);
+        let randW = Math.random() * totalW;
+        let selectedTier = weightedTiers[0];
+        for (const wt of weightedTiers) {
+          if (randW < wt.weight) {
+            selectedTier = wt;
+            break;
+          }
+          randW -= wt.weight;
+        }
         const inTier = validPool.filter(s => {
           const p = parseFloat(s.price) || 0;
-          return p >= tier[0] && p <= tier[1];
+          return p >= selectedTier.min && p <= selectedTier.max;
         });
         const pick = (inTier.length > 0 ? inTier : validPool)[Math.floor(Math.random() * (inTier.length > 0 ? inTier.length : validPool.length))];
         pickedSkins = [pick];
@@ -4850,19 +4876,31 @@ function getOrGenerateUserProfile(userId) {
       target.round.status = 'in_progress';
       target.status = 'in_progress';
       target.startedAt = Date.now();
-      target.finishedTimestamp = Date.now() + 14000;
+      target.finishedTimestamp = Date.now() + 16000;
 
       // Register in fast lookup map so room can always load it
       this.allLobbies.set(target.shareToken, target);
       this.allLobbies.set(target.id, target);
 
-      // Immediately notify room/spectators to start duel animation!
+      // 1. Immediately notify lobby list that an opponent joined and 10s countdown begins!
+      WsMock.broadcast({
+        event: 'battle.lobby_closed',
+        data: {
+          id: target.id,
+          shareToken: target.shareToken,
+          opponent: opponentBot,
+          winnerId: winnerId,
+          secondsLeft: 10
+        }
+      });
+
+      // 2. Immediately notify room/spectators to start duel animation!
       WsMock.broadcast({
         event: 'battle.round_finished',
         data: target
       });
 
-      // Schedule finalization after 14 seconds (countdown + wheel spin + winner reveal)
+      // Schedule finalization after 16 seconds (10s countdown + 5s wheel spin + 1s reveal)
       setTimeout(() => {
         target.round.status = 'finished';
         target.status = 'finished';
@@ -4877,10 +4915,11 @@ function getOrGenerateUserProfile(userId) {
             shareToken: target.shareToken,
             opponent: opponentBot,
             winnerId: winnerId,
-            secondsLeft: 0
+            secondsLeft: 0,
+            isLeaving: true
           }
         });
-      }, 14000);
+      }, 16000);
 
       return target;
     },
@@ -5219,7 +5258,7 @@ function getOrGenerateUserProfile(userId) {
       lobby.round.status = 'in_progress';
       lobby.status = 'in_progress';
       lobby.startedAt = Date.now();
-      lobby.finishedTimestamp = Date.now() + 14000;
+      lobby.finishedTimestamp = Date.now() + 16000;
 
       if (activeUser) {
         try {
@@ -5358,6 +5397,17 @@ function getOrGenerateUserProfile(userId) {
       } catch(e) {}
 
       WsMock.broadcast({
+        event: 'battle.lobby_closed',
+        data: {
+          id: lobby.id,
+          shareToken: lobby.shareToken,
+          opponent: bot,
+          winnerId: winnerId,
+          secondsLeft: 10
+        }
+      });
+
+      WsMock.broadcast({
         event: 'battle.round_finished',
         data: lobby
       });
@@ -5376,10 +5426,11 @@ function getOrGenerateUserProfile(userId) {
             shareToken: lobby.shareToken,
             opponent: bot,
             winnerId: winnerId,
-            secondsLeft: 0
+            secondsLeft: 0,
+            isLeaving: true
           }
         });
-      }, 14000);
+      }, 16000);
     },
     findShopSkinForStake(targetStake, maxBudget) {
       let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
@@ -5698,7 +5749,12 @@ function getOrGenerateUserProfile(userId) {
       } else if (plan && plan.scenario === 'swap' && plan.soldSkin && plan.boughtItem) {
         // Native swap scenario: sell expensive skin, buy shop skin, add remaining difference to balance
         const soldId = String(plan.soldSkin.id || (plan.soldSkin.item && plan.soldSkin.item.id));
-        user.inventory = (user.inventory || []).filter(i => String(i.id) !== soldId && String(i.originalSkinId) !== soldId);
+        LocalDB.removeInventoryItem(user.username, soldId);
+        user.inventory = (user.inventory || []).filter(i => {
+          const iid = String(i.id || (i.item && i.item.id) || i.originalSkinId);
+          return iid !== soldId;
+        });
+        WsMock.broadcastDeletedItems([soldId]);
         const soldPrice = parseFloat(plan.soldSkin.price || (plan.soldSkin.item && plan.soldSkin.item.price) || 0);
         const boughtPrice = parseFloat(plan.boughtItem.price || 0);
         const diff = Math.round((soldPrice - boughtPrice) * 100) / 100;
@@ -5814,7 +5870,7 @@ function getOrGenerateUserProfile(userId) {
       lobby.round.status = 'in_progress';
       lobby.status = 'in_progress';
       lobby.startedAt = Date.now();
-      lobby.finishedTimestamp = Date.now() + 14000;
+      lobby.finishedTimestamp = Date.now() + 16000;
 
       // Record in persistent battle history immediately
       const histEntry = {
@@ -5850,6 +5906,14 @@ function getOrGenerateUserProfile(userId) {
         const stakedIds = new Set([...rawIds, ...stakeIds]);
         freshUser.inventory = (freshUser.inventory || []).filter(it => !stakedIds.has(String(it.id)));
         if (stakedIds.size > 0) WsMock.broadcastDeletedItems([...stakedIds]);
+      } else if (plan && plan.scenario === 'swap' && plan.soldSkin) {
+        const soldId = String(plan.soldSkin.id || (plan.soldSkin.item && plan.soldSkin.item.id));
+        LocalDB.removeInventoryItem(freshUser.username, soldId);
+        freshUser.inventory = (freshUser.inventory || []).filter(it => {
+          const iid = String(it.id || (it.item && it.item.id) || it.originalSkinId);
+          return iid !== soldId;
+        });
+        WsMock.broadcastDeletedItems([soldId]);
       }
 
       if (userWon) {
@@ -5885,8 +5949,8 @@ function getOrGenerateUserProfile(userId) {
             SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
           }
         });
-        // If user won, return their staked skins too (if inventory skins were staked)
-        if (plan && (plan.scenario === 'inventory' || plan.scenario === 'shop') && stakedSkins.length > 0) {
+        // If user won, return their staked skins too (if inventory skins were staked or swap)
+        if (plan && (plan.scenario === 'inventory' || plan.scenario === 'shop' || plan.scenario === 'swap') && stakedSkins.length > 0) {
           stakedSkins.forEach(bs => {
             const returnedItem = {
               id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
@@ -5918,6 +5982,12 @@ function getOrGenerateUserProfile(userId) {
             }
           });
         }
+        if (plan && plan.scenario === 'swap' && plan.soldSkin) {
+          const soldId = String(plan.soldSkin.id || (plan.soldSkin.item && plan.soldSkin.item.id));
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.removeInventoryItem(soldId).catch(() => {});
+          }
+        }
         freshUser.userStats = freshUser.userStats || {};
         freshUser.userStats.profit = Math.round(((freshUser.userStats.profit || 0) - reqAmt) * 100) / 100;
       }
@@ -5940,6 +6010,17 @@ function getOrGenerateUserProfile(userId) {
       } catch(e) {}
 
       WsMock.broadcast({
+        event: 'battle.lobby_closed',
+        data: {
+          id: lobby.id,
+          shareToken: lobby.shareToken,
+          opponent: player2,
+          winnerId: winnerId,
+          secondsLeft: 10
+        }
+      });
+
+      WsMock.broadcast({
         event: 'battle.round_finished',
         data: lobby
       });
@@ -5958,10 +6039,11 @@ function getOrGenerateUserProfile(userId) {
             shareToken: lobby.shareToken,
             opponent: player2,
             winnerId: winnerId,
-            secondsLeft: 0
+            secondsLeft: 0,
+            isLeaving: true
           }
         });
-      }, 14000);
+      }, 16000);
 
       return lobby;
     },
@@ -9682,13 +9764,13 @@ function getOrGenerateUserProfile(userId) {
       const wheel = document.querySelector('up-battle-wheel');
       if (!wheel) return;
 
-      const hasDigit = wheel.textContent && /\b[1-6]\b/.test(wheel.textContent.trim());
+      const hasDigit = wheel.textContent && /\b([1-9]|10)\b/.test(wheel.textContent.trim());
       const cdDigits = wheel.querySelectorAll('.countdown-digit');
       const isCountingDown = hasDigit || cdDigits.length > 0;
 
       if (isCountingDown) {
         if (!wheel._cdStartTime) wheel._cdStartTime = Date.now();
-        if (Date.now() - wheel._cdStartTime >= 6300 && !wheel._spinFired) {
+        if (Date.now() - wheel._cdStartTime >= 10300 && !wheel._spinFired) {
           wheel._spinFired = true;
           wheel.dispatchEvent(new CustomEvent('countdownFinished', { bubbles: true }));
           try {
