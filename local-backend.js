@@ -4627,6 +4627,14 @@ function getOrGenerateUserProfile(userId) {
           const arr = JSON.parse(saved);
           for (const lob of arr) {
             if (lob && lob.shareToken && !this.allLobbies.has(lob.shareToken)) {
+              if (lob.round && Array.isArray(lob.round.stakes)) {
+                lob.round.stakes.forEach(stk => {
+                  if (stk && stk.items && stk.items.length > 0) {
+                    stk.balanceAmount = '0.00';
+                    stk.itemsAmount = stk.amount;
+                  }
+                });
+              }
               this.allLobbies.set(lob.shareToken, lob);
               this.allLobbies.set(lob.id, lob);
               this.userLobbies.push(lob);
@@ -5006,6 +5014,15 @@ function getOrGenerateUserProfile(userId) {
           }
         }, 2500);
       }
+      // Ensure 100% skin stakes never show redundant balanceAmount
+      if (lob && lob.round && Array.isArray(lob.round.stakes)) {
+        lob.round.stakes.forEach(stk => {
+          if (stk && stk.items && stk.items.length > 0) {
+            stk.balanceAmount = '0.00';
+            stk.itemsAmount = stk.amount;
+          }
+        });
+      }
       return lob;
     },
     createLobby(user, body) {
@@ -5037,6 +5054,7 @@ function getOrGenerateUserProfile(userId) {
         });
       }
 
+      const shopBoughtSkins = [];
       if (body.shopItemIds && Array.isArray(body.shopItemIds) && body.shopItemIds.length > 0) {
         body.shopItemIds.forEach(sid => {
           const skin = (Array.isArray(catalogData) ? catalogData : this.fallbackSkins).find(s => String(s.id) === String(sid));
@@ -5044,14 +5062,16 @@ function getOrGenerateUserProfile(userId) {
             const p = parseFloat(skin.price) || 0;
             totalAmount += p;
             balanceStake += p;
-            stakedItems.push({
+            const shopItem = {
               id: String(Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
               marketName: skin.marketName,
               imageUrl: skin.image || skin.imageUrl,
               price: Number(p).toFixed(2),
               extra: skin.extra,
               userId: String(user.id)
-            });
+            };
+            stakedItems.push(shopItem);
+            shopBoughtSkins.push(shopItem);
           }
         });
       }
@@ -5059,9 +5079,20 @@ function getOrGenerateUserProfile(userId) {
       if (stakedItems.length === 0 && totalAmount < 50) {
         const diff = 50 - totalAmount;
         if (Number(user.balance || 0) >= diff) {
-          user.balance = Math.round((user.balance - diff) * 100) / 100;
-          totalAmount = 50;
-          balanceStake += diff;
+          const fallbackSkin = this.findShopSkinForStake(diff, Number(user.balance || 0));
+          const p = parseFloat(fallbackSkin.price) || diff;
+          totalAmount = p;
+          balanceStake += p;
+          const shopItem = {
+            id: String(Date.now() + '_' + Math.random().toString(36).substr(2, 5)),
+            marketName: fallbackSkin.marketName,
+            imageUrl: fallbackSkin.image || fallbackSkin.imageUrl,
+            price: Number(p).toFixed(2),
+            extra: fallbackSkin.extra,
+            userId: String(user.id)
+          };
+          stakedItems.push(shopItem);
+          shopBoughtSkins.push(shopItem);
         } else {
           totalAmount = Math.max(50, totalAmount);
         }
@@ -5098,6 +5129,7 @@ function getOrGenerateUserProfile(userId) {
         expiresAt: new Date(Date.now() + 86400000).toISOString(),
         closedAt: null,
         createdBy: creator,
+        _shopBoughtSkins: shopBoughtSkins,
         round: {
           id: id,
           status: 'waiting',
@@ -5112,8 +5144,8 @@ function getOrGenerateUserProfile(userId) {
             {
               user: creator,
               amount: totalAmount.toFixed(2),
-              itemsAmount: (totalAmount - balanceStake).toFixed(2),
-              balanceAmount: balanceStake.toFixed(2),
+              itemsAmount: totalAmount.toFixed(2),
+              balanceAmount: '0.00', // 100% skin duel, NO balance stake!
               rangeFrom: null,
               rangeTo: null,
               chance: null,
@@ -5211,9 +5243,7 @@ function getOrGenerateUserProfile(userId) {
               ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(activeUser.id) })),
               ...botSkins.map(it => ({ ...it, userId: String(bot.id) }))
             ],
-            roundBalances: [
-              { userId: String(activeUser.id), amount: (lobby.round.stakes[0].balanceAmount || '0.00') }
-            ],
+            roundBalances: [],
             wonBalance: userWon ? totalBank.toFixed(2) : '0.00',
             rangeFrom: 0,
             rangeTo: userMaxRoll,
@@ -5229,6 +5259,26 @@ function getOrGenerateUserProfile(userId) {
             if (Array.isArray(freshUser.inventory)) {
               freshUser.inventory.forEach(it => {
                 if (it.locked_for_battle) it.locked_for_battle = false;
+              });
+            }
+            // User bought skins from shop to create the lobby -> retain them in inventory on win!
+            if (Array.isArray(lobby._shopBoughtSkins) && lobby._shopBoughtSkins.length > 0) {
+              lobby._shopBoughtSkins.forEach(bs => {
+                const newInvItem = {
+                  id: 'won_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                  marketName: bs.marketName,
+                  price: bs.price,
+                  image: bs.imageUrl || bs.image,
+                  imageUrl: bs.imageUrl || bs.image,
+                  extra: bs.extra,
+                  obtainedAt: new Date().toISOString()
+                };
+                freshUser.inventory = freshUser.inventory || [];
+                freshUser.inventory.unshift(newInvItem);
+                WsMock.broadcastInventoryItem(newInvItem);
+                if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+                  SupabaseDB.addInventoryItem(freshUser.id, newInvItem).catch(() => {});
+                }
               });
             }
             botSkins.forEach(bs => {
@@ -5870,8 +5920,27 @@ function getOrGenerateUserProfile(userId) {
         user.inventory.forEach(it => {
           if (it.locked_for_battle) it.locked_for_battle = false;
         });
-        LocalDB.saveUser(user);
       }
+      if (Array.isArray(lobby._shopBoughtSkins) && lobby._shopBoughtSkins.length > 0) {
+        lobby._shopBoughtSkins.forEach(bs => {
+          const retItem = {
+            id: 'ret_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            marketName: bs.marketName,
+            price: bs.price,
+            image: bs.imageUrl || bs.image,
+            imageUrl: bs.imageUrl || bs.image,
+            extra: bs.extra,
+            obtainedAt: new Date().toISOString()
+          };
+          user.inventory = user.inventory || [];
+          user.inventory.unshift(retItem);
+          WsMock.broadcastInventoryItem(retItem);
+          if (typeof SupabaseDB !== 'undefined' && SupabaseDB.getUrl()) {
+            SupabaseDB.addInventoryItem(user.id, retItem).catch(() => {});
+          }
+        });
+      }
+      LocalDB.saveUser(user);
       WsMock.broadcast({
         event: 'battle.round_cancelled',
         data: lobby
