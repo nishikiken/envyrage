@@ -5475,7 +5475,7 @@ function getOrGenerateUserProfile(userId) {
       this.allLobbies.set(target.id, target);
       this.saveActiveLobby(target);
 
-      // 1. Immediately notify lobby list that an opponent joined and 10s countdown begins!
+      // 1. Immediately notify lobby list that an opponent joined and 6s countdown begins!
       WsMock.broadcast({
         event: 'battle.lobby_closed',
         data: {
@@ -5483,7 +5483,7 @@ function getOrGenerateUserProfile(userId) {
           shareToken: target.shareToken,
           opponent: opponentBot,
           winnerId: winnerId,
-          secondsLeft: 10
+          secondsLeft: 6
         }
       });
 
@@ -5493,7 +5493,7 @@ function getOrGenerateUserProfile(userId) {
         data: target
       });
 
-      // Schedule finalization after 10 seconds
+      // Schedule finalization after 6 seconds (6s countdown)
       setTimeout(() => {
         target.round.status = 'finished';
         target.status = 'finished';
@@ -5519,7 +5519,7 @@ function getOrGenerateUserProfile(userId) {
             isLeaving: true
           }
         });
-      }, 10000);
+      }, 6000);
 
       return target;
     },
@@ -5531,7 +5531,7 @@ function getOrGenerateUserProfile(userId) {
       const purgeFilter = l => {
         const isFinished = (l.status === 'finished');
         const isCancelled = (l.status === 'cancelled');
-        const isStartedAndOver = (l.startedAt && (now - l.startedAt >= 10000));
+        const isStartedAndOver = (l.startedAt && (now - l.startedAt >= 6000));
         const isStale = (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting');
         if (isFinished || isCancelled || isStartedAndOver || isStale) {
           purged.push(l);
@@ -5613,7 +5613,7 @@ function getOrGenerateUserProfile(userId) {
       const now = Date.now();
       const isFresh = l => {
         if (!l || l.status === 'cancelled' || l.status === 'finished') return false;
-        if (l.startedAt && (now - l.startedAt >= 10000)) return false;
+        if (l.startedAt && (now - l.startedAt >= 6000)) return false;
         if (l.createdAtTime && (now - l.createdAtTime > 60000) && l.status !== 'waiting') return false;
         return true;
       };
@@ -6134,7 +6134,7 @@ function getOrGenerateUserProfile(userId) {
           shareToken: lobby.shareToken,
           opponent: bot,
           winnerId: winnerId,
-          secondsLeft: 10
+          secondsLeft: 6
         }
       });
 
@@ -6743,7 +6743,7 @@ function getOrGenerateUserProfile(userId) {
           shareToken: lobby.shareToken,
           opponent: player2,
           winnerId: winnerId,
-          secondsLeft: 10
+          secondsLeft: 6
         }
       });
 
