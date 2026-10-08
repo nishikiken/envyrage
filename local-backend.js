@@ -1952,11 +1952,7 @@
     static restoreDefaultAccounts() {
       const accounts = JSON.parse(JSON.stringify(DEFAULT_SEED_ACCOUNTS));
       this.saveAccountsLocally(accounts);
-      if (accounts['envy!']) {
-        this.setActiveUser('envy!');
-      } else {
-        this.clearActiveUser();
-      }
+      this.clearActiveUser();
       return accounts;
     }
 
@@ -2633,8 +2629,7 @@
       if (!acc || !item) return null;
 
       acc.withdrawingItems = acc.withdrawingItems || {};
-      const durationMs = Math.floor(180 + Math.random() * 60) * 1000; // 3 to 4 minutes (realistic trade window)
-      const loadingDurationMs = 28000; // 28 seconds authentic loading ("Ожидание продавца")
+      const durationMs = 60000; // ~60 seconds (around 1 minute as requested)
       const tradeOfferId = Math.floor(1000000000 + Math.random() * 9000000000);
       const expiresAt = new Date(Date.now() + durationMs).toISOString();
 
@@ -2642,7 +2637,6 @@
         id: String(item.id),
         item: item,
         startedAt: Date.now(),
-        loadingDurationMs: loadingDurationMs,
         durationMs: durationMs,
         tradeOfferId: String(tradeOfferId),
         expiresAt: expiresAt
@@ -2725,8 +2719,6 @@
             WsMock.broadcastDeletedItems([item.id, item.originalSkinId].filter(Boolean));
           }
         } catch(e) {}
-
-        showToast('Скин ' + (item.marketName || 'предмет') + ' успешно выведен в Steam!', 'success');
       }
     }
 
@@ -4713,7 +4705,7 @@ function getOrGenerateUserProfile(userId) {
       if (targetAmount && typeof targetAmount === 'number' && targetAmount > 0) {
         const candidates = validPool.filter(s => {
           const p = parseFloat(s.price) || 0;
-          return p >= targetAmount * 0.95 && p <= targetAmount * 1.05;
+          return p >= targetAmount * (49.00 / 51.00) && p <= targetAmount * (51.00 / 49.00);
         });
         if (candidates.length > 0) {
           const pick = candidates[Math.floor(Math.random() * candidates.length)];
@@ -4855,34 +4847,40 @@ function getOrGenerateUserProfile(userId) {
       target.round.roll = roll;
       target.round.maxRoll = 100000;
       target.round.winnerId = winnerId;
-      target.round.finishedAt = new Date().toISOString();
-      target.round.status = 'finished';
-      target.status = 'finished';
-      target.closedAt = new Date().toISOString();
-      target.finishedTimestamp = Date.now();
+      target.round.status = 'in_progress';
+      target.status = 'in_progress';
       target.startedAt = Date.now();
+      target.finishedTimestamp = Date.now() + 14000;
 
       // Register in fast lookup map so room can always load it
       this.allLobbies.set(target.shareToken, target);
       this.allLobbies.set(target.id, target);
 
-      // Immediately notify battles list that lobby closed and matched!
-      WsMock.broadcast({
-        event: 'battle.lobby_closed',
-        data: {
-          id: target.id,
-          shareToken: target.shareToken,
-          opponent: opponentBot,
-          winnerId: winnerId,
-          secondsLeft: 6
-        }
-      });
-
-      // Broadcast battle.round_finished for spectators
+      // Immediately notify room/spectators to start duel animation!
       WsMock.broadcast({
         event: 'battle.round_finished',
         data: target
       });
+
+      // Schedule finalization after 14 seconds (countdown + wheel spin + winner reveal)
+      setTimeout(() => {
+        target.round.status = 'finished';
+        target.status = 'finished';
+        target.round.finishedAt = new Date().toISOString();
+        target.closedAt = new Date().toISOString();
+        target.finishedTimestamp = Date.now();
+
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: {
+            id: target.id,
+            shareToken: target.shareToken,
+            opponent: opponentBot,
+            winnerId: winnerId,
+            secondsLeft: 0
+          }
+        });
+      }, 14000);
 
       return target;
     },
@@ -5218,12 +5216,10 @@ function getOrGenerateUserProfile(userId) {
       lobby.round.roll = roll;
       lobby.round.maxRoll = 100000;
       lobby.round.winnerId = winnerId;
-      lobby.round.finishedAt = new Date().toISOString();
-      lobby.round.status = 'finished';
-      lobby.status = 'finished';
-      lobby.closedAt = new Date().toISOString();
-      lobby.finishedTimestamp = Date.now();
+      lobby.round.status = 'in_progress';
+      lobby.status = 'in_progress';
       lobby.startedAt = Date.now();
+      lobby.finishedTimestamp = Date.now() + 14000;
 
       if (activeUser) {
         try {
@@ -5240,11 +5236,11 @@ function getOrGenerateUserProfile(userId) {
             },
             isWinner: userWon,
             roundItems: [
-              ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(activeUser.id) })),
-              ...botSkins.map(it => ({ ...it, userId: String(bot.id) }))
+              ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(activeUser.id), imageUrl: it.imageUrl || it.image || '', image: it.imageUrl || it.image || '' })),
+              ...botSkins.map(it => ({ ...it, userId: String(bot.id), imageUrl: it.imageUrl || it.image || '', image: it.imageUrl || it.image || '' }))
             ],
             roundBalances: [],
-            wonBalance: userWon ? totalBank.toFixed(2) : '0.00',
+            wonBalance: '0.00',
             rangeFrom: 0,
             rangeTo: userMaxRoll,
             maxRoll: 100000,
@@ -5365,16 +5361,25 @@ function getOrGenerateUserProfile(userId) {
         event: 'battle.round_finished',
         data: lobby
       });
-      WsMock.broadcast({
-        event: 'battle.lobby_closed',
-        data: {
-          id: lobby.id,
-          shareToken: lobby.shareToken,
-          opponent: bot,
-          winnerId: winnerId,
-          secondsLeft: 6
-        }
-      });
+
+      setTimeout(() => {
+        lobby.round.status = 'finished';
+        lobby.status = 'finished';
+        lobby.round.finishedAt = new Date().toISOString();
+        lobby.closedAt = new Date().toISOString();
+        lobby.finishedTimestamp = Date.now();
+
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: {
+            id: lobby.id,
+            shareToken: lobby.shareToken,
+            opponent: bot,
+            winnerId: winnerId,
+            secondsLeft: 0
+          }
+        });
+      }, 14000);
     },
     findShopSkinForStake(targetStake, maxBudget) {
       let pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : this.fallbackSkins;
@@ -5432,6 +5437,7 @@ function getOrGenerateUserProfile(userId) {
       let itemsTotal = 0;
       let scenario = 'inventory';
       let boughtShopItem = null;
+      let soldSkin = null;
       let candidateOptions = [];
 
       // Filter only inventory items that have positive price
@@ -5498,56 +5504,46 @@ function getOrGenerateUserProfile(userId) {
         const maxTol = reqAmt * (51.00 / 49.00);
         const inTol = candidates.filter(c => c.total >= minTol && c.total <= maxTol);
 
-        let selectedCand = null;
         if (inTol.length > 0) {
-          selectedCand = inTol[0];
+          const selectedCand = inTol[0];
+          matchedItems = selectedCand.items;
+          itemsTotal = selectedCand.total;
+          scenario = 'inventory';
         } else {
-          // If none within tight tolerance, pick the single closest candidate from user inventory!
-          selectedCand = candidates[0];
+          // Check if user has an expensive item (> maxTol) that can be swapped/exchanged
+          const expensiveCandidates = validItems.filter(it => {
+            const p = parseFloat(it.price || (it.item && it.item.price) || 0);
+            return p > maxTol;
+          }).sort((a, b) => {
+            const pa = parseFloat(a.price || (a.item && a.item.price) || 0);
+            const pb = parseFloat(b.price || (b.item && b.item.price) || 0);
+            return pa - pb; // pick the cheapest expensive item
+          });
+
+          if (expensiveCandidates.length > 0) {
+            const expensiveSkin = expensiveCandidates[0];
+            const expPrice = parseFloat(expensiveSkin.price || (expensiveSkin.item && expensiveSkin.item.price) || 0);
+            const shopSkin = this.findShopSkinForStake(reqAmt, expPrice);
+            matchedItems = [];
+            itemsTotal = 0;
+            scenario = 'swap';
+            soldSkin = expensiveSkin;
+            boughtShopItem = shopSkin;
+          } else if (userBal >= minTol) {
+            // Cash balance is enough to auto-buy matching skin from shop
+            const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
+            matchedItems = [];
+            itemsTotal = 0;
+            scenario = 'shop';
+            boughtShopItem = shopSkin;
+          } else {
+            // User has neither matching skins, nor expensive skin to swap, nor balance to participate
+            throw new Error('Недостаточно средств для участия в битве');
+          }
         }
-
-        matchedItems = selectedCand.items;
-        itemsTotal = selectedCand.total;
-        scenario = 'inventory';
-
-        // Prepare distinct candidate options for the UI switcher
-        const seenTotals = new Set();
-        validItems.forEach(it => {
-          const p = parseFloat(it.price || (it.item && it.item.price) || 0);
-          const pKey = p.toFixed(2);
-          if (!seenTotals.has(pKey)) {
-            seenTotals.add(pKey);
-            candidateOptions.push({
-              id: String(it.id || (it.item && it.item.id)),
-              marketName: it.marketName || (it.item && it.item.marketName) || 'CS2 Item',
-              price: pKey,
-              image: it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '',
-              items: [it],
-              total: p
-            });
-          }
-        });
-        candidates.filter(c => c.items.length > 1).slice(0, 3).forEach(c => {
-          const pKey = c.total.toFixed(2);
-          if (!seenTotals.has(pKey)) {
-            seenTotals.add(pKey);
-            candidateOptions.push({
-              id: 'combo_' + pKey,
-              marketName: `${c.items.length} предм. (${c.items.map(x => (x.marketName || (x.item && x.item.marketName) || '').split('|')[0].trim()).slice(0, 2).join(' + ')})`,
-              price: pKey,
-              image: c.items[0].image || c.items[0].imageUrl || (c.items[0].item && (c.items[0].item.image || c.items[0].item.imageUrl)) || '',
-              items: c.items,
-              total: c.total
-            });
-          }
-        });
-        // Sort candidateOptions so the selected candidate is first
-        candidateOptions.sort((a, b) => Math.abs(a.total - itemsTotal) - Math.abs(b.total - itemsTotal));
-      } else if (userBal >= 20) {
-        // User has NO skins, but has cash balance!
-        // In battles, raw balance can NEVER be staked directly; auto-buy a matching skin from shop!
+      } else if (userBal >= (reqAmt * (49.00 / 51.00))) {
+        // User has NO skins, but has cash balance sufficient for this stake!
         const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
-        const shopPrice = parseFloat(shopSkin.price);
         matchedItems = [];
         itemsTotal = 0;
         scenario = 'shop';
@@ -5560,7 +5556,11 @@ function getOrGenerateUserProfile(userId) {
 
       let stakeItems = [];
       let buyItems = [];
+      let sellItems = [];
       let finalStakeAmount = reqAmt;
+      let purchaseAmtStr = '0.00';
+      let saleProceedsStr = '0.00';
+      let balanceAfterStr = userBal.toFixed(2);
 
       if (scenario === 'inventory') {
         finalStakeAmount = itemsTotal;
@@ -5590,6 +5590,42 @@ function getOrGenerateUserProfile(userId) {
           };
         });
         buyItems = [];
+        sellItems = [];
+      } else if (scenario === 'swap') {
+        const bPrice = parseFloat(boughtShopItem.price);
+        finalStakeAmount = bPrice;
+        const bItem = {
+          id: String(boughtShopItem.id),
+          price: boughtShopItem.price,
+          status: 'available',
+          marketName: boughtShopItem.marketName,
+          imageUrl: boughtShopItem.imageUrl || boughtShopItem.image,
+          image: boughtShopItem.imageUrl || boughtShopItem.image,
+          extra: boughtShopItem.extra,
+          userId: String(user ? user.id : ''),
+          item: boughtShopItem
+        };
+        stakeItems = [bItem];
+        buyItems = [{ item: boughtShopItem, quantity: 1 }];
+
+        const sPrice = Number(soldSkin.price || (soldSkin.item && soldSkin.item.price) || 0).toFixed(2);
+        const sName = soldSkin.marketName || (soldSkin.item && soldSkin.item.marketName) || 'CS2 Item';
+        const sImg = soldSkin.image || soldSkin.imageUrl || (soldSkin.item && (soldSkin.item.image || soldSkin.item.imageUrl)) || '';
+        const sExtra = soldSkin.extra || (soldSkin.item && soldSkin.item.extra) || { e: 2, g: 18, n: [sName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
+        sellItems = [{
+          id: String(soldSkin.id),
+          price: sPrice,
+          status: 'available',
+          marketName: sName,
+          imageUrl: sImg,
+          image: sImg,
+          extra: sExtra,
+          userId: String(user ? user.id : ''),
+          item: { id: String(soldSkin.id), marketName: sName, price: sPrice, image: sImg, imageUrl: sImg, extra: sExtra }
+        }];
+        purchaseAmtStr = boughtShopItem.price;
+        saleProceedsStr = sPrice;
+        balanceAfterStr = (userBal + parseFloat(sPrice) - parseFloat(boughtShopItem.price)).toFixed(2);
       } else {
         // Scenario 'shop': auto-buy real skin from shop using balance
         const bPrice = parseFloat(boughtShopItem.price);
@@ -5606,12 +5642,10 @@ function getOrGenerateUserProfile(userId) {
           item: boughtShopItem
         };
         stakeItems = [bItem];
-        buyItems = [
-          {
-            item: boughtShopItem,
-            quantity: 1
-          }
-        ];
+        buyItems = [{ item: boughtShopItem, quantity: 1 }];
+        sellItems = [];
+        purchaseAmtStr = boughtShopItem.price;
+        balanceAfterStr = Math.max(0, userBal - parseFloat(boughtShopItem.price)).toFixed(2);
       }
 
       const plan = {
@@ -5620,28 +5654,24 @@ function getOrGenerateUserProfile(userId) {
         scenario: scenario,
         stakeItems: stakeItems,
         matchedRawItems: matchedItems,
-        balanceStake: scenario === 'shop' ? parseFloat(boughtShopItem.price) : 0,
+        soldSkin: soldSkin || null,
+        boughtItem: boughtShopItem || null,
+        balanceStake: 0,
         totalStake: finalStakeAmount,
-        itemsTotal: itemsTotal,
-        options: candidateOptions || [],
-        selectedOptionIdx: 0,
-        boughtItem: boughtShopItem || null
+        itemsTotal: itemsTotal
       };
       this.plans[planToken] = plan;
       this.activePreviewPlan = plan;
-
-      const purchaseAmtStr = scenario === 'shop' && boughtShopItem ? boughtShopItem.price : '0.00';
-      const balanceAfterStr = scenario === 'shop' && boughtShopItem ? Math.max(0, userBal - parseFloat(boughtShopItem.price)).toFixed(2) : userBal.toFixed(2);
 
       return {
         planToken: planToken,
         expiresAt: new Date(Date.now() + 60000).toISOString(),
         stake: stakeItems,
-        sell: [],
+        sell: sellItems,
         buy: buyItems,
         totals: {
           purchaseAmount: purchaseAmtStr,
-          saleProceeds: '0.00',
+          saleProceeds: saleProceedsStr,
           balanceBefore: userBal.toFixed(2),
           balanceAfter: balanceAfterStr,
           stakeAmount: finalStakeAmount.toFixed(2)
@@ -5665,6 +5695,21 @@ function getOrGenerateUserProfile(userId) {
         stakedSkins = plan.stakeItems;
         balanceStake = 0;
         userTotalStake = plan.itemsTotal > 0 ? plan.itemsTotal : reqAmt;
+      } else if (plan && plan.scenario === 'swap' && plan.soldSkin && plan.boughtItem) {
+        // Native swap scenario: sell expensive skin, buy shop skin, add remaining difference to balance
+        const soldId = String(plan.soldSkin.id || (plan.soldSkin.item && plan.soldSkin.item.id));
+        user.inventory = (user.inventory || []).filter(i => String(i.id) !== soldId && String(i.originalSkinId) !== soldId);
+        const soldPrice = parseFloat(plan.soldSkin.price || (plan.soldSkin.item && plan.soldSkin.item.price) || 0);
+        const boughtPrice = parseFloat(plan.boughtItem.price || 0);
+        const diff = Math.round((soldPrice - boughtPrice) * 100) / 100;
+        user.balance = Math.round(((user.balance || 0) + diff) * 100) / 100;
+        user._lastBalanceUpdate = Date.now();
+        LocalDB.saveUser(user);
+        WsMock.broadcastBalance(user.balance);
+
+        stakedSkins = plan.stakeItems;
+        balanceStake = 0;
+        userTotalStake = boughtPrice;
       } else if (plan && plan.scenario === 'shop' && (plan.boughtItem || (plan.stakeItems && plan.stakeItems.length > 0))) {
         const itemToBuy = plan.boughtItem || (plan.stakeItems[0] && (plan.stakeItems[0].item || plan.stakeItems[0]));
         const cost = parseFloat(itemToBuy.price);
@@ -5713,6 +5758,12 @@ function getOrGenerateUserProfile(userId) {
         avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
 
+      const minTol = reqAmt * (49.00 / 51.00);
+      const maxTol = reqAmt * (51.00 / 49.00);
+      if (userTotalStake < minTol || userTotalStake > maxTol) {
+        throw new Error('Сумма ставки не соответствует условиям битвы');
+      }
+
       // Ensure opponent bot's stake is strictly within [49.00%, 51.00%] odds of user's stake!
       let p1Stake = parseFloat(lobby.round.stakes[0].amount);
       const isOpponentBot = !lobby.isMine;
@@ -5757,15 +5808,13 @@ function getOrGenerateUserProfile(userId) {
       const { roll, userWon } = this.calculateBattleRoll(user, p1MaxRoll, false);
       const winnerId = userWon ? String(user.id) : String(lobby.createdBy.id);
 
-      // Immediately settle round
       lobby.round.roll = roll;
       lobby.round.maxRoll = 100000;
       lobby.round.winnerId = winnerId;
-      lobby.round.finishedAt = new Date().toISOString();
-      lobby.round.status = 'finished';
-      lobby.status = 'finished';
-      lobby.closedAt = new Date().toISOString();
-      lobby.finishedTimestamp = Date.now();
+      lobby.round.status = 'in_progress';
+      lobby.status = 'in_progress';
+      lobby.startedAt = Date.now();
+      lobby.finishedTimestamp = Date.now() + 14000;
 
       // Record in persistent battle history immediately
       const histEntry = {
@@ -5780,11 +5829,11 @@ function getOrGenerateUserProfile(userId) {
         },
         isWinner: userWon,
         roundItems: [
-          ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(lobby.createdBy.id) })),
-          ...stakedSkins.map(it => ({ ...it, userId: String(user.id) }))
+          ...lobby.round.stakes[0].items.map(it => ({ ...it, userId: String(lobby.createdBy.id), imageUrl: it.imageUrl || it.image || '', image: it.imageUrl || it.image || '' })),
+          ...stakedSkins.map(it => ({ ...it, userId: String(user.id), imageUrl: it.imageUrl || it.image || '', image: it.imageUrl || it.image || '' }))
         ],
         roundBalances: [],
-        wonBalance: userWon ? totalBank.toFixed(2) : '0.00',
+        wonBalance: '0.00',
         rangeFrom: p1MaxRoll + 1,
         rangeTo: 100000,
         maxRoll: 100000,
@@ -5894,16 +5943,25 @@ function getOrGenerateUserProfile(userId) {
         event: 'battle.round_finished',
         data: lobby
       });
-      WsMock.broadcast({
-        event: 'battle.lobby_closed',
-        data: {
-          id: lobby.id,
-          shareToken: lobby.shareToken,
-          opponent: player2,
-          winnerId: winnerId,
-          secondsLeft: 6
-        }
-      });
+
+      setTimeout(() => {
+        lobby.round.status = 'finished';
+        lobby.status = 'finished';
+        lobby.round.finishedAt = new Date().toISOString();
+        lobby.closedAt = new Date().toISOString();
+        lobby.finishedTimestamp = Date.now();
+
+        WsMock.broadcast({
+          event: 'battle.lobby_closed',
+          data: {
+            id: lobby.id,
+            shareToken: lobby.shareToken,
+            opponent: player2,
+            winnerId: winnerId,
+            secondsLeft: 0
+          }
+        });
+      }, 14000);
 
       return lobby;
     },
@@ -5972,15 +6030,16 @@ function getOrGenerateUserProfile(userId) {
             opponent: {
               id: String(botId + 500 + i),
               nickname: oppNick,
-              image: oppAv
+              image: oppAv,
+              avatar: oppAv
             },
             isWinner: isWinner,
             roundItems: [
-              { ...skin1, userId: String(user.id) },
-              { ...skin2, userId: String(botId + 500 + i) }
+              { ...skin1, userId: String(user.id), imageUrl: skin1.imageUrl || skin1.image || '', image: skin1.imageUrl || skin1.image || '' },
+              { ...skin2, userId: String(botId + 500 + i), imageUrl: skin2.imageUrl || skin2.image || '', image: skin2.imageUrl || skin2.image || '' }
             ],
             roundBalances: [],
-            wonBalance: isWinner ? totalBank.toFixed(2) : '0.00',
+            wonBalance: '0.00',
             rangeFrom: 0,
             rangeTo: 50000,
             maxRoll: 100000,
@@ -6124,10 +6183,12 @@ function getOrGenerateUserProfile(userId) {
           data: preview
         };
       } catch(err) {
+        const lob = BattleSystem.getLobby(shareToken);
+        if (lob) lob._reservedForUser = 0;
         return {
           status: 400,
           data: {
-            code: 'insufficient_join_funds',
+            code: 'insufficient_funds',
             message: err.message || 'Недостаточно средств для участия в битве'
           }
         };
@@ -6614,25 +6675,43 @@ function getOrGenerateUserProfile(userId) {
         const botId = parseInt(acc.id, 10) || 12345;
         const botItemsCount = 14 + (botId % 10);
         const botHistory = [];
+        const isVipBot = acc.botTier === 'vip' || (acc.withdrawnAmount && acc.withdrawnAmount > 50000);
+        const maxCompPrice = isVipBot ? 700 : 300;
+
         for (let i = 0; i < botItemsCount; i++) {
           const skin = pool[(botId * 3 + i * 7) % pool.length];
           const itId = String(botId * 100 + i);
+          const skinPrice = parseFloat(skin.price);
+          let action = 'won';
+          if (skinPrice <= maxCompPrice && ((botId + i) % 4 === 1)) {
+            action = 'compensated';
+          } else if ((botId + i) % 5 === 0) {
+            action = 'withdrawal';
+          } else {
+            action = 'won';
+          }
+          const itemImg = skin.image || skin.imageUrl || '';
+          const itemObj = {
+            id: itId,
+            appId: 730,
+            marketName: skin.marketName,
+            price: Number(skin.price).toFixed(2),
+            image: itemImg,
+            imageNew: itemImg,
+            imageUrl: itemImg,
+            action: action,
+            extra: skin.extra || { e: 2, g: 18, n: [skin.marketName], r: 15, s: false, t: 16, ch: '4b69ff', st: false }
+          };
           botHistory.push({
             id: itId,
             marketName: skin.marketName,
             price: Number(skin.price).toFixed(2),
-            image: skin.image || skin.imageUrl,
-            imageNew: skin.image || skin.imageUrl,
-            extra: skin.extra || { e: 2, g: 18, n: [skin.marketName], r: 15, s: false, t: 16, ch: '4b69ff', st: false },
-            item: {
-              id: itId,
-              appId: 730,
-              marketName: skin.marketName,
-              price: Number(skin.price).toFixed(2),
-              image: skin.image || skin.imageUrl,
-              imageNew: skin.image || skin.imageUrl,
-              extra: skin.extra || { e: 2, g: 18, n: [skin.marketName], r: 15, s: false, t: 16, ch: '4b69ff', st: false }
-            },
+            image: itemImg,
+            imageNew: itemImg,
+            imageUrl: itemImg,
+            action: action,
+            extra: itemObj.extra,
+            item: itemObj,
             obtainedAt: new Date(Date.now() - (i + 1) * 3600000 * 2).toISOString()
           });
         }
@@ -7135,7 +7214,6 @@ function getOrGenerateUserProfile(userId) {
 
       if (item) {
         LocalDB.startWithdrawal(activeUser.username, item);
-        showToast('Запрос на вывод отправлен. Передаем скин в Steam...', 'info');
         syncWithdrawingCards();
       }
 
@@ -7782,67 +7860,35 @@ function getOrGenerateUserProfile(userId) {
 
         let statusEl = overlay.querySelector('up-withdrawal-status') || overlay;
 
-        // Render authentic up-withdrawal-status stage
-        if (!isWaitingAccept) {
-          // Stage 1: Waiting for seller (spinning loader + text matching media_1791009769130.png)
-          if (overlay.dataset.stage !== 'stage1') {
-            overlay.dataset.stage = 'stage1';
-            statusEl.innerHTML = `
-              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
-                <svg width="24" height="24" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto" style="width:24px;height:24px;animation:upSpin 1s linear infinite;display:block;margin:0 auto;">
-                  <g clip-path="url(#clip0_9367_19811)">
-                    <path d="M5.90914 9.99991C5.90914 9.49785 5.50211 9.09082 5.00004 9.09082H1.36368C0.86162 9.09082 0.45459 9.49785 0.45459 9.99991C0.45459 10.502 0.86162 10.909 1.36368 10.909H5.00004C5.50211 10.909 5.90914 10.502 5.90914 9.99991Z" fill="url(#paint0_linear_9367_19811)"/>
-                    <path d="M18.6365 9.09082H16.8183C16.3162 9.09082 15.9092 9.49785 15.9092 9.99991C15.9092 10.502 16.3162 10.909 16.8183 10.909H18.6365C19.1385 10.909 19.5455 10.502 19.5455 9.99991C19.5455 9.49785 19.1385 9.09082 18.6365 9.09082Z" fill="url(#paint1_linear_9367_19811)"/>
-                    <path d="M10.4545 5.45455C10.9566 5.45455 11.3636 5.04752 11.3636 4.54545V0.909091C11.3636 0.40703 10.9566 0 10.4545 0C9.95244 0 9.54541 0.40703 9.54541 0.909091V4.54545C9.54541 5.04752 9.95244 5.45455 10.4545 5.45455Z" fill="url(#paint2_linear_9367_19811)"/>
-                    <path d="M10.4545 14.5454C9.95244 14.5454 9.54541 14.9524 9.54541 15.4545V19.0909C9.54541 19.5929 9.95244 20 10.4545 20C10.9566 20 11.3636 19.5929 11.3636 19.0909V15.4545C11.3636 14.9524 10.9566 14.5454 10.4545 14.5454Z" fill="url(#paint3_linear_9367_19811)"/>
-                    <path d="M4.6691 2.92885C4.31419 2.57382 3.73855 2.57388 3.38346 2.92885C3.02843 3.28388 3.02843 3.85945 3.38346 4.21448L5.95479 6.78588C6.13231 6.96339 6.36498 7.05218 6.59758 7.05218C6.83019 7.05218 7.06291 6.96339 7.24037 6.78594C7.5954 6.43091 7.5954 5.85533 7.24037 5.5003L4.6691 2.92885Z" fill="url(#paint4_linear_9367_19811)"/>
-                    <path d="M14.9542 13.214C14.5993 12.859 14.0236 12.859 13.6686 13.214C13.3136 13.569 13.3136 14.1446 13.6686 14.4996L16.24 17.0709C16.4175 17.2484 16.6502 17.3371 16.8828 17.3371C17.1155 17.3371 17.3482 17.2483 17.5256 17.0709C17.8807 16.7159 17.8807 16.1403 17.5256 15.7853L14.9542 13.214Z" fill="url(#paint5_linear_9367_19811)"/>
-                    <path d="M5.95473 13.214L3.38346 15.7853C3.02843 16.1403 3.02843 16.7159 3.38346 17.0709C3.56098 17.2485 3.79364 17.3372 4.02631 17.3372C4.25898 17.3372 4.49164 17.2485 4.6691 17.0709L7.24037 14.4997C7.5954 14.1446 7.5954 13.5691 7.24037 13.214C6.88534 12.859 6.3097 12.859 5.95473 13.214Z" fill="url(#paint6_linear_9367_19811)"/>
-                  </g>
-                  <defs>
-                    <linearGradient id="paint0_linear_9367_19811" x1="0.509135" y1="9.17199" x2="6.04465" y2="9.97608" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint1_linear_9367_19811" x1="15.9455" y1="9.17199" x2="19.6787" y2="9.53351" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint2_linear_9367_19811" x1="9.56359" y1="0.243507" x2="11.4472" y2="0.273908" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint3_linear_9367_19811" x1="9.56359" y1="14.7889" x2="11.4472" y2="14.8193" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint4_linear_9367_19811" x1="3.16108" y1="2.85856" x2="7.69905" y2="3.07828" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint5_linear_9367_19811" x1="13.4462" y1="13.1437" x2="17.9843" y2="13.3635" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint6_linear_9367_19811" x1="3.16108" y1="13.1437" x2="7.69905" y2="13.3634" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <clipPath id="clip0_9367_19811"><rect width="20" height="20" fill="white"/></clipPath>
-                  </defs>
-                </svg>
-                <span class="text-gray text-xxs text-center font-normal" style="color:#8E8F94;font-size:11px;font-family:'Exo 2',sans-serif;font-weight:400;text-align:center;">${waitingText}</span>
-              </div>
-            `;
-          }
-        } else {
-          // Stage 2: Trade ready / countdown / Accept button
-          if (overlay.dataset.stage !== 'stage2') {
-            overlay.dataset.stage = 'stage2';
-            statusEl.innerHTML = `
-              <div class="flex items-center justify-center gap-2.5" style="display:flex;align-items:center;justify-content:center;gap:6px;">
-                <svg width="20" height="20" viewBox="0 0 21 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:18px;height:18px;display:inline-block;vertical-align:middle;">
-                  <g clip-path="url(#clip0_2248_19073)">
-                    <path d="M16.5582 5.95354L17.7557 4.75604L16.5773 3.57729L15.2963 4.85833C14.126 4.02899 12.7604 3.51786 11.3332 3.375V1.66667H12.9998V0H7.99984V1.66667H9.66651V3.375C8.23929 3.51786 6.87366 4.02899 5.70338 4.85833L4.42234 3.57729L3.24401 4.75604L4.44151 5.95354C3.32371 7.13704 2.57704 8.62203 2.2937 10.2251C2.01036 11.8282 2.20276 13.4791 2.84714 14.9741C3.49152 16.4691 4.55966 17.7426 5.91965 18.6373C7.27964 19.532 8.87192 20.0089 10.4998 20.0089C12.1278 20.0089 13.72 19.532 15.08 18.6373C16.44 17.7426 17.5082 16.4691 18.1525 14.9741C18.7969 13.4791 18.9893 11.8282 18.706 10.2251C18.4226 8.62203 17.676 7.13704 16.5582 5.95354ZM10.4998 18.3333C9.1813 18.3333 7.89237 17.9423 6.79604 17.2098C5.69971 16.4773 4.84523 15.4361 4.34064 14.2179C3.83606 12.9997 3.70404 11.6593 3.96127 10.3661C4.21851 9.07286 4.85345 7.88497 5.7858 6.95262C6.71815 6.02027 7.90603 5.38533 9.19924 5.1281C10.4924 4.87086 11.8329 5.00289 13.0511 5.50747C14.2692 6.01205 15.3104 6.86654 16.043 7.96287C16.7755 9.05919 17.1665 10.3481 17.1665 11.6667C17.1645 13.4342 16.4615 15.1287 15.2117 16.3785C13.9619 17.6283 12.2673 18.3313 10.4998 18.3333Z" fill="url(#paint0_linear_2248_19073)"/>
-                    <path d="M10.5 6.6665V11.6665H5.5C5.5 12.6554 5.79324 13.6221 6.34265 14.4444C6.89206 15.2666 7.67295 15.9075 8.58658 16.2859C9.50021 16.6643 10.5055 16.7634 11.4755 16.5704C12.4454 16.3775 13.3363 15.9013 14.0355 15.202C14.7348 14.5028 15.211 13.6119 15.4039 12.642C15.5969 11.672 15.4978 10.6667 15.1194 9.75309C14.741 8.83946 14.1001 8.05856 13.2779 7.50916C12.4556 6.95975 11.4889 6.6665 10.5 6.6665Z" fill="url(#paint1_linear_2248_19073)"/>
-                  </g>
-                  <defs>
-                    <linearGradient id="paint0_linear_2248_19073" x1="2.33317" y1="0.893253" x2="19.5761" y2="1.5887" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <linearGradient id="paint1_linear_2248_19073" x1="5.6" y1="7.11293" x2="15.9383" y2="7.61352" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
-                    <clipPath id="clip0_2248_19073"><rect width="20" height="20" fill="white" transform="translate(0.5)"/></clipPath>
-                  </defs>
-                </svg>
-                <span class="up-withdraw-timer font-tektur text-[0.8125rem] leading-[1.0625rem] font-bold text-[#FFDD23]" style="font-family:Tektur,sans-serif;font-size:13px;font-weight:700;color:#FFDD23;">${timerFormatted}</span>
-              </div>
-              <a href="https://steamcommunity.com/tradeoffer/${entry.tradeOfferId || '9482716492'}/" target="_blank" data-testid="withdrawal-status-accept-link" class="bg-gradient-yellow-main px-auto mx-2.5 flex cursor-pointer items-center justify-center self-stretch rounded-[0.375rem] py-2 transition-all duration-200 hover:shadow-[0_0_10px_0_rgba(255,171,27,0.80)]" style="display:flex;align-items:center;justify-content:center;width:calc(100% - 20px);margin:0 10px;padding:7px 0;border-radius:6px;background:linear-gradient(180deg,#FFE02D 0%,#FFB800 100%);color:#1C1C20;font-family:Tektur,sans-serif;font-size:12px;font-weight:800;text-decoration:none;box-shadow:0 0 12px rgba(255,171,27,0.5);transition:transform 0.15s ease;cursor:pointer;text-transform:uppercase;letter-spacing:0.5px;">
-                <span class="font-tektur text-[0.8125rem] leading-[1.0625rem] text-[#1C1C20]">${acceptText}</span>
-              </a>
-            `;
-          } else {
-            const timerEl = overlay.querySelector('.up-withdraw-timer');
-            if (timerEl && timerEl.textContent !== timerFormatted) {
-              timerEl.textContent = timerFormatted;
-            }
-          }
+        // Render authentic up-withdrawal-status loading state (no timer, no accept button)
+        if (overlay.dataset.stage !== 'loading') {
+          overlay.dataset.stage = 'loading';
+          statusEl.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+              <svg width="24" height="24" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" class="mx-auto" style="width:24px;height:24px;animation:upSpin 1s linear infinite;display:block;margin:0 auto;">
+                <g clip-path="url(#clip0_9367_19811)">
+                  <path d="M5.90914 9.99991C5.90914 9.49785 5.50211 9.09082 5.00004 9.09082H1.36368C0.86162 9.09082 0.45459 9.49785 0.45459 9.99991C0.45459 10.502 0.86162 10.909 1.36368 10.909H5.00004C5.50211 10.909 5.90914 10.502 5.90914 9.99991Z" fill="url(#paint0_linear_9367_19811)"/>
+                  <path d="M18.6365 9.09082H16.8183C16.3162 9.09082 15.9092 9.49785 15.9092 9.99991C15.9092 10.502 16.3162 10.909 16.8183 10.909H18.6365C19.1385 10.909 19.5455 10.502 19.5455 9.99991C19.5455 9.49785 19.1385 9.09082 18.6365 9.09082Z" fill="url(#paint1_linear_9367_19811)"/>
+                  <path d="M10.4545 5.45455C10.9566 5.45455 11.3636 5.04752 11.3636 4.54545V0.909091C11.3636 0.40703 10.9566 0 10.4545 0C9.95244 0 9.54541 0.40703 9.54541 0.909091V4.54545C9.54541 5.04752 9.95244 5.45455 10.4545 5.45455Z" fill="url(#paint2_linear_9367_19811)"/>
+                  <path d="M10.4545 14.5454C9.95244 14.5454 9.54541 14.9524 9.54541 15.4545V19.0909C9.54541 19.5929 9.95244 20 10.4545 20C10.9566 20 11.3636 19.5929 11.3636 19.0909V15.4545C11.3636 14.9524 10.9566 14.5454 10.4545 14.5454Z" fill="url(#paint3_linear_9367_19811)"/>
+                  <path d="M4.6691 2.92885C4.31419 2.57382 3.73855 2.57388 3.38346 2.92885C3.02843 3.28388 3.02843 3.85945 3.38346 4.21448L5.95479 6.78588C6.13231 6.96339 6.36498 7.05218 6.59758 7.05218C6.83019 7.05218 7.06291 6.96339 7.24037 6.78594C7.5954 6.43091 7.5954 5.85533 7.24037 5.5003L4.6691 2.92885Z" fill="url(#paint4_linear_9367_19811)"/>
+                  <path d="M14.9542 13.214C14.5993 12.859 14.0236 12.859 13.6686 13.214C13.3136 13.569 13.3136 14.1446 13.6686 14.4996L16.24 17.0709C16.4175 17.2484 16.6502 17.3371 16.8828 17.3371C17.1155 17.3371 17.3482 17.2483 17.5256 17.0709C17.8807 16.7159 17.8807 16.1403 17.5256 15.7853L14.9542 13.214Z" fill="url(#paint5_linear_9367_19811)"/>
+                  <path d="M5.95473 13.214L3.38346 15.7853C3.02843 16.1403 3.02843 16.7159 3.38346 17.0709C3.56098 17.2485 3.79364 17.3372 4.02631 17.3372C4.25898 17.3372 4.49164 17.2485 4.6691 17.0709L7.24037 14.4997C7.5954 14.1446 7.5954 13.5691 7.24037 13.214C6.88534 12.859 6.3097 12.859 5.95473 13.214Z" fill="url(#paint6_linear_9367_19811)"/>
+                </g>
+                <defs>
+                  <linearGradient id="paint0_linear_9367_19811" x1="0.509135" y1="9.17199" x2="6.04465" y2="9.97608" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <linearGradient id="paint1_linear_9367_19811" x1="15.9455" y1="9.17199" x2="19.6787" y2="9.53351" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <linearGradient id="paint2_linear_9367_19811" x1="9.56359" y1="0.243507" x2="11.4472" y2="0.273908" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <linearGradient id="paint3_linear_9367_19811" x1="9.56359" y1="14.7889" x2="11.4472" y2="14.8193" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <linearGradient id="paint4_linear_9367_19811" x1="3.16108" y1="2.85856" x2="7.69905" y2="3.07828" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <linearGradient id="paint5_linear_9367_19811" x1="13.4462" y1="13.1437" x2="17.9843" y2="13.3635" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <linearGradient id="paint6_linear_9367_19811" x1="3.16108" y1="13.1437" x2="7.69905" y2="13.3634" gradientUnits="userSpaceOnUse"><stop offset="0.5" stop-color="#FFDD23"/><stop offset="1" stop-color="#FBD506"/></linearGradient>
+                  <clipPath id="clip0_9367_19811"><rect width="20" height="20" fill="white"/></clipPath>
+                </defs>
+              </svg>
+              <span class="text-gray text-xxs text-center font-normal" style="color:#8E8F94;font-size:11px;font-family:'Exo 2',sans-serif;font-weight:400;text-align:center;">${waitingText}</span>
+            </div>
+          `;
         }
 
         // Lock & dim action buttons below this card
@@ -7888,7 +7934,6 @@ function getOrGenerateUserProfile(userId) {
     const activeUser = LocalDB.getActiveUser();
     if (activeUser && item) {
       LocalDB.startWithdrawal(activeUser.username, item);
-      showToast('Запрос на вывод отправлен. Передаем скин в Steam...', 'info');
       syncWithdrawingCards();
     }
   }
@@ -9402,30 +9447,13 @@ function getOrGenerateUserProfile(userId) {
           }
           if (item) {
             if (LocalDB.isItemWithdrawing(activeUser.username, item.id)) {
-              showToast('Этот скин уже находится в процессе вывода в Steam', 'info');
               return;
             }
             LocalDB.startWithdrawal(activeUser.username, item);
-            const isEn = (localStorage.getItem('lang') === 'en') || document.documentElement.lang === 'en' || (window.location && window.location.pathname.startsWith('/en'));
-            showToast(isEn ? 'Withdrawal request sent' : 'Запрос на вывод отправлен', 'success');
             syncWithdrawingCards();
           }
         }
         return;
-      }
-
-      // Catch clicks on Steam accept link in card overlay: complete withdrawal shortly after user accepts trade offer
-      const acceptLink = target.closest('[data-testid="withdrawal-status-accept-link"]');
-      if (acceptLink) {
-        const overlay = acceptLink.closest('.up-withdrawing-overlay') || acceptLink.closest('[data-withdrawing-id]');
-        const itemId = overlay ? overlay.dataset.withdrawingId : null;
-        const activeUser = LocalDB.getActiveUser();
-        if (activeUser && itemId) {
-          setTimeout(() => {
-            LocalDB.completeWithdrawal(activeUser.username, itemId);
-            syncWithdrawingCards();
-          }, 3500);
-        }
       }
 
       // Catch clicks on push notifications switch toggle in profile
@@ -9557,105 +9585,9 @@ function getOrGenerateUserProfile(userId) {
       // 7. Ensure header icons remain authentic SVGs
       syncHeaderIcons();
 
-      // 8. Render interactive battle skin picker if multiple items available
-      syncBattleJoinSkinPicker();
+      const existingPicker = document.getElementById('upgrader-battle-skin-picker');
+      if (existingPicker) existingPicker.remove();
     });
-
-    function syncBattleJoinSkinPicker() {
-      const modal = document.querySelector('[data-testid="battle-join-modal"]');
-      if (!modal) return;
-      const body = modal.querySelector('[data-testid="battle-join-body"]');
-      const tiles = modal.querySelector('[data-testid="battle-join-tiles"]');
-      if (!body || !tiles) return;
-
-      const plan = BattleSystem.activePreviewPlan;
-      if (!plan || !plan.options || plan.options.length <= 1) {
-        const existing = document.getElementById('upgrader-battle-skin-picker');
-        if (existing) existing.remove();
-        return;
-      }
-
-      let picker = document.getElementById('upgrader-battle-skin-picker');
-      if (!picker) {
-        picker = document.createElement('div');
-        picker.id = 'upgrader-battle-skin-picker';
-        picker.className = 'flex flex-col gap-2 w-full my-2 p-2.5 rounded-xl bg-[#1E1F23]/90 border border-white/5';
-        tiles.parentNode.insertBefore(picker, tiles);
-      }
-
-      if (picker.dataset.planToken === plan.planToken) {
-        return;
-      }
-      picker.dataset.planToken = plan.planToken;
-
-      let html = `
-        <div class="flex items-center justify-between px-1 mb-1">
-          <span class="font-exo text-xs text-white/70 font-medium">Варианты для ставки (${plan.options.length}):</span>
-          <span class="font-exo text-[0.625rem] text-[#FDD911] font-semibold">Выберите предмет</span>
-        </div>
-        <div class="grid grid-cols-2 gap-1.5 w-full">
-      `;
-
-      plan.options.forEach((opt, idx) => {
-        const isSel = idx === (plan.selectedOptionIdx || 0);
-        html += `
-          <button type="button" data-skin-opt-idx="${idx}" class="skin-opt-btn flex items-center gap-2 p-2 rounded-lg border ${isSel ? 'border-[#FDD911] bg-[#FDD911]/15 text-white' : 'border-white/10 bg-[#17181C] hover:border-white/20 text-white/70'} transition-all cursor-pointer">
-            <img src="${opt.image}" class="h-8 w-8 object-contain shrink-0" draggable="false" />
-            <div class="flex flex-col text-left min-w-0">
-              <span class="text-[0.6875rem] font-medium text-white truncate max-w-[100px]">${opt.marketName}</span>
-              <span class="text-xs font-tektur font-semibold text-[#FDD911]">${opt.price} ₽</span>
-            </div>
-          </button>
-        `;
-      });
-      html += `</div>`;
-      picker.innerHTML = html;
-
-      picker.querySelectorAll('.skin-opt-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const idx = parseInt(btn.getAttribute('data-skin-opt-idx'), 10);
-          if (isNaN(idx) || !plan.options[idx]) return;
-          plan.selectedOptionIdx = idx;
-          const chosen = plan.options[idx];
-
-          const stakeItems = chosen.items.map(it => {
-            const pStr = Number(it.price || (it.item && it.item.price) || 0).toFixed(2);
-            const mName = it.marketName || (it.item && it.item.marketName) || 'CS2 Item';
-            const img = it.image || it.imageUrl || (it.item && (it.item.image || it.item.imageUrl)) || '';
-            const ex = it.extra || (it.item && it.item.extra) || { e: 2, g: 18, n: [mName], r: 15, s: false, t: 16, ch: '4b69ff', st: false };
-            const innerItem = { id: String(it.id), marketName: mName, price: pStr, image: img, imageUrl: img, extra: ex };
-            return { id: String(it.id), price: pStr, status: 'available', marketName: mName, imageUrl: img, image: img, extra: ex, userId: String(LocalDB.getActiveUser()?.id || ''), item: innerItem };
-          });
-          plan.stakeItems = stakeItems;
-          plan.matchedRawItems = chosen.items;
-          plan.itemsTotal = chosen.total;
-          plan.totalStake = chosen.total;
-
-          picker.querySelectorAll('.skin-opt-btn').forEach((b, i) => {
-            if (i === idx) {
-              b.className = 'skin-opt-btn flex items-center gap-2 p-2 rounded-lg border border-[#FDD911] bg-[#FDD911]/15 text-white transition-all cursor-pointer';
-            } else {
-              b.className = 'skin-opt-btn flex items-center gap-2 p-2 rounded-lg border border-white/10 bg-[#17181C] hover:border-white/20 text-white/70 transition-all cursor-pointer';
-            }
-          });
-
-          const invTile = modal.querySelector('[data-testid="battle-join-tile-tile-from-inventory"]');
-          if (invTile) {
-            const priceEl = invTile.querySelector('up-battle-price span');
-            if (priceEl) priceEl.textContent = chosen.price;
-            const imgEl = invTile.querySelector('img');
-            if (imgEl && chosen.image) imgEl.src = chosen.image;
-          }
-          const stakeTile = modal.querySelector('[data-testid="battle-join-tile-tile-stake"]');
-          if (stakeTile) {
-            const priceEl = stakeTile.querySelector('up-battle-price span');
-            if (priceEl) priceEl.textContent = chosen.price;
-          }
-        });
-      });
-    }
 
     function syncDomAvatars() {
       const activeUser = LocalDB.getActiveUser();
@@ -9746,6 +9678,68 @@ function getOrGenerateUserProfile(userId) {
       }
     }
 
+    function syncBattleWheelWatchdog() {
+      const wheel = document.querySelector('up-battle-wheel');
+      if (!wheel) return;
+
+      const hasDigit = wheel.textContent && /\b[1-6]\b/.test(wheel.textContent.trim());
+      const cdDigits = wheel.querySelectorAll('.countdown-digit');
+      const isCountingDown = hasDigit || cdDigits.length > 0;
+
+      if (isCountingDown) {
+        if (!wheel._cdStartTime) wheel._cdStartTime = Date.now();
+        if (Date.now() - wheel._cdStartTime >= 6300 && !wheel._spinFired) {
+          wheel._spinFired = true;
+          wheel.dispatchEvent(new CustomEvent('countdownFinished', { bubbles: true }));
+          try {
+            if (window.ng && typeof window.ng.getComponent === 'function') {
+              const comp = window.ng.getComponent(wheel);
+              if (comp && comp.countdownFinished && typeof comp.countdownFinished.emit === 'function') {
+                comp.countdownFinished.emit();
+              }
+              const room = document.querySelector('up-battle-room');
+              if (room) {
+                const roomComp = window.ng.getComponent(room);
+                if (roomComp && typeof roomComp.onCountdownFinished === 'function') {
+                  roomComp.onCountdownFinished();
+                }
+              }
+            }
+          } catch(e) {}
+        }
+      } else {
+        wheel._cdStartTime = null;
+        wheel._spinFired = false;
+      }
+
+      const isSpinning = wheel._spinFired || wheel.classList.contains('spinning') || (wheel.dataset && wheel.dataset.spinning === 'true');
+      if (isSpinning) {
+        if (!wheel._spinStartTime) wheel._spinStartTime = Date.now();
+        if (Date.now() - wheel._spinStartTime >= 7500 && !wheel._resultFired) {
+          wheel._resultFired = true;
+          wheel.dispatchEvent(new CustomEvent('spinFinished', { bubbles: true }));
+          try {
+            if (window.ng && typeof window.ng.getComponent === 'function') {
+              const comp = window.ng.getComponent(wheel);
+              if (comp && comp.spinFinished && typeof comp.spinFinished.emit === 'function') {
+                comp.spinFinished.emit();
+              }
+              const room = document.querySelector('up-battle-room');
+              if (room) {
+                const roomComp = window.ng.getComponent(room);
+                if (roomComp && typeof roomComp.onSpinFinished === 'function') {
+                  roomComp.onSpinFinished();
+                }
+              }
+            }
+          } catch(e) {}
+        }
+      } else {
+        wheel._spinStartTime = null;
+        wheel._resultFired = false;
+      }
+    }
+
     observer.observe(document.documentElement, { childList: true, subtree: true });
     setInterval(() => {
       syncEmailLinkingCard();
@@ -9753,14 +9747,13 @@ function getOrGenerateUserProfile(userId) {
       syncPushSwitchState();
       syncDomAvatars();
       syncHeaderIcons();
-    }, 1000);
+      syncBattleWheelWatchdog();
+    }, 500);
   }
 
   // Ensure active user state is consistent on boot
   const activeKey = localStorage.getItem(STORAGE_ACTIVE_KEY);
-  if (!activeKey) {
-    LocalDB.setActiveUser('envy!');
-  } else if (activeKey === '__GUEST__') {
+  if (!activeKey || activeKey === '__GUEST__') {
     LocalDB.clearActiveUser();
   } else {
     const initialActiveUser = LocalDB.getActiveUser();
