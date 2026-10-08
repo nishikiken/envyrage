@@ -4269,20 +4269,153 @@ function getOrGenerateUserProfile(userId) {
 
   // Spectator audio is naturally managed by Angular's currentUserOutcome() === 'spectator' 
 
-  let currentBestDrop = {
-    id: "167862338",
-    probability: "0.5503",
-    wonAmount: "483427.28",
-    user: { id: "1554726", nickname: "demonia", image: AUTHENTIC_AVATARS[0] },
-    item: {
-      id: "27574",
-      appId: 730,
-      marketName: "★ Talon Knife | Doppler Ruby (Factory New)",
-      price: "483427.280",
-      image: "https://cs2-cdn.pricempire.com/panorama/images/econ/default_generated/weapon_knife_widowmaker_am_ruby_marbleized_light_png.avif",
-      imageNew: "https://cs2-cdn.pricempire.com/panorama/images/econ/default_generated/weapon_knife_widowmaker_am_ruby_marbleized_light_png.avif",
-      extra: { e: 1, g: 33, n: ["★ Talon Knife", "Doppler Ruby", "Factory New"], r: 11, s: false, t: 6, ch: "ffae39", st: false }
+    const DAILY_STANDOUT_DROPS = [
+    {
+      item: {
+        id: "11764",
+        appId: 730,
+        marketName: "★ Talon Knife | Doppler (Factory New)",
+        price: "203362.19",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1M5vahf6lsK_WBMWad_ux6seJiXyyyhxEYvjyXmIP8KDHCOml8U8UoAfkC4UbuldyzNOy35lHc3opEyS2qhiocvHs_5bsHVPIgq_bQhgrBM7w9_9Bdc1T7Obpq",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1M5vahf6lsK_WBMWad_ux6seJiXyyyhxEYvjyXmIP8KDHCOml8U8UoAfkC4UbuldyzNOy35lHc3opEyS2qhiocvHs_5bsHVPIgq_bQhgrBM7w9_9Bdc1T7Obpq",
+        extra: { e: 2, g: 523, n: ["★ Talon Knife", "Doppler", "Factory New"], r: 11, s: false, t: 16, ch: "ffae39", st: false }
+      },
+      probability: "0.5503"
+    },
+    {
+      item: {
+        id: "11034",
+        appId: 730,
+        marketName: "★ Butterfly Knife | Gamma Doppler (Factory New)",
+        price: "360524.81",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Z-ua6bbZrLOmsD2qvxONzouBlSxa-lA8lvziMgIr9HifOOV5kFJp2Ee9b4Rntm4GxY7_ntQHc2o1DmH6r3Hgcv3w4t-pXU6ZzrPHQjQnfcepq0dwfRJw",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Z-ua6bbZrLOmsD2qvxONzouBlSxa-lA8lvziMgIr9HifOOV5kFJp2Ee9b4Rntm4GxY7_ntQHc2o1DmH6r3Hgcv3w4t-pXU6ZzrPHQjQnfcepq0dwfRJw",
+        extra: { e: 2, g: 515, n: ["★ Butterfly Knife", "Gamma Doppler", "Factory New"], r: 11, s: false, t: 16, ch: "ffae39", st: false }
+      },
+      probability: "0.4120"
+    },
+    {
+      item: {
+        id: "15725",
+        appId: 730,
+        marketName: "AWP | Dragon Lore (Field-Tested)",
+        price: "663655.41",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk4veqYaF7IfysCnWRxuF4j-B-Xxa-kBkupjDLw96pcX6TZg5yCZJ5TbNZtxjtwNS2NemztgDbidoQyH-sjCga6no-6_FCD_QEyQmfGQ/360fx360f",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyLwiYbf_jdk4veqYaF7IfysCnWRxuF4j-B-Xxa-kBkupjDLw96pcX6TZg5yCZJ5TbNZtxjtwNS2NemztgDbidoQyH-sjCga6no-6_FCD_QEyQmfGQ/360fx360f",
+        extra: { e: 3, g: 3, n: ["AWP", "Dragon Lore", "Field-Tested"], r: 10, s: false, t: 16, ch: "eb4b4b", st: false }
+      },
+      probability: "0.4855"
+    },
+    {
+      item: {
+        id: "15695",
+        appId: 730,
+        marketName: "★ Sport Gloves | Vice (Minimal Wear)",
+        price: "129942.18",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk5UvzWCL2kpn2-DFk_OKherB0H_KfG2Kv0ed4u95lRi67gVNx4T-Bw434IHyVb1QlAsd1FOUDthG4xNznMu3m4QXXg90Wzn_33C1I8G81tLaDi_rK/360fx360f",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk5UvzWCL2kpn2-DFk_OKherB0H_KfG2Kv0ed4u95lRi67gVNx4T-Bw434IHyVb1QlAsd1FOUDthG4xNznMu3m4QXXg90Wzn_33C1I8G81tLaDi_rK/360fx360f",
+        extra: { e: 4, g: null, n: ["★ Sport Gloves", "Vice", "Minimal Wear"], r: 11, s: false, t: 6, ch: "ffae39", st: false }
+      },
+      probability: "0.6210"
+    },
+    {
+      item: {
+        id: "11356",
+        appId: 730,
+        marketName: "★ Karambit | Doppler (Factory New)",
+        price: "294525.36",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Q7uCvZaZkNM-SA1iSze91u_FsTju_qhAmoT-Jn4bjJC_4Ml93UtZuRLQPsBawkNfiMbnl5AKMiopCnin7iCJBv31j4rkBBKEg-6zUjV3GY6p9v8dpLWT3Fg",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL6kJ_m-B1Q7uCvZaZkNM-SA1iSze91u_FsTju_qhAmoT-Jn4bjJC_4Ml93UtZuRLQPsBawkNfiMbnl5AKMiopCnin7iCJBv31j4rkBBKEg-6zUjV3GY6p9v8dpLWT3Fg",
+        extra: { e: 2, g: 507, n: ["★ Karambit", "Doppler", "Factory New"], r: 11, s: false, t: 16, ch: "ffae39", st: false }
+      },
+      probability: "0.3890"
+    },
+    {
+      item: {
+        id: "15717",
+        appId: 730,
+        marketName: "M4A4 | Howl (Minimal Wear)",
+        price: "520237.99",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afVSKP-EAm6extF6ueZhW2exwkl2tmTXwt39eCiUPQR2DMN4TOVetUK8xoLgM-K341eM2otDnC6okGoXufBz_TAB/360fx360f",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Dx60noTyL8ypexwiFO0P_6afVSKP-EAm6extF6ueZhW2exwkl2tmTXwt39eCiUPQR2DMN4TOVetUK8xoLgM-K341eM2otDnC6okGoXufBz_TAB/360fx360f",
+        extra: { e: 4, g: 14, n: ["M4A4", "Howl", "Minimal Wear"], r: 11, s: false, t: 16, ch: "e4ae39", st: false }
+      },
+      probability: "0.7100"
+    },
+    {
+      item: {
+        id: "15797",
+        appId: 730,
+        marketName: "★ Specialist Gloves | Crimson Kimono (Minimal Wear)",
+        price: "273340.32",
+        image: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk71ruQBH4jYLf-i5U-fe9V7d9JfOaD2uZ0vpJu-hkQCe8qhkusjCKlIvqHjnCOml8U8UoAfkItBLswdbuNbjr5FHdjNkUzSv73C1K5y46tu4EUvAg-6bU3FrBMOE4_9BdcyhkRns5/360fx360f",
+        imageNew: "https://community.akamai.steamstatic.com/economy/image/i0CoZ81Ui0m-9KwlBY1L_18myuGuq1wfhWSaZgMttyVfPaERSR0Wqmu7LAocGIGz3UqlXOLrxM-vMGmW8VNxu5Tk71ruQBH4jYLf-i5U-fe9V7d9JfOaD2uZ0vpJu-hkQCe8qhkusjCKlIvqHjnCOml8U8UoAfkItBLswdbuNbjr5FHdjNkUzSv73C1K5y46tu4EUvAg-6bU3FrBMOE4_9BdcyhkRns5/360fx360f",
+        extra: { e: 4, g: null, n: ["★ Specialist Gloves", "Crimson Kimono", "Minimal Wear"], r: 11, s: false, t: 6, ch: "ffae39", st: false }
+      },
+      probability: "0.5280"
     }
+  ];
+
+  function getDailyStandoutBestDrop(forceDateKey) {
+    const today = forceDateKey || new Date().toISOString().slice(0, 10);
+    try {
+      const stored = localStorage.getItem('upgrader_daily_best_drop');
+      if (stored && !forceDateKey) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.date === today && parsed.drop && parsed.drop.item) {
+          return parsed.drop;
+        }
+      }
+    } catch(e) {}
+
+    let hash = 0;
+    for (let i = 0; i < today.length; i++) {
+      hash = ((hash << 5) - hash) + today.charCodeAt(i);
+      hash |= 0;
+    }
+    const idx = Math.abs(hash) % DAILY_STANDOUT_DROPS.length;
+    const base = DAILY_STANDOUT_DROPS[idx];
+
+    const userIdx = (Math.abs(hash) + 7) % authenticNicknames.length;
+    const nick = authenticNicknames[userIdx];
+    const av = AUTHENTIC_AVATARS[userIdx % AUTHENTIC_AVATARS.length];
+    const uId = String(1500000 + (Math.abs(hash) % 400000));
+
+    const dailyDrop = {
+      id: String(168000000 + (Math.abs(hash) % 9000000)),
+      probability: base.probability,
+      wonAmount: base.item.price,
+      user: {
+        id: uId,
+        nickname: nick,
+        image: av,
+        avatar: av
+      },
+      item: base.item
+    };
+
+    try {
+      localStorage.setItem('upgrader_daily_best_drop', JSON.stringify({
+        date: today,
+        drop: dailyDrop
+      }));
+    } catch(e) {}
+
+    return dailyDrop;
+  }
+
+  let currentBestDrop = getDailyStandoutBestDrop();
+
+  window.rotateDailyBestDrop = function(forceOffsetDays) {
+    const d = new Date();
+    d.setDate(d.getDate() + (forceOffsetDays || 1));
+    const nextKey = d.toISOString().slice(0, 10);
+    currentBestDrop = getDailyStandoutBestDrop(nextKey);
+    WsMock.broadcast({
+      event: 'live_drops.best_hour_updated',
+      data: { bestLiveDrop: currentBestDrop }
+    });
+    return currentBestDrop;
   };
 
   function removeDuplicateBestDrop() {
@@ -4442,14 +4575,13 @@ function getOrGenerateUserProfile(userId) {
       if (Array.isArray(feed.newDrops) && feed.newDrops.length > 0) {
         enqueueDrops(feed.newDrops);
       }
-      if (feed.bestLiveDrop && feed.bestLiveDrop.item) {
-        currentBestDrop = feed.bestLiveDrop;
-        WsMock.broadcast({
-          event: 'live_drops.best_hour_updated',
-          data: { bestLiveDrop: currentBestDrop }
-        });
-        removeDuplicateBestDrop();
-      }
+      const dailyDrop = getDailyStandoutBestDrop();
+      currentBestDrop = dailyDrop || (feed.bestLiveDrop && feed.bestLiveDrop.item ? feed.bestLiveDrop : currentBestDrop);
+      WsMock.broadcast({
+        event: 'live_drops.best_hour_updated',
+        data: { bestLiveDrop: currentBestDrop }
+      });
+      removeDuplicateBestDrop();
     } catch(e) {}
   }
   setInterval(pollRealtimeFeed, 1000);
@@ -4875,6 +5007,16 @@ function getOrGenerateUserProfile(userId) {
     generateToken() {
       return Array.from({length: 32}, () => Math.floor(Math.random() * 16).toString(16)).join('');
     },
+    saveRecentFinishedLobby(lob) {
+      if (!lob) return;
+      try {
+        const raw = localStorage.getItem('upgrader_recent_finished_lobbies');
+        const list = raw ? JSON.parse(raw) : [];
+        const clean = list.filter(l => l.shareToken !== lob.shareToken && l.id !== lob.id);
+        clean.unshift(lob);
+        localStorage.setItem('upgrader_recent_finished_lobbies', JSON.stringify(clean.slice(0, 30)));
+      } catch(e) {}
+    },
     init() {
       if (this.initialized) return;
       this.initialized = true;
@@ -4905,7 +5047,7 @@ function getOrGenerateUserProfile(userId) {
       try {
         localStorage.setItem('upgrader_user_lobbies', JSON.stringify(this.userLobbies.filter(l => l.status === 'waiting')));
       } catch(e) {}
-      const initialTierTargets = [110, 180, 260, 390, 520, 780, 1150, 2400];
+      const initialTierTargets = [100, 120, 180, 210, 260, 310, 420];
       for (const tAmt of initialTierTargets) {
         this.createBotLobby(tAmt);
       }
@@ -4920,8 +5062,8 @@ function getOrGenerateUserProfile(userId) {
       const userInv = Array.isArray(activeUser && activeUser.inventory)
         ? activeUser.inventory.filter(i => !i.locked_for_battle && !LocalDB.isItemWithdrawing((activeUser && activeUser.username), (i.id || (i.item && i.item.id))))
         : [];
-      const minTol = targetAmt * (49.00 / 51.00);
-      const maxTol = targetAmt * (51.00 / 49.00);
+      const minTol = targetAmt * (46.00 / 54.00);
+      const maxTol = targetAmt * (54.00 / 46.00);
       const validItems = userInv.filter(it => {
         const p = parseFloat(it.price || (it.item && it.item.price) || 0);
         return p > 0;
@@ -4994,12 +5136,11 @@ function getOrGenerateUserProfile(userId) {
       if (pickedSkins.length === 0) {
         // Weighted distribution favoring cheap, accessible CS2 battles
         const weightedTiers = [
-          { min: 80, max: 280, weight: 35 },   // 35% cheap (80 - 280 ₽)
-          { min: 280, max: 600, weight: 30 },  // 30% budget (280 - 600 ₽)
-          { min: 600, max: 1300, weight: 20 }, // 20% medium (600 - 1300 ₽)
-          { min: 1300, max: 2800, weight: 10 },// 10% high (1300 - 2800 ₽)
-          { min: 2800, max: 6500, weight: 4 }, // 4% rare (2800 - 6500 ₽)
-          { min: 6500, max: 15000, weight: 1 } // 1% ultra-rare (6500 - 15000 ₽)
+          { min: 90, max: 290, weight: 60 },   // 60% cheap (90 - 290 ₽)
+          { min: 290, max: 480, weight: 25 },  // 25% budget (290 - 480 ₽)
+          { min: 480, max: 750, weight: 10 },  // 10% medium (480 - 750 ₽)
+          { min: 750, max: 1200, weight: 3.5 },// 3.5% high (750 - 1200 ₽)
+          { min: 1200, max: 2000, weight: 1.5 } // 1.5% very rare (1200 - 2000 ₽)
         ];
         const totalW = weightedTiers.reduce((acc, t) => acc + t.weight, 0);
         let randW = Math.random() * totalW;
@@ -5067,7 +5208,8 @@ function getOrGenerateUserProfile(userId) {
         },
         canAfford: this.isAffordableForUser(finalAmount),
         isMine: false,
-        createdAtTime: Date.now()
+        createdAtTime: Date.now(),
+        _matchDelay: Math.floor(3500 + Math.random() * 5000)
       };
       this.allLobbies.set(shareToken, lobby);
       this.allLobbies.set(id, lobby);
@@ -5167,6 +5309,7 @@ function getOrGenerateUserProfile(userId) {
         target.round.finishedAt = new Date().toISOString();
         target.closedAt = new Date().toISOString();
         target.finishedTimestamp = Date.now();
+        this.saveRecentFinishedLobby(target);
 
         WsMock.broadcast({
           event: 'battle.lobby_closed',
@@ -5219,24 +5362,43 @@ function getOrGenerateUserProfile(userId) {
         } catch(e) {}
       }
 
-      // 2. Bot vs Bot: any bot lobby waiting for >= 2.5 seconds gets matched with a companion bot!
-      const matureWaiting = this.botLobbies.filter(l => l.status === 'waiting' && !l.isMine && (!l._reservedForUser || now > l._reservedForUser) && (now - (l.createdAtTime || 0) >= 2500));
+      // 2. Dynamic quiet period: occasional brief lull (6-12s) where no new lobbies are created
+      if (!this._quietPeriodUntil && Math.random() < 0.04) {
+        this._quietPeriodUntil = now + Math.floor(6000 + Math.random() * 6000);
+      }
+      if (this._quietPeriodUntil && now > this._quietPeriodUntil) {
+        this._quietPeriodUntil = 0;
+      }
+
+      // 3. Bot vs Bot: any bot lobby waiting for >= lobby._matchDelay gets matched with a companion bot
+      const matureWaiting = this.botLobbies.filter(l => {
+        if (l.status !== 'waiting' || l.isMine) return false;
+        if (l._reservedForUser && now < l._reservedForUser) return false;
+        const delay = l._matchDelay || 4000;
+        return (now - (l.createdAtTime || 0)) >= delay;
+      });
       if (matureWaiting.length > 0) {
         const target = matureWaiting[Math.floor(Math.random() * matureWaiting.length)];
         this.matchBotVsBot(target);
       }
 
-      // 3. Keep bot lobby count dynamic and clean (maintain ~4 waiting lobbies)
-      const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
-      if (currentWaitingCount < 4) {
-        const fresh = this.createBotLobby();
-        WsMock.broadcast({
-          event: 'battle.lobby_created',
-          data: fresh
-        });
+      // 4. Dynamic publishing: fluctuates in speed and allows brief empty/low moments
+      if (!this._quietPeriodUntil) {
+        if (!this._nextLobbyPublishTime || now >= this._nextLobbyPublishTime) {
+          const currentWaitingCount = this.botLobbies.filter(l => l.status === 'waiting').length;
+          const targetWaiting = Math.floor(2 + Math.random() * 3);
+          if (currentWaitingCount < targetWaiting) {
+            const fresh = this.createBotLobby();
+            WsMock.broadcast({
+              event: 'battle.lobby_created',
+              data: fresh
+            });
+          }
+          this._nextLobbyPublishTime = now + Math.floor(2500 + Math.random() * 4500);
+        }
       }
 
-      // 4. If total lobbies exceed 6, discard oldest waiting
+      // 5. If total lobbies exceed 6, discard oldest waiting
       if (this.botLobbies.length > 6) {
         const oldestWaitingIdx = this.botLobbies.findLastIndex ? this.botLobbies.findLastIndex(l => l.status === 'waiting' && !l.isMine) : -1;
         if (oldestWaitingIdx !== -1) {
@@ -5344,6 +5506,19 @@ function getOrGenerateUserProfile(userId) {
           this.allLobbies.set(lob.shareToken, lob);
         }
       }
+      if (!lob) {
+        try {
+          const recentSaved = localStorage.getItem('upgrader_recent_finished_lobbies');
+          if (recentSaved) {
+            const list = JSON.parse(recentSaved);
+            lob = list.find(l => l.shareToken === tokenOrId || l.id === tokenOrId) || null;
+            if (lob) {
+              this.allLobbies.set(lob.shareToken, lob);
+              this.allLobbies.set(lob.id, lob);
+            }
+          }
+        } catch(e) {}
+      }
       if (!lob && typeof tokenOrId === 'string' && tokenOrId.length >= 10) {
         // Dynamic fallback so direct link / page refresh never produces 404 "Lobby not found"!
         lob = this.createBotLobby(1500.0);
@@ -5358,14 +5533,15 @@ function getOrGenerateUserProfile(userId) {
           lob.round.countdownSeconds = rem;
         }
       }
-      // When a spectator enters a waiting bot lobby, match within 2.5s so spectator sees the duel visually
+      // Spectating a waiting lobby: respect the natural match delay so spectator can wait for bot to join!
       if (lob && lob.status === 'waiting' && !lob.isMine && !lob._matchScheduled) {
         lob._matchScheduled = true;
+        const delay = lob._matchDelay ? Math.max(3000, lob._matchDelay - (Date.now() - (lob.createdAtTime || 0))) : 5000;
         setTimeout(() => {
           if (lob.status === 'waiting') {
             this.matchBotVsBot(lob);
           }
-        }, 2500);
+        }, delay);
       }
       // When user enters their waiting lobby, guarantee bot joins within 2.5s
       if (lob && lob.status === 'waiting' && lob.isMine && !lob._botJoinScheduled) {
@@ -5530,12 +5706,29 @@ function getOrGenerateUserProfile(userId) {
         data: lobby
       });
 
-      // Bot automatically joins user lobby after 2.5 seconds
+      // Bot joins user lobby with delay scaled to the battle stake amount!
+      const botDelay = this.getBotJoinDelayForStake(totalAmount);
       setTimeout(() => {
         this.botJoinUserLobby(lobby.shareToken);
-      }, 2500);
+      }, botDelay);
 
       return lobby;
+    },
+    getBotJoinDelayForStake(stakeAmount) {
+      const amt = parseFloat(stakeAmount) || 100;
+      if (amt <= 300) {
+        // 8 to 18 seconds
+        return Math.floor(8000 + Math.random() * 10000);
+      } else if (amt <= 500) {
+        // 20 to 45 seconds
+        return Math.floor(20000 + Math.random() * 25000);
+      } else if (amt < 1000) {
+        // 45 to 90 seconds
+        return Math.floor(45000 + Math.random() * 45000);
+      } else {
+        // 1000 - 2000+ ₽: between 2 minutes (120s) and 5 minutes (300s)
+        return Math.floor(120000 + Math.random() * 180000);
+      }
     },
     botJoinUserLobby(shareToken) {
       const lobby = this.getLobby(shareToken);
@@ -5743,6 +5936,7 @@ function getOrGenerateUserProfile(userId) {
         lobby.round.finishedAt = new Date().toISOString();
         lobby.closedAt = new Date().toISOString();
         lobby.finishedTimestamp = Date.now();
+        this.saveRecentFinishedLobby(lobby);
 
         WsMock.broadcast({
           event: 'battle.lobby_closed',
@@ -5877,8 +6071,8 @@ function getOrGenerateUserProfile(userId) {
         candidates.sort((a, b) => Math.abs(a.total - reqAmt) - Math.abs(b.total - reqAmt));
 
         // Strict 49.00% to 51.00% odds window
-        const minTol = reqAmt * (49.00 / 51.00);
-        const maxTol = reqAmt * (51.00 / 49.00);
+        const minTol = reqAmt * (46.00 / 54.00);
+        const maxTol = reqAmt * (54.00 / 46.00);
         const inTol = candidates.filter(c => c.total >= minTol && c.total <= maxTol);
 
         if (inTol.length > 0) {
@@ -5934,7 +6128,7 @@ function getOrGenerateUserProfile(userId) {
             throw new Error('Недостаточно средств для участия в битве');
           }
         }
-      } else if (userBal >= (reqAmt * (49.00 / 51.00))) {
+      } else if (userBal >= (reqAmt * (46.00 / 54.00))) {
         // User has NO skins, but has cash balance sufficient for this stake!
         const shopSkin = this.findShopSkinForStake(reqAmt, userBal);
         matchedItems = [];
@@ -6176,19 +6370,19 @@ function getOrGenerateUserProfile(userId) {
         avatarUrl: user.avatar || user.image || '/assets/images/default-avatar-small.webp'
       };
 
-      const minTol = reqAmt * (49.00 / 51.00);
-      const maxTol = reqAmt * (51.00 / 49.00);
+      const minTol = reqAmt * (46.00 / 54.00);
+      const maxTol = reqAmt * (54.00 / 46.00);
       if (userTotalStake < minTol || userTotalStake > maxTol) {
         throw new Error('Сумма ставки не соответствует условиям битвы');
       }
 
-      // Ensure opponent bot's stake is strictly within [49.00%, 51.00%] odds of user's stake!
+      // Ensure opponent bot's stake is within [46.00%, 54.00%] odds of user's stake
       let p1Stake = parseFloat(lobby.round.stakes[0].amount);
       const isOpponentBot = !lobby.isMine;
       if (isOpponentBot) {
         const totalB = p1Stake + userTotalStake;
         let c1 = Math.round((p1Stake / totalB) * 10000) / 100;
-        if (c1 < 49.00 || c1 > 51.00) {
+        if (c1 < 46.00 || c1 > 54.00) {
           const newBotSkins = this.getOpponentSkins(userTotalStake, lobby.createdBy.id);
           lobby.round.stakes[0].items = newBotSkins;
           p1Stake = newBotSkins.reduce((a, s) => a + parseFloat(s.price), 0);
@@ -6200,8 +6394,8 @@ function getOrGenerateUserProfile(userId) {
 
       const totalBank = p1Stake + userTotalStake;
       let p1Chance = Math.round((p1Stake / totalBank) * 10000) / 100;
-      if (p1Chance < 49.00) p1Chance = 49.00;
-      if (p1Chance > 51.00) p1Chance = 51.00;
+      if (p1Chance < 46.00) p1Chance = 46.00;
+      if (p1Chance > 54.00) p1Chance = 54.00;
       let userChance = Number((100.00 - p1Chance).toFixed(2));
       const p1MaxRoll = Math.round(p1Chance * 1000);
 
@@ -6398,6 +6592,7 @@ function getOrGenerateUserProfile(userId) {
         lobby.round.finishedAt = new Date().toISOString();
         lobby.closedAt = new Date().toISOString();
         lobby.finishedTimestamp = Date.now();
+        this.saveRecentFinishedLobby(lobby);
 
         WsMock.broadcast({
           event: 'battle.lobby_closed',
