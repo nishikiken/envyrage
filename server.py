@@ -22,187 +22,145 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8085
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
 class UpgraderLiveSync:
+    """
+    Parses ONLY three metrics from the original site (https://upgrader.best):
+    1. Online count (via wss://upgrader.best/api/ws)
+    2. Total upgrades count (via https://upgrader.best/api/statistics/games-count)
+    3. Best drop of the day (via https://upgrader.best/api/live-drops/best-hour)
+
+    Syncs strictly every 10 minutes (600s) for optimal stability and performance.
+    In between 10-minute syncs:
+    - Total upgrades count increments smoothly (+1..3 every 30ms) so site feels live.
+    - Online count has subtle natural micro-jitter (+-1..2).
+    - Best drop of the day remains stable until the next 10-minute sync.
+    """
     def __init__(self):
-        self.online = 5680
-        self.games_count = 488830000
-        self.live_drops = []
-        self.seen_drop_ids = set()
-        self.new_drops_queue = []
+        self.online = 5800
+        self.base_online = 5800
+        self.games_count = 510846000
         self.best_live_drop = None
-        self.battle_lobbies = []
+        self.last_sync_time = 0
+        self.sync_interval = 600.0  # 10 minutes
         self._lock = threading.Lock()
         self._running = True
 
     def start(self):
-        t_ws = threading.Thread(target=self._ws_worker, daemon=True)
-        t_ws.start()
         t_poll = threading.Thread(target=self._poll_worker, daemon=True)
         t_poll.start()
         t_tick = threading.Thread(target=self._ticker_worker, daemon=True)
         t_tick.start()
 
-    def _ticker_worker(self):
-        import random, math
-        last_jitter = time.time()
-        online_jitter = 0
+    def sync_from_original_site(self):
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
 
-        schedule = [
-            (0.0, 3500),
-            (3.5, 3440),
-            (5.5, 3480),
-            (7.0, 3750),
-            (8.0, 3980),
-            (10.0, 4020),
-            (12.0, 4080),
-            (13.5, 4750),
-            (15.0, 5040),
-            (16.5, 5080),
-            (18.0, 4980),
-            (19.5, 4550),
-            (21.0, 3950),
-            (22.5, 3600),
-            (23.5, 3510),
-            (24.0, 3500)
-        ]
+        # 1. PARSE ONLINE (from wss://upgrader.best/api/ws)
+        parsed_online = None
+        try:
+            async def get_online():
+                headers = [
+                    ('Origin', 'https://upgrader.best'),
+                    ('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
+                ]
+                async with websockets.connect('wss://upgrader.best/api/ws', ssl=ssl_ctx, additional_headers=headers) as ws:
+                    await ws.send(json.dumps({'id': 'poll_online', 'event': 'online'}))
+                    resp = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                    data = json.loads(resp)
+                    return data.get('data')
 
-        def get_base_online(hour):
-            for i in range(len(schedule) - 1):
-                h0, o0 = schedule[i]
-                h1, o1 = schedule[i+1]
-                if h0 <= hour <= h1:
-                    progress = (hour - h0) / (h1 - h0)
-                    smooth = (1 - math.cos(progress * math.pi)) / 2
-                    return o0 + (o1 - o0) * smooth
-            return 4000
+            loop = asyncio.new_event_loop()
+            parsed_online = loop.run_until_complete(get_online())
+            loop.close()
+        except Exception as e:
+            print(f"[UpgraderLiveSync] Notice: could not fetch online: {e}")
 
+        # 2. PARSE UPGRADES COUNT (from https://upgrader.best/api/statistics/games-count)
+        parsed_games = None
+        try:
+            req = urllib.request.Request(
+                "https://upgrader.best/api/statistics/games-count",
+                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
+            )
+            with urllib.request.urlopen(req, context=ssl_ctx, timeout=5) as r:
+                res = json.loads(r.read().decode())
+                parsed_games = res.get("count")
+        except Exception as e:
+            print(f"[UpgraderLiveSync] Notice: could not fetch games-count: {e}")
+
+        # 3. PARSE BEST DROP OF THE DAY (from https://upgrader.best/api/live-drops/best-hour)
+        parsed_best = None
+        try:
+            req = urllib.request.Request(
+                "https://upgrader.best/api/live-drops/best-hour",
+                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
+            )
+            with urllib.request.urlopen(req, context=ssl_ctx, timeout=5) as r:
+                res = json.loads(r.read().decode())
+                parsed_best = res.get("bestLiveDrop")
+        except Exception as e:
+            print(f"[UpgraderLiveSync] Notice: could not fetch best-hour: {e}")
+
+        with self._lock:
+            if isinstance(parsed_online, int) and parsed_online > 0:
+                self.online = parsed_online
+                self.base_online = parsed_online
+
+            if isinstance(parsed_games, int) and parsed_games > 0:
+                self.games_count = max(self.games_count, parsed_games)
+
+            if parsed_best and isinstance(parsed_best, dict) and "item" in parsed_best:
+                u = parsed_best.setdefault("user", {})
+                uid = str(u.get("id") or "2148065")
+                unick = u.get("nickname") or "Mikey"
+                u["id"] = uid
+                u["nickname"] = unick
+                if not u.get("avatar") and not u.get("image"):
+                    h = 0
+                    for ch in uid:
+                        h = ((h << 5) - h) + ord(ch)
+                        h &= 0xFFFFFFFF
+                    av_idx = (abs(h) % 149) + 1
+                    u["avatar"] = f"/assets/avatars/user_pack/avatar_{av_idx}.jpg"
+                    u["image"] = u["avatar"]
+                self.best_live_drop = parsed_best
+
+            self.last_sync_time = time.time()
+            best_name = self.best_live_drop.get("item", {}).get("marketName") if self.best_live_drop else "None"
+            best_user = self.best_live_drop.get("user", {}).get("nickname") if self.best_live_drop else "None"
+            print(f"[UpgraderLiveSync] Synced from upgrader.best! Online: {self.online}, Upgrades: {self.games_count}, Best Drop: {best_name} ({best_user})")
+
+    def _poll_worker(self):
         while self._running:
-            time.sleep(0.025)
-            # Smooth increments of 1, 2, or 3 every 25ms (average ~70-100 upgrades/sec, strictly <= 200/sec)
+            self.sync_from_original_site()
+            # Sleep 10 minutes (600 seconds) in 1s slices for clean server exit
+            for _ in range(int(self.sync_interval)):
+                if not self._running:
+                    break
+                time.sleep(1.0)
+
+    def _ticker_worker(self):
+        import random
+        last_online_jitter = time.time()
+        while self._running:
+            time.sleep(0.03)  # smooth ~33 ticks/sec
             delta = random.choice([1, 1, 2, 2, 3])
             now = time.time()
             with self._lock:
                 self.games_count += delta
-                if now - last_jitter >= 1.8:
-                    last_jitter = now
-                    lt = time.localtime(now)
-                    hour = lt.tm_hour + lt.tm_min / 60.0 + lt.tm_sec / 3600.0
-                    base_online = get_base_online(hour)
-                    step = random.choice([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5])
-                    drift = 0
-                    if online_jitter > 25: drift = -random.randint(1, 3)
-                    elif online_jitter < -25: drift = random.randint(1, 3)
-                    online_jitter = max(-45, min(45, online_jitter + step + drift))
-                    self.online = int(round(base_online + online_jitter))
-
-    def _ws_worker(self):
-        async def run():
-            ssl_ctx = ssl.create_default_context()
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
-            headers = {
-                "Origin": "https://upgrader.best",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            while self._running:
-                try:
-                    async with websockets.connect("wss://upgrader.best/api/ws", ssl=ssl_ctx, additional_headers=headers) as ws:
-                        await ws.send(json.dumps({"event": "subscribe", "room": "online"}))
-                        await ws.send(json.dumps({"id": "init_online", "event": "online"}))
-                        while self._running:
-                            try:
-                                msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
-                            except asyncio.TimeoutError:
-                                await ws.send(json.dumps({"id": f"poll_online_{time.time()}", "event": "online"}))
-                except Exception:
-                    await asyncio.sleep(2)
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(run())
-
-    def _poll_worker(self):
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
-
-        poll_counter = 0
-        while self._running:
-            poll_counter += 1
-            # 1. Poll games count
-            try:
-                req = urllib.request.Request("https://upgrader.best/api/statistics/games-count", headers=headers)
-                with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
-                    res = json.loads(r.read().decode())
-                    cnt = res.get("count")
-                    if isinstance(cnt, int) and cnt > self.games_count:
-                        with self._lock:
-                            self.games_count = cnt
-            except Exception:
-                pass
-
-            # 2. Poll live drops
-            try:
-                req = urllib.request.Request("https://upgrader.best/api/live-drops", headers=headers)
-                with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
-                    res = json.loads(r.read().decode())
-                    drops = res.get("liveDrops", [])
-                    if drops:
-                        with self._lock:
-                            fresh = []
-                            for d in drops:
-                                did = str(d.get("id"))
-                                if did and did not in self.seen_drop_ids:
-                                    if len(self.seen_drop_ids) > 0:
-                                        fresh.append(d)
-                                    self.seen_drop_ids.add(did)
-                            if fresh:
-                                self.new_drops_queue.extend(fresh)
-                                if len(self.new_drops_queue) > 40:
-                                    self.new_drops_queue = self.new_drops_queue[-40:]
-                            self.live_drops = drops
-            except Exception:
-                pass
-
-            # 3. Poll best-hour drop
-            if poll_counter % 3 == 0 or not self.best_live_drop:
-                try:
-                    req = urllib.request.Request("https://upgrader.best/api/live-drops/best-hour", headers=headers)
-                    with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
-                        res = json.loads(r.read().decode())
-                        best = res.get("bestLiveDrop")
-                        if best:
-                            with self._lock:
-                                self.best_live_drop = best
-                except Exception:
-                    pass
-
-            # 4. Poll live battle lobbies from https://upgrader.best/api/game/battle/lobbies
-            if poll_counter % 2 == 0 or not self.battle_lobbies:
-                try:
-                    req = urllib.request.Request("https://upgrader.best/api/game/battle/lobbies", headers=headers)
-                    with urllib.request.urlopen(req, context=ssl_ctx, timeout=4) as r:
-                        res = json.loads(r.read().decode())
-                        items = res.get("items", [])
-                        if items:
-                            with self._lock:
-                                self.battle_lobbies = items
-                except Exception:
-                    pass
-
-            time.sleep(1.0)
+                if now - last_online_jitter >= 2.5:
+                    last_online_jitter = now
+                    jitter = random.choice([-2, -1, 0, 1, 2])
+                    self.online = max(100, self.base_online + jitter)
 
     def get_snapshot(self):
         with self._lock:
-            fresh = list(self.new_drops_queue)
-            self.new_drops_queue.clear()
             return {
                 "online": self.online,
                 "gamesCount": self.games_count,
-                "liveDrops": list(self.live_drops),
-                "newDrops": fresh,
                 "bestLiveDrop": self.best_live_drop,
-                "battleLobbies": list(self.battle_lobbies)
+                "lastSync": self.last_sync_time,
+                "syncInterval": self.sync_interval
             }
 
 LIVE_SYNC = UpgraderLiveSync()
@@ -244,9 +202,6 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path in ['/api/statistics/games-count', '/statistics/games-count']:
             return self.send_json({"count": LIVE_SYNC.games_count})
 
-        if parsed.path in ['/api/live-drops', '/live-drops']:
-            return self.send_json({"liveDrops": LIVE_SYNC.live_drops})
-
         if parsed.path in ['/api/statistics/online', '/statistics/online']:
             return self.send_json({"data": LIVE_SYNC.online, "event": "online"})
 
@@ -254,10 +209,6 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             snap = LIVE_SYNC.get_snapshot()
             best = snap.get("bestLiveDrop")
             return self.send_json({"bestLiveDrop": best} if best else {"bestLiveDrop": None})
-
-        # Battle lobbies live feed directly synced from upgrader.best (debug/live preview only)
-        if parsed.path in ['/api/game/battle/lobbies/live', '/game/battle/lobbies/live']:
-            return self.send_json({"items": LIVE_SYNC.battle_lobbies, "hasMore": False})
 
         # 1. Root redirect to cis/index.html
         if parsed.path in ['', '/', '/index.html']:

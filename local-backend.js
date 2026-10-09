@@ -60,6 +60,9 @@
     }
   } catch(e) {}
 
+  // Keep reference to unintercepted native fetch for internal background sync
+  const originalFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null;
+
   // Safety patch: prevent Angular or CDN prepending paths to data:image URLs
   try {
     const origSrcDesc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
@@ -3946,6 +3949,54 @@
     knownBots.set(String(user.id), user);
   }
 
+  function registerBestDropUser(bestDrop) {
+    if (!bestDrop || !bestDrop.user) return null;
+    const u = bestDrop.user;
+    const uId = String(u.id || '2148065');
+    const uNick = u.nickname || 'Mikey';
+    let uAv = u.avatar || u.image;
+    if (!uAv || uAv.includes('default-avatar') || uAv.includes('default_avatar')) {
+      let hash = 0;
+      for (let i = 0; i < uId.length; i++) hash = ((hash << 5) - hash) + uId.charCodeAt(i);
+      const avIdx = Math.abs(hash) % AUTHENTIC_AVATARS.length;
+      uAv = AUTHENTIC_AVATARS[avIdx];
+    }
+    u.avatar = uAv;
+    u.image = uAv;
+
+    const item = bestDrop.item || {};
+    const wonPrice = parseFloat(item.price || bestDrop.wonAmount || 110000);
+
+    const profile = {
+      id: uId,
+      username: uNick,
+      nickname: uNick,
+      avatar: uAv,
+      image: uAv,
+      avatarUrl: uAv,
+      balance: 0,
+      isBot: true,
+      botTier: 'vip',
+      vipTier: 'vip_gold',
+      tier: 'vip_gold',
+      vipTag: 'vip_gold',
+      upgradesMade: 184,
+      withdrawnAmount: Math.round(wonPrice * 1.35 * 100) / 100,
+      withdrawnItemsCount: 19,
+      bestDrop: item,
+      bestDropProbability: bestDrop.probability || '0.3568',
+      steamProfileLink: 'https://steamcommunity.com/profiles/' + uId
+    };
+
+    knownBots.set(uId, profile);
+    knownBots.set(uNick.toLowerCase(), profile);
+    try {
+      localStorage.setItem('upgrader_best_drop_user_profile', JSON.stringify(profile));
+    } catch(e) {}
+    window.__currentBestDropUserProfile = profile;
+    return profile;
+  }
+
 function getOrGenerateUserProfile(userId) {
   const activeUser = LocalDB.getActiveUser();
     if (!userId) return activeUser;
@@ -3955,7 +4006,28 @@ function getOrGenerateUserProfile(userId) {
   const localAcc = LocalDB.getUserById(userId);
   if (localAcc) return localAcc;
 
-  // Check known bots cache first, or deterministic generation from user ID
+  // 1. Strict match for Best Drop of the day user (by ID or nickname)
+  const query = String(userId).toLowerCase();
+  if (typeof currentBestDrop !== 'undefined' && currentBestDrop && currentBestDrop.user) {
+    const bUser = currentBestDrop.user;
+    const bId = String(bUser.id);
+    const bNick = String(bUser.nickname || '').toLowerCase();
+    if (query === bId.toLowerCase() || query === bNick) {
+      return registerBestDropUser(currentBestDrop);
+    }
+  }
+
+  try {
+    const cachedProfileRaw = localStorage.getItem('upgrader_best_drop_user_profile');
+    if (cachedProfileRaw) {
+      const p = JSON.parse(cachedProfileRaw);
+      if (p && (String(p.id).toLowerCase() === query || String(p.username || '').toLowerCase() === query || String(p.nickname || '').toLowerCase() === query)) {
+        return p;
+      }
+    }
+  } catch(e) {}
+
+  // 2. Check known bots cache first, or deterministic generation from user ID
   const cachedBot = knownBots.get(String(userId));
   if (cachedBot && cachedBot.bestDrop) {
     return cachedBot;
@@ -4515,6 +4587,7 @@ function getOrGenerateUserProfile(userId) {
       if (stored && !forceDateKey) {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.date === today && parsed.drop && parsed.drop.item) {
+          registerBestDropUser(parsed.drop);
           return parsed.drop;
         }
       }
@@ -4546,6 +4619,8 @@ function getOrGenerateUserProfile(userId) {
       item: base.item
     };
 
+    registerBestDropUser(dailyDrop);
+
     try {
       localStorage.setItem('upgrader_daily_best_drop', JSON.stringify({
         date: today,
@@ -4557,12 +4632,14 @@ function getOrGenerateUserProfile(userId) {
   }
 
   let currentBestDrop = getDailyStandoutBestDrop();
+  registerBestDropUser(currentBestDrop);
 
   window.rotateDailyBestDrop = function(forceOffsetDays) {
     const d = new Date();
     d.setDate(d.getDate() + (forceOffsetDays || 1));
     const nextKey = d.toISOString().slice(0, 10);
     currentBestDrop = getDailyStandoutBestDrop(nextKey);
+    registerBestDropUser(currentBestDrop);
     WsMock.broadcast({
       event: 'live_drops.best_hour_updated',
       data: { bestLiveDrop: currentBestDrop }
@@ -4691,16 +4768,22 @@ function getOrGenerateUserProfile(userId) {
     try {
       let feed = null;
       try {
-        const mockRes = handleMockApi('GET', '/api/realtime-feed');
-        if (mockRes && mockRes.data) {
-          feed = mockRes.data;
+        const fetchFn = (typeof originalFetch !== 'undefined') ? originalFetch : window.fetch;
+        const res = await fetchFn('/api/realtime-feed');
+        if (res && res.ok) {
+          feed = await res.json();
         }
       } catch (e) {}
+
       if (!feed) {
-        const res = await fetch('/api/realtime-feed');
-        if (res.ok) feed = await res.json();
+        try {
+          const raw = localStorage.getItem('upgrader_realtime_feed_cache');
+          if (raw) feed = JSON.parse(raw);
+        } catch(e) {}
       }
+
       if (!feed) return;
+
       if (typeof feed.online === 'number' && feed.online > 0) {
         currentOnline = feed.online;
         GlobalStats.onlineCount = feed.online;
@@ -4712,31 +4795,29 @@ function getOrGenerateUserProfile(userId) {
       }
       if (typeof feed.gamesCount === 'number' && feed.gamesCount > 400000000) {
         GlobalStats.setTargetCount(feed.gamesCount);
+        GlobalStats.updateHeaderDOM(feed.gamesCount);
       }
-      if (Array.isArray(feed.liveDrops) && feed.liveDrops.length > 0) {
-        cachedRealtimeDrops = feed.liveDrops;
-        feed.liveDrops.forEach(d => {
-          const did = String(d.id || (d.item && d.item.id) || '');
-          if (did && !seenLiveDropIds.has(did)) {
-            seenLiveDropIds.add(did);
-            authenticDropsPool.push(d);
-            if (authenticDropsPool.length > 80) authenticDropsPool.shift();
-          }
+      if (feed.bestLiveDrop && feed.bestLiveDrop.item) {
+        currentBestDrop = feed.bestLiveDrop;
+        registerBestDropUser(currentBestDrop);
+        WsMock.broadcast({
+          event: 'live_drops.best_hour_updated',
+          data: { bestLiveDrop: currentBestDrop }
         });
+        try {
+          localStorage.setItem('upgrader_daily_best_drop', JSON.stringify({
+            date: new Date().toISOString().slice(0, 10),
+            drop: currentBestDrop
+          }));
+        } catch(e) {}
       }
-      if (Array.isArray(feed.newDrops) && feed.newDrops.length > 0) {
-        enqueueDrops(feed.newDrops);
-      }
-      const dailyDrop = getDailyStandoutBestDrop();
-      currentBestDrop = dailyDrop || (feed.bestLiveDrop && feed.bestLiveDrop.item ? feed.bestLiveDrop : currentBestDrop);
-      WsMock.broadcast({
-        event: 'live_drops.best_hour_updated',
-        data: { bestLiveDrop: currentBestDrop }
-      });
+      try {
+        localStorage.setItem('upgrader_realtime_feed_cache', JSON.stringify(feed));
+      } catch(e) {}
       removeDuplicateBestDrop();
     } catch(e) {}
   }
-  setInterval(pollRealtimeFeed, 1000);
+  setInterval(pollRealtimeFeed, 10000);
   pollRealtimeFeed();
 
   // Fast continuous drop streamer (drops roll in smoothly every 700ms - 2500ms)
@@ -7040,24 +7121,7 @@ function getOrGenerateUserProfile(userId) {
   function handleMockApi(method, path, body, params) {
     const activeUser = LocalDB.getActiveUser();
 
-    // -------------------------------------------------------------
-    // REALTIME FEED ENDPOINT (online counter & upgrades count)
-    // -------------------------------------------------------------
-    if (path.includes('realtime-feed')) {
-      const hour = new Date().getHours();
-      const baseCurve = 3500 + Math.sin((hour - 6) / 24 * Math.PI * 2) * 800;
-      const online = Math.floor(baseCurve + (Math.random() * 80 - 40));
-      return {
-        status: 200,
-        data: {
-          online: online,
-          gamesCount: GlobalStats.displayedCount || 2847600,
-          upgradesCount: GlobalStats.displayedCount || 2847600,
-          liveDrops: (typeof cachedRealtimeDrops !== 'undefined' && cachedRealtimeDrops) ? cachedRealtimeDrops : [],
-          realtimeDrops: (typeof cachedRealtimeDrops !== 'undefined' && cachedRealtimeDrops) ? cachedRealtimeDrops : []
-        }
-      };
-    }
+    // (realtime-feed is served live by server.py / UpgraderLiveSync)
 
     // -------------------------------------------------------------
     // VIP SYSTEM ENDPOINTS
@@ -7651,6 +7715,36 @@ function getOrGenerateUserProfile(userId) {
         const botHistory = [];
         const isVipBot = acc.botTier === 'vip' || (acc.withdrawnAmount && acc.withdrawnAmount > 50000);
         const maxCompPrice = isVipBot ? 700 : 300;
+
+        if (acc.bestDrop && (acc.bestDrop.marketName || acc.bestDrop.name)) {
+          const bd = acc.bestDrop;
+          const bdName = bd.marketName || bd.name;
+          const bdImg = bd.image || bd.imageNew || bd.imageUrl || '';
+          const bdPrice = Number(bd.price || 0).toFixed(2);
+          const bdItemObj = {
+            id: String(bd.id || 'best_drop_' + botId),
+            appId: 730,
+            marketName: bdName,
+            price: bdPrice,
+            image: bdImg,
+            imageNew: bdImg,
+            imageUrl: bdImg,
+            action: 'won',
+            extra: bd.extra || { e: 2, g: 18, n: [bdName], r: 15, s: false, t: 16, ch: 'ffd700', st: false }
+          };
+          botHistory.push({
+            id: bdItemObj.id,
+            marketName: bdName,
+            price: bdPrice,
+            image: bdImg,
+            imageNew: bdImg,
+            imageUrl: bdImg,
+            action: 'won',
+            extra: bdItemObj.extra,
+            item: bdItemObj,
+            obtainedAt: new Date(Date.now() - 15 * 60000).toISOString()
+          });
+        }
 
         for (let i = 0; i < botItemsCount; i++) {
           const skin = pool[(botId * 3 + i * 7) % pool.length];
@@ -8599,7 +8693,7 @@ function getOrGenerateUserProfile(userId) {
   window.XMLHttpRequest = MockXMLHttpRequest;
 
   // 9. INTERCEPT FETCH
-  const originalFetch = window.fetch;
+  const nativeFetch = originalFetch || window.fetch.bind(window);
   window.fetch = function(resource, init) {
     const isGH = window.location.hostname.includes('github.io') || window.location.pathname.startsWith('/envyrage');
     if (isGH && typeof resource === 'string') {
@@ -10479,6 +10573,57 @@ function getOrGenerateUserProfile(userId) {
           e.stopPropagation();
           showToast('Этот скин находится на выводе в Steam и не может быть продан', 'error');
           return;
+        }
+      }
+
+      // Catch clicks on Best Drop item in header or banner
+      const bestDropCard = target.closest('up-best-drop-item, [data-testid="best-drop-item"], up-best-drop-item-horizontal, [data-testid="best-drop-item-horizontal"]');
+      if (bestDropCard) {
+        let bDrop = (typeof currentBestDrop !== 'undefined' && currentBestDrop) ? currentBestDrop : null;
+        if (!bDrop) {
+          try {
+            const raw = localStorage.getItem('upgrader_daily_best_drop');
+            if (raw) bDrop = JSON.parse(raw).drop;
+          } catch(e) {}
+        }
+        if (bDrop && bDrop.user) {
+          registerBestDropUser(bDrop);
+          const uId = String(bDrop.user.id || '2148065');
+          const isEn = (localStorage.getItem('lang') === 'en') || document.documentElement.lang === 'en';
+          const prefix = isEn ? '/en' : '/ru';
+          const targetUrl = prefix + '/users/' + uId;
+
+          // If guest, ensure guest auth token so route guard doesn't bounce them back to home
+          if (!localStorage.getItem('auth_token')) {
+            const guestToken = 'local_guest_jwt_' + Date.now();
+            localStorage.setItem('auth_token', guestToken);
+            if (!localStorage.getItem(STORAGE_ACTIVE_KEY) || localStorage.getItem(STORAGE_ACTIVE_KEY) === '__GUEST__') {
+              const guestAcc = {
+                id: '1735999',
+                username: 'GuestUser',
+                nickname: 'Guest',
+                balance: 0,
+                avatar: AUTHENTIC_AVATARS[0],
+                isTosAccepted: true,
+                isTosRead: true
+              };
+              const accs = LocalDB.getAccounts();
+              accs['GuestUser'] = guestAcc;
+              LocalDB.saveAccounts(accs);
+              LocalDB.setActiveUser('GuestUser');
+            }
+          }
+
+          // Allow native Angular router to navigate or smoothly forward to the profile page
+          setTimeout(() => {
+            if (!window.location.pathname.includes('/users/' + uId)) {
+              if (window.__upgraderRouter && typeof window.__upgraderRouter.navigateByUrl === 'function') {
+                window.__upgraderRouter.navigateByUrl(targetUrl);
+              } else {
+                window.location.href = targetUrl;
+              }
+            }
+          }, 80);
         }
       }
 
