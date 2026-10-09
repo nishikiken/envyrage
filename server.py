@@ -21,6 +21,46 @@ import websockets
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8085
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
+import re
+
+SKINS_CATALOG = None
+def get_skin_image_by_name(market_name):
+    global SKINS_CATALOG
+    if not market_name:
+        return None
+    if SKINS_CATALOG is None:
+        try:
+            skins_path = os.path.join(DIRECTORY, "skins.json")
+            with open(skins_path, "r", encoding="utf-8") as f:
+                SKINS_CATALOG = json.load(f)
+        except Exception:
+            SKINS_CATALOG = []
+
+    # 1. Exact match
+    for s in SKINS_CATALOG:
+        if s.get("marketName") == market_name and s.get("image") and "steamstatic" in s.get("image"):
+            return s["image"]
+
+    # 2. Relaxed match (strip StatTrak, star, phase, wear)
+    clean = market_name.replace("StatTrak™ ", "").replace("★ ", "").strip()
+    clean_no_phase = re.sub(r'\s+Phase\s+\d+|\s+Emerald|\s+Ruby|\s+Sapphire|\s+Black Pearl', '', clean, flags=re.I)
+    base_prefix = clean_no_phase.split("(")[0].strip().lower()
+    for s in SKINS_CATALOG:
+        s_clean = s.get("marketName", "").replace("StatTrak™ ", "").replace("★ ", "").strip()
+        s_base = s_clean.split("(")[0].strip().lower()
+        if s_base == base_prefix and s.get("image") and "steamstatic" in s.get("image"):
+            return s["image"]
+
+    # 3. Weapon fallback
+    weapon_type = base_prefix.split("|")[0].strip().lower() if "|" in base_prefix else ""
+    if weapon_type:
+        for s in SKINS_CATALOG:
+            s_clean = s.get("marketName", "").replace("★ ", "").lower()
+            if s_clean.startswith(weapon_type) and s.get("image") and "steamstatic" in s.get("image"):
+                return s["image"]
+
+    return None
+
 class UpgraderLiveSync:
     """
     Parses ONLY three metrics from the original site (https://upgrader.best):
@@ -123,6 +163,15 @@ class UpgraderLiveSync:
                     av_idx = (abs(h) % 149) + 1
                     u["avatar"] = f"/assets/avatars/user_pack/avatar_{av_idx}.jpg"
                     u["image"] = u["avatar"]
+
+                it = parsed_best.get("item", {})
+                img = it.get("image") or ""
+                if "pricempire.com" in img or not img or ".avif" in img:
+                    steam_img = get_skin_image_by_name(it.get("marketName", ""))
+                    if steam_img:
+                        it["image"] = steam_img
+                        it["imageNew"] = steam_img
+
                 self.best_live_drop = parsed_best
 
             self.last_sync_time = time.time()

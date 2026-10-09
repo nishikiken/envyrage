@@ -1951,50 +1951,20 @@
   GlobalStats.displayedCount = GlobalStats.getUpgradesCount();
   GlobalStats.targetCount = GlobalStats.displayedCount;
 
-  // Dynamic Online Counter based on time of day:
-  // - First half of day (morning ~08:00 - 12:00): ~4000
-  // - Peak hours / middle of day (~14:00 - 18:30): ~5000
-  // - Towards night / night (~22:00 - 05:00): ~3500
-  // - Constant organic fluctuations within range: updates every 1.5 - 2s with natural jitter (+/- few players)
-  function getBaseOnlineForHour(hour) {
-    const schedule = [
-      [0.0, 3500],
-      [3.5, 3440],
-      [5.5, 3480],
-      [7.0, 3750],
-      [8.0, 3980],
-      [10.0, 4020],
-      [12.0, 4080],
-      [13.5, 4750],
-      [15.0, 5040],
-      [16.5, 5080],
-      [18.0, 4980],
-      [19.5, 4550],
-      [21.0, 3950],
-      [22.5, 3600],
-      [23.5, 3510],
-      [24.0, 3500]
-    ];
-    for (let i = 0; i < schedule.length - 1; i++) {
-      const [h0, o0] = schedule[i];
-      const [h1, o1] = schedule[i + 1];
-      if (hour >= h0 && hour <= h1) {
-        const progress = (hour - h0) / (h1 - h0);
-        const smoothT = (1 - Math.cos(progress * Math.PI)) / 2;
-        return o0 + (o1 - o0) * smoothT;
+  // Authentic Online Counter synced directly from upgrader.best
+  let realBaseOnline = 6800;
+  try {
+    const rawFeed = localStorage.getItem('upgrader_realtime_feed_cache');
+    if (rawFeed) {
+      const parsed = JSON.parse(rawFeed);
+      if (typeof parsed.online === 'number' && parsed.online > 0) {
+        realBaseOnline = parsed.online;
       }
     }
-    return 4000;
-  }
+  } catch(e) {}
 
-  function getDynamicOnlineTarget() {
-    const d = new Date();
-    const h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
-    return getBaseOnlineForHour(h);
-  }
-
-  let onlineJitter = (Math.random() * 20 - 10);
-  let currentOnline = Math.round(getDynamicOnlineTarget() + onlineJitter);
+  let onlineJitter = 0;
+  let currentOnline = realBaseOnline;
 
   try {
     localStorage.setItem('online', JSON.stringify({ onlineCount: currentOnline }));
@@ -2004,7 +1974,7 @@
   function updateOnlineBadgeInDOM() {
     try {
       localStorage.setItem('online', JSON.stringify({ onlineCount: currentOnline }));
-      const counters = document.querySelectorAll('[data-testid="online-counter"]');
+      const counters = document.querySelectorAll('[data-testid="online-counter"], up-online, [class*="online-counter"]');
       const formattedOnline = currentOnline.toLocaleString('ru-RU').replace(/,/g, ' ');
       counters.forEach(c => {
         const odo = c.querySelector('up-odometer-simple');
@@ -2018,7 +1988,7 @@
         } else {
           const spans = c.querySelectorAll('span');
           spans.forEach(s => {
-            if (s.textContent.trim() === '-' || /^\d+$/.test(s.textContent.trim())) {
+            if (s.textContent.trim() === '-' || /^\d+[\s\d]*$/.test(s.textContent.trim())) {
               s.textContent = ' ' + formattedOnline + ' ';
             }
           });
@@ -2029,16 +1999,13 @@
   }
   setInterval(updateOnlineBadgeInDOM, 1000);
 
-  // Organic random online fluctuation (simulating realistic player activity constantly changing)
+  // Micro jitter around authentic live online (±1..2 players)
   setInterval(() => {
-    const base = getDynamicOnlineTarget();
-    const step = (Math.random() < 0.5 ? -1 : 1) * (Math.floor(Math.random() * 5) + 1); // ±1..5
-    let drift = 0;
-    if (onlineJitter > 25) drift = -Math.floor(Math.random() * 3 + 1);
-    if (onlineJitter < -25) drift = Math.floor(Math.random() * 3 + 1);
-
-    onlineJitter = Math.max(-45, Math.min(45, onlineJitter + step + drift));
-    currentOnline = Math.round(base + onlineJitter);
+    const step = (Math.random() < 0.5 ? -1 : 1);
+    if (onlineJitter > 3) onlineJitter = -1;
+    if (onlineJitter < -3) onlineJitter = 1;
+    onlineJitter += step;
+    currentOnline = Math.max(100, Math.round(realBaseOnline + onlineJitter));
     updateOnlineBadgeInDOM();
     try {
       WsMock.broadcast({
@@ -2046,7 +2013,7 @@
         data: currentOnline
       });
     } catch(e) {}
-  }, 1800);
+  }, 3000);
 
   // Smooth continuous incrementer (1, 2, or 3 upgrades per tick, strictly <= 200 upgrades/sec)
   setInterval(() => {
@@ -4631,7 +4598,30 @@ function getOrGenerateUserProfile(userId) {
     return dailyDrop;
   }
 
-  let currentBestDrop = getDailyStandoutBestDrop();
+  let currentBestDrop = null;
+  try {
+    const rawFeed = localStorage.getItem('upgrader_realtime_feed_cache');
+    if (rawFeed) {
+      const p = JSON.parse(rawFeed);
+      if (p && p.bestLiveDrop && p.bestLiveDrop.item) {
+        currentBestDrop = p.bestLiveDrop;
+      }
+    }
+  } catch(e) {}
+  if (!currentBestDrop) {
+    try {
+      const stored = localStorage.getItem('upgrader_daily_best_drop');
+      if (stored) {
+        const p = JSON.parse(stored);
+        if (p && p.drop && p.drop.item) {
+          currentBestDrop = p.drop;
+        }
+      }
+    } catch(e) {}
+  }
+  if (!currentBestDrop) {
+    currentBestDrop = getDailyStandoutBestDrop();
+  }
   registerBestDropUser(currentBestDrop);
 
   window.rotateDailyBestDrop = function(forceOffsetDays) {
@@ -4764,16 +4754,140 @@ function getOrGenerateUserProfile(userId) {
     }
   }
 
+  function sanitizeSkinImage(item) {
+    if (!item) return;
+    const cur = item.image || item.imageNew || '';
+    if (cur.includes('pricempire.com') || cur.includes('.avif') || !cur) {
+      const mName = item.marketName || item.name || '';
+      const clean = mName.replace('StatTrak™ ', '').replace('★ ', '').trim();
+      const cleanNoPhase = clean.replace(/\s+Phase\s+\d+|\s+Emerald|\s+Ruby|\s+Sapphire|\s+Black Pearl/gi, '');
+      const base = cleanNoPhase.split('(')[0].trim().toLowerCase();
+      const pool = (Array.isArray(catalogData) && catalogData.length > 50) ? catalogData : BattleSystem.fallbackSkins;
+      let found = pool.find(s => {
+        const sn = (s.marketName || '').replace('StatTrak™ ', '').replace('★ ', '').trim().toLowerCase();
+        const snBase = sn.split('(')[0].trim().toLowerCase();
+        return snBase === base && s.image && s.image.includes('steamstatic');
+      });
+      if (!found && base.includes('|')) {
+        const weaponType = base.split('|')[0].trim().toLowerCase();
+        found = pool.find(s => {
+          const sn = (s.marketName || '').replace('★ ', '').trim().toLowerCase();
+          return sn.startsWith(weaponType) && s.image && s.image.includes('steamstatic');
+        });
+      }
+      if (found && found.image) {
+        item.image = found.image;
+        item.imageNew = found.image;
+      }
+    }
+  }
+
+  function updateBestDropCardInDOM(drop) {
+    if (!drop || !drop.item) return;
+    const item = drop.item;
+    const user = drop.user || {};
+    const imgUrl = item.imageNew || item.image;
+    const priceStr = parseFloat(item.price || drop.wonAmount || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    // 1. Vertical best drop card (up-best-drop-item)
+    document.querySelectorAll('up-best-drop-item').forEach(card => {
+      const dropImg = card.querySelector('img[alt="drop-item"]');
+      if (dropImg && imgUrl) {
+        if (dropImg.src !== imgUrl) dropImg.src = imgUrl;
+        dropImg.classList.remove('opacity-0');
+        dropImg.classList.add('opacity-100');
+        dropImg.style.opacity = '1';
+      }
+      const avImg = card.querySelector('img.rounded-full, img[alt*="Avatar"], img[alt*="Аватар"]');
+      if (avImg && user.avatar && avImg.src !== user.avatar) avImg.src = user.avatar;
+
+      const nameSpan = card.querySelector('span.font-tektur');
+      if (nameSpan && item.extra && item.extra.n && item.extra.n[1]) {
+        nameSpan.textContent = item.extra.n[1] + (item.extra.p ? ' ' + item.extra.p : '');
+      } else if (nameSpan && item.marketName) {
+        nameSpan.textContent = item.marketName.replace('★ ', '').replace('StatTrak™ ', '');
+      }
+      const weaponSpan = card.querySelector('span.font-exo');
+      if (weaponSpan && item.extra && item.extra.n && item.extra.n[0]) {
+        weaponSpan.textContent = item.extra.n[0];
+      }
+      const nickSpan = card.querySelector('span[class*="text-white uppercase"], span.truncate.text-white');
+      if (nickSpan && user.nickname) nickSpan.textContent = user.nickname;
+      const priceSpan = card.querySelector('span[class*="leading-none"]');
+      if (priceSpan) priceSpan.textContent = priceStr;
+    });
+
+    // 2. Horizontal best drop card (up-best-drop-item-horizontal)
+    document.querySelectorAll('up-best-drop-item-horizontal').forEach(card => {
+      const dropImg = card.querySelector('img[alt="drop-item"]');
+      if (dropImg && imgUrl) {
+        if (dropImg.src !== imgUrl) dropImg.src = imgUrl;
+        dropImg.classList.remove('opacity-0');
+        dropImg.classList.add('opacity-100');
+        dropImg.style.opacity = '1';
+      }
+      const avImg = card.querySelector('img[alt="User avatar"], img.rounded-full');
+      if (avImg && user.avatar && avImg.src !== user.avatar) avImg.src = user.avatar;
+    });
+  }
+  setInterval(() => {
+    if (typeof currentBestDrop !== 'undefined' && currentBestDrop) {
+      updateBestDropCardInDOM(currentBestDrop);
+    }
+  }, 1500);
+
   async function pollRealtimeFeed() {
     try {
       let feed = null;
+      const fetchFn = (typeof originalFetch !== 'undefined' && originalFetch) ? originalFetch : window.fetch;
+
+      // 1. Try local server.py first
       try {
-        const fetchFn = (typeof originalFetch !== 'undefined') ? originalFetch : window.fetch;
         const res = await fetchFn('/api/realtime-feed');
         if (res && res.ok) {
           feed = await res.json();
         }
       } catch (e) {}
+
+      // 2. Direct fallback to upgrader.best (if running on static host / GitHub Pages or server down)
+      if (!feed || !feed.bestLiveDrop || !feed.gamesCount) {
+        try {
+          const [gamesRes, bestRes] = await Promise.allSettled([
+            fetchFn('https://upgrader.best/api/statistics/games-count').then(r => r.json()),
+            fetchFn('https://upgrader.best/api/live-drops/best-hour').then(r => r.json())
+          ]);
+          feed = feed || {};
+          if (gamesRes.status === 'fulfilled' && gamesRes.value?.count) {
+            feed.gamesCount = gamesRes.value.count;
+          }
+          if (bestRes.status === 'fulfilled' && bestRes.value?.bestLiveDrop) {
+            feed.bestLiveDrop = bestRes.value.bestLiveDrop;
+          }
+        } catch(e) {}
+      }
+
+      // Direct WebSocket to upgrader.best for online if missing
+      if (!feed || typeof feed.online !== 'number') {
+        try {
+          const directWs = new (typeof OriginalWebSocket !== 'undefined' ? OriginalWebSocket : window.WebSocket)('wss://upgrader.best/api/ws');
+          directWs.onopen = () => {
+            directWs.send(JSON.stringify({ id: 'poll_online_' + Date.now(), event: 'online' }));
+          };
+          directWs.onmessage = (ev) => {
+            try {
+              const msg = JSON.parse(ev.data);
+              if (msg && typeof msg.data === 'number' && msg.data > 0) {
+                realBaseOnline = msg.data;
+                currentOnline = msg.data;
+                GlobalStats.onlineCount = msg.data;
+                updateOnlineBadgeInDOM();
+                WsMock.broadcast({ event: 'online', data: msg.data });
+              }
+            } catch(e) {}
+            try { directWs.close(); } catch(e) {}
+          };
+        } catch(e) {}
+      }
 
       if (!feed) {
         try {
@@ -4785,6 +4899,7 @@ function getOrGenerateUserProfile(userId) {
       if (!feed) return;
 
       if (typeof feed.online === 'number' && feed.online > 0) {
+        realBaseOnline = feed.online;
         currentOnline = feed.online;
         GlobalStats.onlineCount = feed.online;
         updateOnlineBadgeInDOM();
@@ -4798,12 +4913,18 @@ function getOrGenerateUserProfile(userId) {
         GlobalStats.updateHeaderDOM(feed.gamesCount);
       }
       if (feed.bestLiveDrop && feed.bestLiveDrop.item) {
+        sanitizeSkinImage(feed.bestLiveDrop.item);
         currentBestDrop = feed.bestLiveDrop;
         registerBestDropUser(currentBestDrop);
         WsMock.broadcast({
           event: 'live_drops.best_hour_updated',
           data: { bestLiveDrop: currentBestDrop }
         });
+        WsMock.broadcast({
+          event: 'live_drops.best_hour_updated',
+          data: currentBestDrop
+        });
+        updateBestDropCardInDOM(currentBestDrop);
         try {
           localStorage.setItem('upgrader_daily_best_drop', JSON.stringify({
             date: new Date().toISOString().slice(0, 10),
